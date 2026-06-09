@@ -1,0 +1,329 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\Employee;
+use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Models\ProductionEntry;
+use App\Domains\Shared\Models\Sku;
+use App\Filament\Resources\ProductionEntryResource\Pages;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
+use Filament\Forms\Form;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Actions\BulkAction;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
+
+class ProductionEntryResource extends Resource
+{
+    protected static ?string $model = ProductionEntry::class;
+    protected static ?string $navigationGroup = 'Manufacturing';
+    protected static ?string $navigationLabel = 'Weekly Production Pay';
+    protected static ?string $navigationIcon = 'heroicon-o-banknotes';
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Select::make('business_id')
+                ->options(fn () => static::businessOptions())
+                ->default(fn () => Auth::user()?->business_id)
+                ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                ->required(),
+            Select::make('sku_id')
+                ->placeholder('Select SKU')
+                ->live()
+                ->options(fn (Get $get) => static::skuOptions((int) ($get('business_id') ?? 0)))
+                ->searchable()
+                ->preload()
+                ->afterStateUpdated(function (Get $get, Set $set): void {
+                    $set('employee_payout', static::calculateGrossPay($get));
+                    $set('net_payable', static::calculateNetPayable($get));
+                })
+                ->required(),
+            Select::make('employee_name')
+                ->label('Worker / employee')
+                ->searchable()
+                ->placeholder('Select worker')
+                ->options(fn (Get $get) => static::employeeOptions((int) ($get('business_id') ?? 0)))
+                ->required(),
+            TextInput::make('quantity_produced')
+                ->numeric()
+                ->live(onBlur: true)
+                ->afterStateUpdated(function (Get $get, Set $set): void {
+                    $set('employee_payout', static::calculateGrossPay($get));
+                    $set('net_payable', static::calculateNetPayable($get));
+                })
+                ->required()
+                ->minValue(1),
+            TextInput::make('waste_quantity')->numeric()->default(0),
+            TextInput::make('employee_payout')
+                ->label('Gross payout')
+                ->helperText('HELOS calculates this from the selected SKU recipe and quantity. You can still adjust it if the client pays differently.')
+                ->numeric()
+                ->prefix('LKR')
+                ->required()
+                ->live(onBlur: true)
+                ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
+            TextInput::make('advance_amount')
+                ->numeric()
+                ->prefix('LKR')
+                ->default(0)
+                ->live(onBlur: true)
+                ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
+            TextInput::make('deduction_amount')
+                ->numeric()
+                ->prefix('LKR')
+                ->default(0)
+                ->live(onBlur: true)
+                ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
+            TextInput::make('net_payable')
+                ->label('Net payable')
+                ->numeric()
+                ->prefix('LKR')
+                ->default(0)
+                ->readOnly()
+                ->dehydrated(),
+            TextInput::make('note')
+                ->label('Note')
+                ->placeholder('Optional')
+                ->columnSpanFull(),
+            Select::make('payment_status')
+                ->options([
+                    'pending' => 'Pending',
+                    'paid' => 'Paid',
+                ])
+                ->default('pending')
+                ->required(),
+            DatePicker::make('paid_on')->label('Paid on'),
+            DatePicker::make('produced_on')->required()->default(now()),
+        ])->columns(2);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
+            ->defaultSort('produced_on', 'desc')
+            ->columns([
+                Tables\Columns\TextColumn::make('produced_on')->date()->sortable(),
+                Tables\Columns\TextColumn::make('employee_name')->searchable(),
+                Tables\Columns\TextColumn::make('sku.code')->label('SKU')->searchable(),
+                Tables\Columns\TextColumn::make('quantity_produced')->label('Qty')->sortable(),
+                Tables\Columns\TextColumn::make('employee_payout')->label('Gross')->money('LKR'),
+                Tables\Columns\TextColumn::make('advance_amount')->label('Advance')->money('LKR')->toggleable(),
+                Tables\Columns\TextColumn::make('deduction_amount')->label('Deduction')->money('LKR')->toggleable(),
+                Tables\Columns\TextColumn::make('net_payable')->label('Net')->money('LKR'),
+                Tables\Columns\TextColumn::make('note')->label('Note')->limit(30)->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('payment_status')->badge(),
+                Tables\Columns\TextColumn::make('paid_on')->date()->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                Tables\Filters\Filter::make('produced_on')
+                    ->form([
+                        DatePicker::make('from')->label('From'),
+                        DatePicker::make('to')->label('To'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when($data['from'] ?? null, fn (Builder $query, $date) => $query->whereDate('produced_on', '>=', $date))
+                            ->when($data['to'] ?? null, fn (Builder $query, $date) => $query->whereDate('produced_on', '<=', $date));
+                    }),
+                Tables\Filters\SelectFilter::make('payment_status')->options([
+                    'pending' => 'Pending',
+                    'paid' => 'Paid',
+                ]),
+            ])
+            ->headerActions([
+                Tables\Actions\CreateAction::make(),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('markPaid')
+                    ->label('Mark paid')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->visible(fn (ProductionEntry $record): bool => $record->payment_status !== 'paid')
+                    ->action(function (ProductionEntry $record): void {
+                        $record->update([
+                            'payment_status' => 'paid',
+                            'paid_on' => now()->toDateString(),
+                        ]);
+
+                        OperationalEvent::query()->firstOrCreate(
+                            [
+                                'business_id' => $record->business_id,
+                                'source' => 'production_payout',
+                                'event_type' => OperationalEvent::PAYOUT_GENERATED,
+                                'external_id' => 'production-entry-'.$record->id,
+                            ],
+                            [
+                                'sku_id' => $record->sku_id,
+                                'department' => 'Manufacturing',
+                                'quantity' => $record->quantity_produced,
+                                'direct_cost_amount' => (float) $record->net_payable,
+                                'payload' => ['production_entry_id' => $record->id],
+                                'occurred_at' => now(),
+                            ]
+                        );
+
+                        Notification::make()->title('Production payout marked paid')->success()->send();
+                    }),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    BulkAction::make('markPaid')
+                        ->label('Mark selected paid')
+                        ->icon('heroicon-o-check-circle')
+                        ->requiresConfirmation()
+                        ->action(function (Collection $records): void {
+                            $records->each(function (ProductionEntry $record): void {
+                                $record->update([
+                                    'payment_status' => 'paid',
+                                    'paid_on' => now()->toDateString(),
+                                ]);
+
+                                OperationalEvent::query()->firstOrCreate(
+                                    [
+                                        'business_id' => $record->business_id,
+                                        'source' => 'production_payout',
+                                        'event_type' => OperationalEvent::PAYOUT_GENERATED,
+                                        'external_id' => 'production-entry-'.$record->id,
+                                    ],
+                                    [
+                                        'sku_id' => $record->sku_id,
+                                        'department' => 'Manufacturing',
+                                        'quantity' => $record->quantity_produced,
+                                        'direct_cost_amount' => (float) $record->net_payable,
+                                        'payload' => ['production_entry_id' => $record->id],
+                                        'occurred_at' => now(),
+                                    ]
+                                );
+                            });
+
+                            Notification::make()->title('Selected production payouts marked paid')->success()->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                ]),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListProductionEntries::route('/'),
+            'create' => Pages\CreateProductionEntry::route('/create'),
+            'edit' => Pages\EditProductionEntry::route('/{record}/edit'),
+        ];
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        $user = Auth::user();
+
+        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = Auth::user();
+
+        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+    }
+
+    private static function businessOptions(): array
+    {
+        $user = Auth::user();
+
+        return Business::query()
+            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    private static function skuOptions(int $businessId): array
+    {
+        if ($businessId <= 0) {
+            return [];
+        }
+
+        return Sku::query()
+            ->where('business_id', $businessId)
+            ->orderBy('code')
+            ->pluck('code', 'id')
+            ->all();
+    }
+
+    private static function employeeOptions(int $businessId): array
+    {
+        if ($businessId <= 0) {
+            return [];
+        }
+
+        return Employee::query()
+            ->where('business_id', $businessId)
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name', 'name')
+            ->all();
+    }
+
+    private static function scopeToCurrentBusiness(Builder $query): Builder
+    {
+        $user = Auth::user();
+
+        if ($user?->seesAllBusinesses()) {
+            return $query;
+        }
+
+        return $query->where('business_id', $user?->business_id);
+    }
+
+    private static function currentBusinessSupportsProductionTracking(): bool
+    {
+        $user = Auth::user();
+
+        if ($user?->seesAllBusinesses()) {
+            return true;
+        }
+
+        return $user?->business?->supportsProductionTracking() ?? false;
+    }
+
+    private static function calculateNetPayable(Get $get): float
+    {
+        $gross = (float) ($get('employee_payout') ?? 0);
+        $advance = (float) ($get('advance_amount') ?? 0);
+        $deduction = (float) ($get('deduction_amount') ?? 0);
+
+        return max($gross - $advance - $deduction, 0);
+    }
+
+    private static function calculateGrossPay(Get $get): float
+    {
+        $skuId = (int) ($get('sku_id') ?? 0);
+        $quantity = max((int) ($get('quantity_produced') ?? 0), 0);
+
+        if ($skuId <= 0 || $quantity <= 0) {
+            return 0.0;
+        }
+
+        $sku = Sku::query()->find($skuId);
+
+        if (! $sku instanceof Sku) {
+            return 0.0;
+        }
+
+        return $sku->laborCostPerUnit() * $quantity;
+    }
+}
