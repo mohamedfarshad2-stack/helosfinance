@@ -9,6 +9,7 @@ use App\Filament\Resources\OperationalEventResource\Pages;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Get;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -31,6 +32,7 @@ class OperationalEventResource extends Resource
                 OperationalEvent::ORDER_CREATED => 'Order created',
                 OperationalEvent::ORDER_CONFIRMED => 'Order confirmed',
                 OperationalEvent::TRACKING_NUMBER_ADDED => 'Tracking number added',
+                OperationalEvent::WHOLESALE_PARCEL_SENT => 'Wholesale parcel sent by transport',
                 OperationalEvent::ORDER_DELIVERED => 'Order delivered',
                 OperationalEvent::ORDER_RETURNED => 'Order returned',
                 OperationalEvent::ORDER_RESENT => 'Order resent',
@@ -41,9 +43,37 @@ class OperationalEventResource extends Resource
                 OperationalEvent::EXPENSE_ADDED => 'Expense added',
             ])->required(),
             TextInput::make('external_id')->label('Stock-app ID'),
-            TextInput::make('channel'),
+            Select::make('channel')
+                ->options([
+                    'cod' => 'COD',
+                    'wholesale' => 'Wholesale',
+                    'cheque' => 'Wholesale - cheque',
+                    'credit' => 'Wholesale - credit',
+                    'service' => 'Service',
+                ])
+                ->searchable()
+                ->default('cod'),
             TextInput::make('department'),
             TextInput::make('quantity')->numeric()->required(),
+            TextInput::make('expected_sale_amount')
+                ->label('Expected sale amount')
+                ->numeric()
+                ->prefix('LKR')
+                ->helperText('Use this for wholesale cheque or credit orders before the money is collected.')
+                ->visible(fn (Get $get): bool => in_array($get('event_type'), [
+                    OperationalEvent::ORDER_CREATED,
+                    OperationalEvent::ORDER_CONFIRMED,
+                    OperationalEvent::TRACKING_NUMBER_ADDED,
+                    OperationalEvent::WHOLESALE_PARCEL_SENT,
+                ], true))
+                ->dehydrated(),
+            TextInput::make('transport_cost_amount')
+                ->label('Transport cost')
+                ->numeric()
+                ->prefix('LKR')
+                ->helperText('Use this when a wholesale parcel goes by transport without a tracking number.')
+                ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT)
+                ->dehydrated(),
             TextInput::make('revenue_amount')->numeric()->prefix('LKR'),
             TextInput::make('direct_cost_amount')->numeric()->prefix('LKR'),
             TextInput::make('leakage_amount')->numeric()->prefix('LKR'),

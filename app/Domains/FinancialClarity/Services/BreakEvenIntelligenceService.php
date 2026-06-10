@@ -519,7 +519,8 @@ class BreakEvenIntelligenceService
         $sku = $event->sku;
 
         return match ($event->event_type) {
-            OperationalEvent::TRACKING_NUMBER_ADDED => [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT => [
                 'product_cost' => $sku ? (float) $sku->materialCostPerUnit() * $quantity : (float) ($event->direct_cost_amount ?? 0),
                 'production_cost' => $sku ? ((float) $sku->laborCostPerUnit() + (float) $sku->finishing_cost) * $quantity : 0.0,
                 'packaging_cost' => $sku ? (float) $sku->packaging_cost * $quantity : 0.0,

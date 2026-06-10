@@ -376,6 +376,7 @@ class ClientHealthReport extends Page implements HasForms
         $orderCreated = $orderRows->where('status', OperationalEvent::ORDER_CREATED)->count();
         $orderConfirmed = $orderRows->where('status', OperationalEvent::ORDER_CONFIRMED)->count();
         $trackingAdded = $orderRows->where('status', OperationalEvent::TRACKING_NUMBER_ADDED)->count();
+        $wholesaleSent = $orderRows->where('status', OperationalEvent::WHOLESALE_PARCEL_SENT)->count();
         $delivered = $orderRows->where('status', OperationalEvent::ORDER_DELIVERED)->count();
         $returned = $orderRows->where('status', OperationalEvent::ORDER_RETURNED)->count();
         $resent = $orderRows->where('status', OperationalEvent::ORDER_RESENT)->count();
@@ -383,6 +384,7 @@ class ClientHealthReport extends Page implements HasForms
         $trackingHeadline = match (true) {
             $returned > 0 && $resent > 0 => 'Orders are moving through delivery, returns, and resends.',
             $delivered > 0 => 'Orders are reaching delivery and moving toward money collection.',
+            $wholesaleSent > 0 => 'Wholesale parcels are out by transport and waiting for delivery or settlement.',
             $trackingAdded > 0 => 'Orders are in dispatch and courier handoff.',
             $orderConfirmed > 0 => 'Orders are confirmed and waiting to move forward.',
             $orderCreated > 0 => 'Orders have started, but the lifecycle is still early.',

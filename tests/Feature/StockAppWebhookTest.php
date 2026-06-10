@@ -112,6 +112,44 @@ class StockAppWebhookTest extends TestCase
         $this->assertSame(1, SkuStockMovement::query()->where('business_id', $business->id)->where('movement_type', 'dispatch')->count());
     }
 
+    public function test_wholesale_transport_status_records_parcel_cost_without_tracking_number(): void
+    {
+        $business = Business::query()->create(['name' => 'Wholesale Business']);
+        Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'WHO-SKU-1',
+            'name' => 'Wholesale SKU',
+            'material_cost' => 1000,
+            'packaging_cost' => 100,
+            'labor_rate' => 200,
+            'finishing_cost' => 50,
+            'expected_sale_price' => 4000,
+        ]);
+
+        $this->postJson('/api/v1/stock-app/webhook', [
+            'business_id' => $business->id,
+            'status' => 'transport_sent',
+            'external_id' => 'WHO-TRANSPORT-1',
+            'sku_code' => 'WHO-SKU-1',
+            'channel' => 'wholesale',
+            'quantity' => 1,
+            'sale_amount' => 5000,
+            'transport_cost_amount' => 600,
+        ])->assertCreated()
+            ->assertJsonPath('impact.revenue_amount', 0)
+            ->assertJsonPath('impact.direct_cost_amount', 1950)
+            ->assertJsonPath('impact.economics.product_cost_amount', 1350)
+            ->assertJsonPath('impact.economics.courier_amount', 600)
+            ->assertJsonPath('impact.economics.sale_amount', 5000);
+
+        $event = OperationalEvent::query()->where('business_id', $business->id)->where('external_id', 'WHO-TRANSPORT-1')->first();
+
+        $this->assertNotNull($event);
+        $this->assertSame(OperationalEvent::WHOLESALE_PARCEL_SENT, $event->event_type);
+        $this->assertSame('wholesale', $event->channel);
+        $this->assertSame(1, SkuStockMovement::query()->where('business_id', $business->id)->where('movement_type', 'dispatch')->count());
+    }
+
     public function test_delivered_order_records_revenue_without_repeating_costs(): void
     {
         $business = Business::query()->create(['name' => 'Test Business']);

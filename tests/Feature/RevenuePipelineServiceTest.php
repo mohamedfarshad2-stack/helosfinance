@@ -57,15 +57,22 @@ class RevenuePipelineServiceTest extends TestCase
         OperationalEvent::query()->create([
             'business_id' => $business->id,
             'source' => 'stock_app',
-            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'event_type' => OperationalEvent::WHOLESALE_PARCEL_SENT,
             'external_id' => 'WHO-1',
             'channel' => 'wholesale',
             'quantity' => 1,
             'revenue_amount' => 0,
-            'direct_cost_amount' => 0,
+            'direct_cost_amount' => 1500,
             'leakage_amount' => 0,
             'recovery_amount' => 0,
-            'payload' => ['sale_amount' => 8000, 'channel' => 'wholesale'],
+            'payload' => [
+                'sale_amount' => 8000,
+                'channel' => 'wholesale',
+                'economics' => [
+                    'product_cost_amount' => 1200,
+                    'courier_amount' => 300,
+                ],
+            ],
             'occurred_at' => now()->subDay(),
         ]);
 

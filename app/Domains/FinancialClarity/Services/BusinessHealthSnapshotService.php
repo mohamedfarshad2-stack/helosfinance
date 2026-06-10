@@ -113,7 +113,7 @@ class BusinessHealthSnapshotService
         $resendImpact = (clone $events)->where('event_type', OperationalEvent::ORDER_RESENT)->sum('leakage_amount');
         $fakeImpact = (clone $events)->where('event_type', OperationalEvent::FAKE_ORDER_DETECTED)->sum('leakage_amount');
         $courierImpact = (clone $events)
-            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::ORDER_RESENT, OperationalEvent::ORDER_RETURNED])
+            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT, OperationalEvent::ORDER_RETURNED])
             ->sum('direct_cost_amount');
         $confirmationImpact = (clone $events)
             ->whereIn('event_type', [OperationalEvent::ORDER_CREATED, OperationalEvent::ORDER_CONFIRMED])
@@ -121,6 +121,7 @@ class BusinessHealthSnapshotService
         $orderCounts = [
             'confirmed' => (clone $events)->where('event_type', OperationalEvent::ORDER_CONFIRMED)->count(),
             'tracking_added' => (clone $events)->where('event_type', OperationalEvent::TRACKING_NUMBER_ADDED)->count(),
+            'wholesale_sent' => (clone $events)->where('event_type', OperationalEvent::WHOLESALE_PARCEL_SENT)->count(),
             'delivered' => (clone $events)->where('event_type', OperationalEvent::ORDER_DELIVERED)->count(),
             'returned' => (clone $events)->where('event_type', OperationalEvent::ORDER_RETURNED)->count(),
             'resent' => (clone $events)->where('event_type', OperationalEvent::ORDER_RESENT)->count(),

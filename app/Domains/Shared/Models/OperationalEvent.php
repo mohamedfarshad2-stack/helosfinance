@@ -10,6 +10,7 @@ class OperationalEvent extends Model
     public const ORDER_CREATED = 'order_created';
     public const ORDER_CONFIRMED = 'order_confirmed';
     public const TRACKING_NUMBER_ADDED = 'tracking_number_added';
+    public const WHOLESALE_PARCEL_SENT = 'wholesale_parcel_sent';
     public const ORDER_DELIVERED = 'order_delivered';
     public const ORDER_RETURNED = 'order_returned';
     public const ORDER_RESENT = 'order_resent';

@@ -18,6 +18,7 @@ class RevenuePipelineService
                 OperationalEvent::ORDER_CREATED,
                 OperationalEvent::ORDER_CONFIRMED,
                 OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
                 OperationalEvent::ORDER_DELIVERED,
                 OperationalEvent::ORDER_RETURNED,
                 OperationalEvent::ORDER_RESENT,
@@ -152,6 +153,7 @@ class RevenuePipelineService
             OperationalEvent::ORDER_CREATED,
             OperationalEvent::ORDER_CONFIRMED,
             OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
             OperationalEvent::ORDER_RESENT,
         ], true);
     }

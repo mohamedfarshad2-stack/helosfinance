@@ -31,6 +31,9 @@ class StockAppWebhookController extends Controller
             'sku_code' => ['nullable', 'string'],
             'quantity' => ['nullable', 'integer', 'min:1'],
             'sale_amount' => ['nullable', 'numeric'],
+            'transport_cost_amount' => ['nullable', 'numeric'],
+            'delivery_amount' => ['nullable', 'numeric'],
+            'courier_amount' => ['nullable', 'numeric'],
             'channel' => ['nullable', 'string'],
             'department' => ['nullable', 'string'],
             'occurred_at' => ['nullable', 'date'],
@@ -167,6 +170,7 @@ class StockAppWebhookController extends Controller
 
         return match ($eventType) {
             'dispatched', 'dispatch', 'tracking_added', 'tracking', 'tracking_number', 'tracking_number_added' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'wholesale_sent', 'wholesale_dispatched', 'transport_sent', 'parcel_sent', 'wholesale_parcel_sent' => OperationalEvent::WHOLESALE_PARCEL_SENT,
             'delivered', 'delivery_done' => OperationalEvent::ORDER_DELIVERED,
             'returned', 'return' => OperationalEvent::ORDER_RETURNED,
             'resent', 'resend' => OperationalEvent::ORDER_RESENT,

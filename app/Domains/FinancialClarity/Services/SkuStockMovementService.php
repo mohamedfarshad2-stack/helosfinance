@@ -42,11 +42,14 @@ class SkuStockMovementService
     private function movementForEvent(string $eventType, array $payload): ?array
     {
         return match ($eventType) {
-            OperationalEvent::TRACKING_NUMBER_ADDED => [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT => [
                 'movement_type' => 'dispatch',
                 'quantity_delta' => -1,
                 'is_restockable' => false,
-                'note' => 'Parcel left the stock room for delivery.',
+                'note' => $eventType === OperationalEvent::WHOLESALE_PARCEL_SENT
+                    ? 'Wholesale parcel left the stock room by transport.'
+                    : 'Parcel left the stock room for delivery.',
             ],
             OperationalEvent::ORDER_RESENT => [
                 'movement_type' => 'resend_dispatch',

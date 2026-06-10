@@ -20,7 +20,7 @@ class OperationalImpactCalculator
         $saleAmount = (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? 0);
         $productCost = $sku ? $sku->productionCostPerUnit() * $quantity : (float) ($payload['cogs_amount'] ?? 0);
 
-        $delivery = $this->assumption($business, ['delivery_fee'], 'Delivery cost', 0);
+        $delivery = (float) ($payload['transport_cost_amount'] ?? $payload['delivery_amount'] ?? $payload['courier_amount'] ?? $this->assumption($business, ['delivery_fee'], 'Delivery cost', 0));
         $returnCourier = $this->assumption($business, ['return_courier_fee', 'return_fee'], 'Return courier cost', 0);
         $returnPackaging = $this->assumption($business, ['return_packaging_fee'], 'Return packaging cost', 0);
         $resendCourier = $this->assumption($business, ['resend_courier_fee', 'resend_fee'], 'Resend courier cost', 0);
@@ -41,7 +41,8 @@ class OperationalImpactCalculator
                     'verification_amount' => $verification,
                 ],
             ],
-            OperationalEvent::TRACKING_NUMBER_ADDED => [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT => [
                 'sku_id' => $sku?->id,
                 'revenue_amount' => 0,
                 'direct_cost_amount' => $productCost + $delivery,
@@ -50,6 +51,7 @@ class OperationalImpactCalculator
                 'economics' => [
                     'product_cost_amount' => $productCost,
                     'courier_amount' => $delivery,
+                    'sale_amount' => $saleAmount,
                 ],
             ],
             OperationalEvent::ORDER_DELIVERED => [

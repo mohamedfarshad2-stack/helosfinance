@@ -35,6 +35,9 @@ class StockAppSyncController extends Controller
             'orders.*.sku_code' => ['nullable', 'string'],
             'orders.*.quantity' => ['nullable', 'integer', 'min:1'],
             'orders.*.sale_amount' => ['nullable', 'numeric'],
+            'orders.*.transport_cost_amount' => ['nullable', 'numeric'],
+            'orders.*.delivery_amount' => ['nullable', 'numeric'],
+            'orders.*.courier_amount' => ['nullable', 'numeric'],
             'orders.*.channel' => ['nullable', 'string'],
             'orders.*.department' => ['nullable', 'string'],
             'orders.*.tracking_number' => ['nullable', 'string'],
@@ -206,6 +209,7 @@ class StockAppSyncController extends Controller
 
         return match ($eventType) {
             'dispatched', 'dispatch', 'tracking_added', 'tracking', 'tracking_number', 'tracking_number_added' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'wholesale_sent', 'wholesale_dispatched', 'transport_sent', 'parcel_sent', 'wholesale_parcel_sent' => OperationalEvent::WHOLESALE_PARCEL_SENT,
             'delivered', 'delivery_done' => OperationalEvent::ORDER_DELIVERED,
             'returned', 'return' => OperationalEvent::ORDER_RETURNED,
             'resent', 'resend' => OperationalEvent::ORDER_RESENT,

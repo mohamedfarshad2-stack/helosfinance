@@ -67,6 +67,7 @@ class BusinessCompletenessService
                     OperationalEvent::ORDER_CREATED,
                     OperationalEvent::ORDER_CONFIRMED,
                     OperationalEvent::TRACKING_NUMBER_ADDED,
+                    OperationalEvent::WHOLESALE_PARCEL_SENT,
                     OperationalEvent::ORDER_DELIVERED,
                     OperationalEvent::ORDER_RETURNED,
                     OperationalEvent::ORDER_RESENT,
@@ -272,17 +273,18 @@ class BusinessCompletenessService
 
     private function missingLifecycleStages(Business $business): array
     {
-        $stages = [
-            OperationalEvent::ORDER_CREATED => 'created',
-            OperationalEvent::ORDER_CONFIRMED => 'confirmed',
-            OperationalEvent::TRACKING_NUMBER_ADDED => 'tracking',
-            OperationalEvent::ORDER_DELIVERED => 'delivered',
+        $stageEvents = [
+            OperationalEvent::ORDER_CREATED,
+            OperationalEvent::ORDER_CONFIRMED,
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_DELIVERED,
         ];
 
         $counts = OperationalEvent::query()
             ->where('business_id', $business->id)
             ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
-            ->whereIn('event_type', array_keys($stages))
+            ->whereIn('event_type', $stageEvents)
             ->selectRaw('event_type, count(*) as total')
             ->groupBy('event_type')
             ->pluck('total', 'event_type')
@@ -297,10 +299,24 @@ class BusinessCompletenessService
         }
 
         $missing = [];
-        foreach ($stages as $eventType => $label) {
-            if ((int) ($counts[$eventType] ?? 0) <= 0) {
-                $missing[] = $label;
-            }
+
+        if ((int) ($counts[OperationalEvent::ORDER_CREATED] ?? 0) <= 0) {
+            $missing[] = 'created';
+        }
+
+        if ((int) ($counts[OperationalEvent::ORDER_CONFIRMED] ?? 0) <= 0) {
+            $missing[] = 'confirmed';
+        }
+
+        $dispatchCount = (int) ($counts[OperationalEvent::TRACKING_NUMBER_ADDED] ?? 0)
+            + (int) ($counts[OperationalEvent::WHOLESALE_PARCEL_SENT] ?? 0);
+
+        if ($dispatchCount <= 0) {
+            $missing[] = 'dispatch or transport';
+        }
+
+        if ((int) ($counts[OperationalEvent::ORDER_DELIVERED] ?? 0) <= 0) {
+            $missing[] = 'delivered';
         }
 
         if (empty($missing)) {
