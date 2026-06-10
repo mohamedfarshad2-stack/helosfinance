@@ -18,13 +18,25 @@ class CreateOperationalEvent extends CreateRecord
     {
         $expectedSaleAmount = (float) ($data['expected_sale_amount'] ?? 0);
         $transportCostAmount = (float) ($data['transport_cost_amount'] ?? 0);
+        $customerPaidAmount = (float) ($data['customer_paid_amount'] ?? 0);
+        $customerPaymentMethod = $data['customer_payment_method'] ?? null;
+        $paymentDueAt = $data['payment_due_at'] ?? null;
 
-        unset($data['expected_sale_amount'], $data['transport_cost_amount']);
+        unset(
+            $data['expected_sale_amount'],
+            $data['transport_cost_amount'],
+            $data['customer_paid_amount'],
+            $data['customer_payment_method'],
+            $data['payment_due_at']
+        );
 
         $data['source'] = 'manual';
         $data['payload'] = array_filter([
             'sale_amount' => $expectedSaleAmount > 0 ? $expectedSaleAmount : null,
             'transport_cost_amount' => $transportCostAmount > 0 ? $transportCostAmount : null,
+            'customer_paid_amount' => $customerPaidAmount > 0 ? $customerPaidAmount : null,
+            'customer_payment_method' => $customerPaymentMethod,
+            'payment_due_at' => $paymentDueAt,
             'channel' => $data['channel'] ?? null,
             'manual_entry' => true,
         ], fn ($value): bool => $value !== null);
@@ -44,6 +56,7 @@ class CreateOperationalEvent extends CreateRecord
                     'quantity' => $data['quantity'] ?? 1,
                     'sale_amount' => $expectedSaleAmount,
                     'transport_cost_amount' => $transportCostAmount,
+                    'customer_paid_amount' => $customerPaidAmount,
                     'channel' => $data['channel'] ?? null,
                 ]);
 

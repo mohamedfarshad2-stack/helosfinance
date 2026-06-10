@@ -51,8 +51,9 @@ class RevenuePipelineService
         $codCollected = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount');
         $codReturned = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->sum('reversed_amount');
 
-        $wholesalePending = $wholesaleOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('expected_amount');
-        $wholesaleDelivered = $wholesaleOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount');
+        $wholesalePending = $wholesaleOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('remaining_amount');
+        $wholesaleDelivered = $wholesaleOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount')
+            + $wholesaleOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('paid_amount');
         $wholesaleReturned = $wholesaleOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->sum('reversed_amount');
 
         $pendingCount = $orders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->count();
@@ -117,6 +118,7 @@ class RevenuePipelineService
 
         $expectedAmount = $this->expectedAmount($sku, $payload);
         $recognizedAmount = max((float) ($latest->revenue_amount ?? 0), 0.0);
+        $paidAmount = max((float) ($payload['customer_paid_amount'] ?? $payload['paid_amount'] ?? 0), 0.0);
         $reversedAmount = abs((float) ($latest->revenue_amount ?? 0));
 
         return [
@@ -127,6 +129,8 @@ class RevenuePipelineService
             'sku_name' => $sku?->name,
             'expected_amount' => $expectedAmount,
             'recognized_amount' => $recognizedAmount,
+            'paid_amount' => $paidAmount,
+            'remaining_amount' => max($expectedAmount - $paidAmount - $recognizedAmount, 0.0),
             'reversed_amount' => $reversedAmount,
             'occurred_at' => $latest->occurred_at?->toDateTimeString(),
         ];

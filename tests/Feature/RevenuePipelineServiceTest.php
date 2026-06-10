@@ -67,6 +67,8 @@ class RevenuePipelineServiceTest extends TestCase
             'recovery_amount' => 0,
             'payload' => [
                 'sale_amount' => 8000,
+                'customer_paid_amount' => 3000,
+                'customer_payment_method' => 'cash',
                 'channel' => 'wholesale',
                 'economics' => [
                     'product_cost_amount' => 1200,
@@ -111,8 +113,10 @@ class RevenuePipelineServiceTest extends TestCase
         $this->assertSame(3000.0, (float) $pipeline['cod']['expected_revenue']);
         $this->assertSame(4500.0, (float) $pipeline['cod']['collected_revenue']);
         $this->assertSame(0.0, (float) $pipeline['cod']['returned_revenue']);
-        $this->assertSame(8000.0, (float) $pipeline['wholesale']['expected_revenue']);
-        $this->assertSame(12000.0, (float) $pipeline['wholesale']['collected_revenue']);
+        $this->assertSame(5000.0, (float) $pipeline['wholesale']['expected_revenue']);
+        $this->assertSame(15000.0, (float) $pipeline['wholesale']['collected_revenue']);
+        $this->assertSame(3000.0, (float) collect($pipeline['orders'])->firstWhere('external_id', 'WHO-1')['paid_amount']);
+        $this->assertSame(5000.0, (float) collect($pipeline['orders'])->firstWhere('external_id', 'WHO-1')['remaining_amount']);
         $this->assertNotEmpty($pipeline['actions']);
     }
 }

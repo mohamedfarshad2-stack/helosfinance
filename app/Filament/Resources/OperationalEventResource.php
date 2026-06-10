@@ -74,6 +74,29 @@ class OperationalEventResource extends Resource
                 ->helperText('Use this when a wholesale parcel goes by transport without a tracking number.')
                 ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT)
                 ->dehydrated(),
+            TextInput::make('customer_paid_amount')
+                ->label('Customer paid now')
+                ->numeric()
+                ->prefix('LKR')
+                ->helperText('Use this for cash, bank, cheque advance, or any partial amount already received.')
+                ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT)
+                ->dehydrated(),
+            Select::make('customer_payment_method')
+                ->label('Customer payment method')
+                ->options([
+                    'cash' => 'Cash',
+                    'bank' => 'Bank transfer',
+                    'cheque' => 'Cheque',
+                    'credit' => 'Credit',
+                    'mixed' => 'Mixed',
+                ])
+                ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT)
+                ->dehydrated(),
+            DateTimePicker::make('payment_due_at')
+                ->label('Balance due date')
+                ->helperText('Use this when the remaining amount will be settled later.')
+                ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT)
+                ->dehydrated(),
             TextInput::make('revenue_amount')->numeric()->prefix('LKR'),
             TextInput::make('direct_cost_amount')->numeric()->prefix('LKR'),
             TextInput::make('leakage_amount')->numeric()->prefix('LKR'),
