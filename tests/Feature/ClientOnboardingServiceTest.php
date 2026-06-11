@@ -64,4 +64,25 @@ class ClientOnboardingServiceTest extends TestCase
         $this->assertNull($result['integration_source']);
         $this->assertSame('secret123', $result['password']);
     }
+
+    public function test_onboarding_generates_stock_app_name_and_business_key_from_business_name(): void
+    {
+        $result = app(ClientOnboardingService::class)->create([
+            'business_name' => 'Horns England Pvt Ltd',
+            'industry' => 'Manufacturing wholesale',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_4,
+            'employee_seat_limit' => 3,
+            'user_name' => 'Horns Owner',
+            'user_email' => 'horns-owner@example.com',
+            'password' => 'secret123',
+            'integration_base_url' => 'https://codreturnslanka.lk',
+            'integration_status' => 'testing',
+        ]);
+
+        $this->assertInstanceOf(IntegrationSource::class, $result['integration_source']);
+        $this->assertSame('Horns England Pvt Ltd stock-app', $result['integration_source']->name);
+        $this->assertSame('horns-england-pvt-ltd', $result['integration_source']->settings['stock_app_business_key']);
+    }
 }

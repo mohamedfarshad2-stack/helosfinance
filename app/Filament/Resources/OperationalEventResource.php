@@ -132,7 +132,7 @@ class OperationalEventResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+        return Auth::check() && (Auth::user()?->isOwner() ?? false);
     }
 
     public static function canAccess(): bool

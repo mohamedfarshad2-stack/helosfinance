@@ -19,6 +19,7 @@ use App\Filament\Pages\ManagerWorkQueue;
 use App\Filament\Pages\TodaysWork;
 use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Resources\BankTransactionResource;
+use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\MaterialLedgerResource;
 use App\Filament\Resources\ProductionEntryResource;
 use App\Filament\Resources\SkuRecipeResource;
@@ -325,7 +326,7 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertRedirect(TodaysWork::getUrl());
     }
 
-    public function test_internal_admins_land_on_the_work_queue(): void
+    public function test_internal_admins_land_on_client_businesses(): void
     {
         $business = Business::query()->create([
             'name' => 'Manager Queue Client',
@@ -346,7 +347,11 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->actingAs($user)
             ->get('/admin')
-            ->assertRedirect(ManagerWorkQueue::getUrl());
+            ->assertRedirect(BusinessResource::getUrl('index'));
+
+        $this->actingAs($user)
+            ->get(ManagerWorkQueue::getUrl())
+            ->assertForbidden();
     }
 
     public function test_employee_work_screen_renders(): void
@@ -505,7 +510,7 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_work_queue_screen_renders_for_internal_admins(): void
+    public function test_work_queue_screen_renders_for_client_owners(): void
     {
         $business = Business::query()->create([
             'name' => 'Render Queue Manager',
@@ -515,20 +520,19 @@ class WorkQueueIntelligenceTest extends TestCase
             'onboarding_status' => 'ready',
         ]);
 
-        $admin = User::query()->create([
-            'name' => 'Platform Admin',
-            'email' => 'queue-admin-render@example.com',
+        $owner = User::query()->create([
+            'name' => 'Client Owner',
+            'email' => 'queue-owner-render@example.com',
             'password' => Hash::make('password'),
             'business_id' => $business->id,
             'is_employee' => false,
-            'is_platform_admin' => true,
+            'is_platform_admin' => false,
         ]);
 
-        $this->actingAs($admin)
+        $this->actingAs($owner)
             ->get(ManagerWorkQueue::getUrl())
             ->assertOk()
             ->assertSee('Work queue')
-            ->assertSee('Client and employee shortcuts')
             ->assertSee('Blocked Work')
             ->assertSee('Team Workload')
             ->assertSee('Open Tasks')

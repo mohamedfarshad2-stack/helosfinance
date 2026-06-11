@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domains\Shared\Models\Business;
 use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Resources\BankTransactionResource;
+use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -61,7 +62,58 @@ class UserResourceTest extends TestCase
 
         $this->actingAs($platformUser);
         $this->assertTrue(UserResource::canAccess());
+        $this->assertFalse($platformUser->isOwner());
+        $this->assertTrue($platformUser->isInternalAdmin());
         $this->get(UserResource::getUrl('index'))->assertOk();
+    }
+
+    public function test_internal_admin_can_see_client_users_inside_client_account(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Visible Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $platformUser = User::query()->create([
+            'name' => 'Platform Admin',
+            'email' => 'platform-client-users@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => null,
+            'is_platform_admin' => true,
+            'is_employee' => false,
+        ]);
+
+        User::query()->create([
+            'name' => 'Client Owner',
+            'email' => 'visible-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        User::query()->create([
+            'name' => 'Client Staff',
+            'email' => 'visible-staff@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'employee_access_profile' => 'operations',
+        ]);
+
+        $this->actingAs($platformUser)
+            ->get(BusinessResource::getUrl('edit', ['record' => $business]))
+            ->assertOk()
+            ->assertSee('Client users');
+
+        $this->assertSame(
+            ['Client Owner', 'Client Staff'],
+            $business->users()->orderBy('name')->pluck('name')->all()
+        );
     }
 
     public function test_business_can_track_employee_seat_limit_and_usage(): void

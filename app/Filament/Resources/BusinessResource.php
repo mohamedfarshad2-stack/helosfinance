@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Expense;
 use App\Filament\Resources\BusinessResource\Pages;
+use App\Filament\Resources\BusinessResource\RelationManagers\ClientUsersRelationManager;
 use App\Filament\Resources\BusinessResource\RelationManagers\FixedExpensesRelationManager;
 use App\Filament\Resources\BusinessResource\RelationManagers\VariableExpensesRelationManager;
 use Filament\Forms\Components\CheckboxList;
@@ -247,6 +248,7 @@ class BusinessResource extends Resource
     public static function getRelations(): array
     {
         return [
+            ClientUsersRelationManager::class,
             FixedExpensesRelationManager::class,
             VariableExpensesRelationManager::class,
         ];

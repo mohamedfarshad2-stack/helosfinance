@@ -80,7 +80,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function isOwner(): bool
     {
-        return $this->is_platform_admin || (! $this->is_employee && filled($this->business_id));
+        return ! $this->is_platform_admin && ! $this->is_employee && filled($this->business_id);
     }
 
     public function isStaff(): bool

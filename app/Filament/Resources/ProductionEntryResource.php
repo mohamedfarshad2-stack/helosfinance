@@ -7,6 +7,7 @@ use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
+use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Filament\Resources\ProductionEntryResource\Pages;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -46,10 +47,44 @@ class ProductionEntryResource extends Resource
                 ->searchable()
                 ->preload()
                 ->afterStateUpdated(function (Get $get, Set $set): void {
+                    $set('sku_recipe_item_id', null);
+                    $set('production_step', null);
+                    $set('piece_rate', 0);
                     $set('employee_payout', static::calculateGrossPay($get));
                     $set('net_payable', static::calculateNetPayable($get));
                 })
                 ->required(),
+            Select::make('sku_recipe_item_id')
+                ->label('Production work / pay step')
+                ->placeholder('Select work step')
+                ->helperText('Choose the exact paid work, for example strap stitching, cutting, finishing, or packing.')
+                ->live()
+                ->options(fn (Get $get) => static::laborStepOptions((int) ($get('sku_id') ?? 0)))
+                ->searchable()
+                ->preload()
+                ->afterStateUpdated(function (Get $get, Set $set): void {
+                    $step = static::selectedLaborStep((int) ($get('sku_recipe_item_id') ?? 0));
+
+                    $set('production_step', $step?->component_name);
+                    $set('piece_rate', $step ? static::pieceRate($step) : 0);
+                    $set('employee_payout', static::calculateGrossPay($get));
+                    $set('net_payable', static::calculateNetPayable($get));
+                }),
+            TextInput::make('production_step')
+                ->label('Selected work')
+                ->readOnly()
+                ->dehydrated()
+                ->placeholder('Auto-filled from selected work step'),
+            TextInput::make('piece_rate')
+                ->label('Rate per piece')
+                ->numeric()
+                ->prefix('LKR')
+                ->helperText('Auto-filled from the SKU recipe labor line. Adjust only if this batch has a special rate.')
+                ->live(onBlur: true)
+                ->afterStateUpdated(function (Get $get, Set $set): void {
+                    $set('employee_payout', static::calculateGrossPay($get));
+                    $set('net_payable', static::calculateNetPayable($get));
+                }),
             Select::make('employee_name')
                 ->label('Worker / employee')
                 ->searchable()
@@ -118,6 +153,8 @@ class ProductionEntryResource extends Resource
                 Tables\Columns\TextColumn::make('produced_on')->date()->sortable(),
                 Tables\Columns\TextColumn::make('employee_name')->searchable(),
                 Tables\Columns\TextColumn::make('sku.code')->label('SKU')->searchable(),
+                Tables\Columns\TextColumn::make('production_step')->label('Work')->searchable()->toggleable(),
+                Tables\Columns\TextColumn::make('piece_rate')->label('Rate')->money('LKR')->toggleable(),
                 Tables\Columns\TextColumn::make('quantity_produced')->label('Qty')->sortable(),
                 Tables\Columns\TextColumn::make('employee_payout')->label('Gross')->money('LKR'),
                 Tables\Columns\TextColumn::make('advance_amount')->label('Advance')->money('LKR')->toggleable(),
@@ -230,7 +267,7 @@ class ProductionEntryResource extends Resource
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
     }
 
     public static function canAccess(): bool
@@ -262,6 +299,42 @@ class ProductionEntryResource extends Resource
             ->orderBy('code')
             ->pluck('code', 'id')
             ->all();
+    }
+
+    private static function laborStepOptions(int $skuId): array
+    {
+        if ($skuId <= 0) {
+            return [];
+        }
+
+        return SkuRecipeItem::query()
+            ->where('sku_id', $skuId)
+            ->where('active', true)
+            ->where('line_type', SkuRecipeItem::TYPE_LABOR)
+            ->orderBy('component_name')
+            ->get()
+            ->mapWithKeys(fn (SkuRecipeItem $item): array => [
+                $item->id => $item->component_name.' - LKR '.number_format(static::pieceRate($item), 2).' / piece',
+            ])
+            ->all();
+    }
+
+    private static function selectedLaborStep(int $recipeItemId): ?SkuRecipeItem
+    {
+        if ($recipeItemId <= 0) {
+            return null;
+        }
+
+        return SkuRecipeItem::query()
+            ->whereKey($recipeItemId)
+            ->where('active', true)
+            ->where('line_type', SkuRecipeItem::TYPE_LABOR)
+            ->first();
+    }
+
+    private static function pieceRate(SkuRecipeItem $item): float
+    {
+        return (float) $item->quantity_per_unit * (float) $item->unit_cost;
     }
 
     private static function employeeOptions(int $businessId): array
@@ -313,9 +386,14 @@ class ProductionEntryResource extends Resource
     {
         $skuId = (int) ($get('sku_id') ?? 0);
         $quantity = max((int) ($get('quantity_produced') ?? 0), 0);
+        $pieceRate = (float) ($get('piece_rate') ?? 0);
 
         if ($skuId <= 0 || $quantity <= 0) {
             return 0.0;
+        }
+
+        if ($pieceRate > 0) {
+            return $pieceRate * $quantity;
         }
 
         $sku = Sku::query()->find($skuId);

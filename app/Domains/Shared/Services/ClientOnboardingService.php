@@ -55,9 +55,11 @@ class ClientOnboardingService
                 || filled($data['integration_notes'] ?? null);
 
             if ($hasIntegrationData) {
+                $stockAppBusinessKey = $data['stock_app_business_key'] ?? null;
+
                 $integrationSource = IntegrationSource::query()->create([
                     'business_id' => $business->id,
-                    'name' => $data['integration_name'] ?: $business->name.' stock-app',
+                    'name' => filled($data['integration_name'] ?? null) ? $data['integration_name'] : $business->name.' stock-app',
                     'type' => 'stock_app',
                     'base_url' => $data['integration_base_url'] ?? null,
                     'status' => $data['integration_status'] ?? 'draft',
@@ -65,7 +67,7 @@ class ClientOnboardingService
                     'shared_token' => $data['integration_shared_token'] ?? null,
                     'signature_secret' => $data['integration_signature_secret'] ?? null,
                     'settings' => [
-                        'stock_app_business_key' => $data['stock_app_business_key'] ?? null,
+                        'stock_app_business_key' => filled($stockAppBusinessKey) ? $stockAppBusinessKey : str($business->name)->slug()->toString(),
                         'notes' => $data['integration_notes'] ?? null,
                     ],
                 ]);

@@ -223,4 +223,58 @@ class CapitalAndInventoryIntelligenceTest extends TestCase
         $this->assertSame(5, $entry->quantity_produced);
         $this->assertSame(2875.0, (float) $entry->estimated_total_cost);
     }
+
+    public function test_production_cost_service_can_pay_one_selected_piece_work_step(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Piece Work Factory',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'STRAP-001',
+            'name' => 'Slipper Strap',
+            'material_cost' => 20,
+            'packaging_cost' => 0,
+            'labor_rate' => 0,
+            'finishing_cost' => 0,
+            'expected_sale_price' => 80,
+        ]);
+
+        SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_LABOR,
+            'component_name' => 'Cutting',
+            'quantity_per_unit' => 1,
+            'unit_cost' => 4,
+            'active' => true,
+        ]);
+
+        $stitching = SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_LABOR,
+            'component_name' => 'Strap stitching',
+            'quantity_per_unit' => 1,
+            'unit_cost' => 12,
+            'active' => true,
+        ]);
+
+        $entry = app(ProductionCostService::class)->record($sku, [
+            'employee_name' => 'Stitching Worker',
+            'sku_recipe_item_id' => $stitching->id,
+            'quantity_produced' => 100,
+            'produced_on' => now()->toDateString(),
+        ]);
+
+        $this->assertSame('Strap stitching', $entry->production_step);
+        $this->assertSame(12.0, (float) $entry->piece_rate);
+        $this->assertSame(1200.0, (float) $entry->employee_payout);
+        $this->assertSame(1200.0, (float) $entry->net_payable);
+    }
 }

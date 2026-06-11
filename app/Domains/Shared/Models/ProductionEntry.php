@@ -10,7 +10,10 @@ class ProductionEntry extends Model
     protected $fillable = [
         'business_id',
         'sku_id',
+        'sku_recipe_item_id',
         'employee_name',
+        'production_step',
+        'piece_rate',
         'quantity_produced',
         'waste_quantity',
         'employee_payout',
@@ -28,6 +31,7 @@ class ProductionEntry extends Model
     {
         return [
             'employee_payout' => 'decimal:2',
+            'piece_rate' => 'decimal:2',
             'advance_amount' => 'decimal:2',
             'deduction_amount' => 'decimal:2',
             'net_payable' => 'decimal:2',
@@ -40,6 +44,11 @@ class ProductionEntry extends Model
     public function sku(): BelongsTo
     {
         return $this->belongsTo(Sku::class);
+    }
+
+    public function skuRecipeItem(): BelongsTo
+    {
+        return $this->belongsTo(SkuRecipeItem::class);
     }
 
     public function business(): BelongsTo

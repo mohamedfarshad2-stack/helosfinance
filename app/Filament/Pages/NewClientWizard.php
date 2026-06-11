@@ -18,6 +18,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class NewClientWizard extends Page implements HasForms
 {
@@ -53,6 +54,20 @@ class NewClientWizard extends Page implements HasForms
                             ->content('Create the business first. This becomes the financial container for the client. Then answer the quick readiness questions so HELOS can suggest the starting maturity.'),
                         TextInput::make('business_name')
                             ->label('Business name')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
+                                if (blank($state)) {
+                                    return;
+                                }
+
+                                if (blank($get('integration_name'))) {
+                                    $set('integration_name', $state.' Stock App');
+                                }
+
+                                if (blank($get('stock_app_business_key'))) {
+                                    $set('stock_app_business_key', Str::slug($state));
+                                }
+                            })
                             ->required(),
                         TextInput::make('industry')
                             ->placeholder('COD retail, manufacturing, service, distribution...')
@@ -166,7 +181,10 @@ class NewClientWizard extends Page implements HasForms
                             ->content('This step is optional. Fill it in only if the client already has a stock-app to connect. Leave it blank if they are new and do not have one yet.'),
                         TextInput::make('integration_name')
                             ->label('Connection name')
-                            ->placeholder('Primary stock-app connection'),
+                            ->placeholder(fn (Get $get): string => filled($get('business_name'))
+                                ? $get('business_name').' Stock App'
+                                : 'Primary stock-app connection')
+                            ->helperText('Auto-filled from the business name. Change only if this client has more than one stock-app connection.'),
                         TextInput::make('integration_base_url')
                             ->label('Stock-app base URL')
                             ->url()
@@ -182,7 +200,10 @@ class NewClientWizard extends Page implements HasForms
                             ->nullable(),
                         TextInput::make('stock_app_business_key')
                             ->label('Stock-app business key')
-                            ->placeholder('Optional identifier from stock-app'),
+                            ->placeholder(fn (Get $get): string => filled($get('business_name'))
+                                ? Str::slug((string) $get('business_name'))
+                                : 'Auto-filled from business name')
+                            ->helperText('HELOS uses this to match Stock App events to the right business.'),
                         TextInput::make('integration_webhook_secret')
                             ->label('Webhook secret')
                             ->password()

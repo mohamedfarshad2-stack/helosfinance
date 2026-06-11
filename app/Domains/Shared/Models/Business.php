@@ -378,6 +378,11 @@ class Business extends Model
         return $this->hasMany(BankTransaction::class);
     }
 
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
     public function employeeSeatLimit(): ?int
     {
         $settings = is_array($this->settings ?? null) ? $this->settings : [];

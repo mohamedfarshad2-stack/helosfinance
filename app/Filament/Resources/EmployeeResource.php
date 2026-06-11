@@ -26,8 +26,8 @@ class EmployeeResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Section::make('Employee salary setup')
-                ->description('Use this for fixed salaried team members only. Weekly production-based pay lives in Manufacturing > Weekly Production Pay.')
+            Section::make('Employee pay setup')
+                ->description('Use monthly salary only for fixed salaried team members. Production workers can be weekly piece-work with no fixed amount.')
                 ->schema([
                     Select::make('business_id')
                         ->options(fn () => static::businessOptions())
@@ -40,16 +40,22 @@ class EmployeeResource extends Resource
                         ->searchable()
                         ->options(fn () => static::roleOptions())
                         ->preload(),
-                    TextInput::make('monthly_salary')->label('Monthly salary')->numeric()->prefix('LKR')->required(),
                     Select::make('pay_cycle')
                         ->label('When is it settled?')
-                        ->helperText('Use this for fixed monthly salary timing only. Do not use it for weekly production pay.')
+                        ->helperText('Choose weekly production / piece work for workers paid by produced quantity.')
                         ->options([
                             'month_end' => 'At month end',
+                            'weekly_piece' => 'Weekly production / piece work',
                             'custom' => 'Custom',
                         ])
                         ->default('month_end')
                         ->required(),
+                    TextInput::make('monthly_salary')
+                        ->label('Fixed monthly salary')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->default(0)
+                        ->helperText('Leave 0 for weekly production workers. Their pay is recorded in Weekly Production Pay.'),
                     Textarea::make('note')->label('Short note')->rows(3),
                 ])
                 ->columns(2),
@@ -63,7 +69,7 @@ class EmployeeResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('name')->searchable(),
                 Tables\Columns\TextColumn::make('role')->searchable(),
-                Tables\Columns\TextColumn::make('monthly_salary')->money('LKR'),
+                Tables\Columns\TextColumn::make('monthly_salary')->label('Fixed monthly')->money('LKR'),
                 Tables\Columns\TextColumn::make('pay_cycle')->badge(),
                 Tables\Columns\IconColumn::make('active')->boolean(),
             ])
@@ -81,7 +87,7 @@ class EmployeeResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+        return Auth::check() && (Auth::user()?->isOwner() ?? false);
     }
 
     public static function canAccess(): bool

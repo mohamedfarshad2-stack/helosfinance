@@ -48,12 +48,12 @@ class ManagerWorkQueue extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+        return Auth::check() && (Auth::user()?->isOwner() ?? false);
     }
 
     public static function canAccess(): bool
     {
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+        return Auth::check() && (Auth::user()?->isOwner() ?? false);
     }
 
     private function loadQueue(WorkQueueService $workQueue): void

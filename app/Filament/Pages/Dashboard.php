@@ -3,8 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Pages\ClientHealthReport;
-use App\Filament\Pages\ManagerWorkQueue;
 use App\Filament\Pages\TodaysWork;
+use App\Filament\Resources\BusinessResource;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Illuminate\Support\Facades\Auth;
 
@@ -21,7 +21,7 @@ class Dashboard extends BaseDashboard
         }
 
         if ($user?->isInternalAdmin()) {
-            $this->redirect(ManagerWorkQueue::getUrl());
+            $this->redirect(BusinessResource::getUrl('index'));
 
             return;
         }

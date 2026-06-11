@@ -114,6 +114,7 @@ class BusinessCompletenessService
         $activeEmployeesMissingSalary = Employee::query()
             ->where('business_id', $business->id)
             ->where('active', true)
+            ->where('pay_cycle', '!=', 'weekly_piece')
             ->where(function ($query): void {
                 $query->whereNull('monthly_salary')
                     ->orWhere('monthly_salary', '<=', 0);
@@ -124,7 +125,7 @@ class BusinessCompletenessService
             $issues['important'][] = $this->issue(
                 'Missing salary mapping',
                 $activeEmployeesMissingSalary.' active employee(s) still have no salary amount.',
-                'Salary pressure needs a salary figure to stay honest.',
+                'Fixed salary pressure needs a salary figure to stay honest. Weekly production workers are checked through production pay entries.',
                 'Salary obligations and cash pressure.',
                 ['Team salaries']
             );
