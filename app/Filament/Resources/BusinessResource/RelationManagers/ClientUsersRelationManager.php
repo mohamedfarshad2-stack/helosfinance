@@ -6,6 +6,7 @@ use App\Models\User;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class ClientUsersRelationManager extends RelationManager
 {
@@ -29,6 +30,15 @@ class ClientUsersRelationManager extends RelationManager
                     ->badge()
                     ->placeholder('-')
                     ->formatStateUsing(fn (?string $state): string => User::employeeAccessProfileOptions()[$state ?? 'operations'] ?? 'Operations'),
+            ])
+            ->actions([
+                Tables\Actions\DeleteAction::make()
+                    ->label('Remove access')
+                    ->modalHeading('Remove user access?')
+                    ->modalDescription('This removes the login account. Business records and transactions stay in HELOS.')
+                    ->visible(fn (User $record): bool => (Auth::user()?->isInternalAdmin() ?? false)
+                        && ! $record->isInternalAdmin()
+                        && $record->id !== Auth::id()),
             ]);
     }
 }

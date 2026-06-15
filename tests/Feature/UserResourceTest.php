@@ -117,6 +117,51 @@ class UserResourceTest extends TestCase
         );
     }
 
+    public function test_internal_admin_can_remove_client_access_but_not_platform_admins(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Access Removal Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $platformUser = User::query()->create([
+            'name' => 'Platform Admin',
+            'email' => 'remove-platform@example.com',
+            'password' => Hash::make('password'),
+            'is_platform_admin' => true,
+            'is_employee' => false,
+        ]);
+
+        $clientOwner = User::query()->create([
+            'name' => 'Client Owner',
+            'email' => 'remove-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $clientStaff = User::query()->create([
+            'name' => 'Client Staff',
+            'email' => 'remove-staff@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        $this->actingAs($platformUser);
+        $this->assertTrue(UserResource::canDelete($clientOwner));
+        $this->assertTrue(UserResource::canDelete($clientStaff));
+        $this->assertFalse(UserResource::canDelete($platformUser));
+
+        $this->actingAs($clientOwner);
+        $this->assertFalse(UserResource::canDelete($clientStaff));
+    }
+
     public function test_client_owner_can_see_employees_across_their_client_group_businesses_only(): void
     {
         $group = ClientGroup::query()->create(['name' => 'Horns Group']);
