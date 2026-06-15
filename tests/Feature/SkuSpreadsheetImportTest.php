@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Domains\Manufacturing\Services\SkuSpreadsheetImportService;
+use App\Domains\Manufacturing\Services\SkuUploadTemplateExportService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use ZipArchive;
 
 class SkuSpreadsheetImportTest extends TestCase
 {
@@ -76,6 +78,49 @@ class SkuSpreadsheetImportTest extends TestCase
         $this->assertDatabaseCount('skus', 0);
 
         @unlink($csvPath);
+        @unlink($path);
+    }
+
+    public function test_it_exports_product_upload_template_with_business_dropdown(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Factory Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $otherBusiness = Business::query()->create([
+            'name' => 'ShoeHub SL',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_TRADING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'sku_upload_template_').'.xlsx';
+
+        app(SkuUploadTemplateExportService::class)->export($business, [
+            $business->id => $business->name,
+            $otherBusiness->id => $otherBusiness->name,
+        ], $path);
+
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path));
+
+        $productSheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $listsSheet = $zip->getFromName('xl/worksheets/sheet2.xml');
+        $workbook = $zip->getFromName('xl/workbook.xml');
+
+        $zip->close();
+
+        $this->assertStringContainsString('<dataValidations count="2">', $productSheet);
+        $this->assertStringContainsString('BusinessNames', $productSheet);
+        $this->assertStringContainsString('Factory Client', $listsSheet);
+        $this->assertStringContainsString('ShoeHub SL', $listsSheet);
+        $this->assertStringContainsString('<definedName name="BusinessNames">', $workbook);
+
         @unlink($path);
     }
 }
