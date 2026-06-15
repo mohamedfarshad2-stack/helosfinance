@@ -181,15 +181,76 @@ class ListSkuRecipeItems extends ListRecords
         $path = storage_path('app/sku-recipe-upload-sample.csv');
         $writer = new Writer();
         $writer->openToFile($path);
-        $writer->addRow(Row::fromValues(['sku_code', 'line_type', 'component_name', 'quantity_per_unit', 'unit_cost', 'purchase_unit', 'consumption_unit', 'units_per_purchase_unit', 'waste_percent', 'purchase_unit_cost', 'active', 'note']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'raw_material', 'DSI sheet', 1, 0, 'sheet', 'piece', 12, 5, 1200, 'yes', 'One sheet cuts 12 pieces before expected waste.']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'raw_material', 'Rubber sheet', 1, 300, 'sheet', 'piece', 1, 0, 300, 'yes', '']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'raw_material', 'Glue', 0.2, 40, 'bottle', 'use', 1, 0, 40, 'yes', '']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'raw_material', 'Thread', 0.15, 30, 'roll', 'use', 1, 0, 30, 'yes', '']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'raw_material', 'Label', 1, 12, 'piece', 'piece', 1, 0, 12, 'yes', '']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'labor', 'Cutting labor', 1, 60, '', '', '', '', '', 'yes', '']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'labor', 'Stitching labor', 2, 100, '', '', '', '', '', 'yes', '']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'labor', 'Finishing labor', 1, 50, '', '', '', '', '', 'yes', '']));
+        $writer->addRow(Row::fromValues([
+            'sku_code',
+            'line_type',
+            'component_name',
+            'quantity_per_unit',
+            'unit_cost',
+            'purchase_unit',
+            'purchase_unit_cost',
+            'units_per_purchase_unit',
+            'waste_percent',
+            'consumption_unit',
+            'active',
+            'note',
+        ]));
+        $writer->addRow(Row::fromValues([
+            'SLP-001',
+            'raw_material',
+            'DSI sheet',
+            1,
+            '',
+            'sheet',
+            1200,
+            12,
+            5,
+            'piece',
+            'yes',
+            'Sheet example: leave unit_cost blank. HELOS calculates cost per piece from sheet cost, yield, and waste.',
+        ]));
+        $writer->addRow(Row::fromValues([
+            'SLP-001',
+            'raw_material',
+            'Glue',
+            0.2,
+            40,
+            'bottle',
+            '',
+            '',
+            '',
+            'use',
+            'yes',
+            'Simple material example: use unit_cost directly.',
+        ]));
+        $writer->addRow(Row::fromValues([
+            'SLP-001',
+            'labor',
+            'Cutting labor',
+            1,
+            60,
+            '',
+            '',
+            '',
+            '',
+            '',
+            'yes',
+            'Labor example: only quantity_per_unit and unit_cost matter.',
+        ]));
+        $writer->addRow(Row::fromValues([
+            'SLP-001',
+            'labor',
+            'Stitching labor',
+            2,
+            100,
+            '',
+            '',
+            '',
+            '',
+            '',
+            'yes',
+            'Labor example: 2 stitches/steps at Rs 100 each.',
+        ]));
         $writer->close();
 
         return response()->download($path, 'helos-sku-recipe-sample.csv')->deleteFileAfterSend();
