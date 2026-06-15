@@ -12,6 +12,7 @@ use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MaterialComponentResource;
 use App\Filament\Resources\IntegrationSourceResource;
 use App\Filament\Resources\MaterialLedgerResource;
+use App\Filament\Resources\ProductionWorkStepResource;
 use App\Filament\Resources\ProductionEntryResource;
 use App\Filament\Resources\SkuRecipeResource;
 use App\Filament\Resources\SkuResource;
@@ -316,6 +317,11 @@ class BusinessArchitectureTest extends TestCase
             ->assertOk()
             ->assertSee('Usable pieces per buying unit')
             ->assertSee('Expected waste');
+
+        $this->get(ProductionWorkStepResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Work name')
+            ->assertSee('Rate per unit');
 
         $this->get(SkuResource::getUrl('create'))
             ->assertOk()

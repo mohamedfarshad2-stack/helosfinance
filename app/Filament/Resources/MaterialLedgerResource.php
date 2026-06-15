@@ -25,7 +25,7 @@ class MaterialLedgerResource extends Resource
     protected static ?string $navigationGroup = 'Manufacturing';
     protected static ?string $navigationLabel = 'Material Ledger';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
     {

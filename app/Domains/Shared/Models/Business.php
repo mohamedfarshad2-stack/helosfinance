@@ -390,6 +390,11 @@ class Business extends Model
         return $this->hasMany(MaterialComponent::class);
     }
 
+    public function productionWorkSteps(): HasMany
+    {
+        return $this->hasMany(ProductionWorkStep::class);
+    }
+
     public function clientGroup(): BelongsTo
     {
         return $this->belongsTo(ClientGroup::class);
