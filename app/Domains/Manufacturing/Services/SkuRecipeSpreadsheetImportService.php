@@ -14,7 +14,7 @@ use OpenSpout\Reader\Common\Creator\ReaderFactory;
 class SkuRecipeSpreadsheetImportService
 {
     /**
-     * @return array{created:int, updated:int, skipped:int}
+     * @return array{created:int, updated:int, skipped:int, skipped_reasons:list<string>}
      */
     public function import(Business $business, string $path): array
     {
@@ -25,6 +25,7 @@ class SkuRecipeSpreadsheetImportService
         $created = 0;
         $updated = 0;
         $skipped = 0;
+        $skippedReasons = [];
 
         foreach ($reader->getSheetIterator() as $sheet) {
             foreach ($sheet->getRowIterator() as $rowNumber => $row) {
@@ -40,6 +41,7 @@ class SkuRecipeSpreadsheetImportService
 
                 if (! $this->hasMinimumData($data)) {
                     $skipped++;
+                    $this->addSkippedReason($skippedReasons, $rowNumber, 'SKU code or component/work step name is missing.');
                     continue;
                 }
 
@@ -51,20 +53,23 @@ class SkuRecipeSpreadsheetImportService
 
                 if (! $sku instanceof Sku) {
                     $skipped++;
+                    $this->addSkippedReason($skippedReasons, $rowNumber, "SKU '{$skuCode}' was not found for this business.");
                     continue;
                 }
 
                 $lineType = $this->lineType($data['line_type'] ?? null);
                 $componentName = trim((string) ($data['component_name'] ?? ''));
+                $unitCost = (float) ($data['unit_cost'] ?? 0);
                 $component = $lineType === SkuRecipeItem::TYPE_RAW_MATERIAL
                     ? $this->materialComponent($business, $componentName, $data)
                     : null;
                 $workStep = $lineType === SkuRecipeItem::TYPE_LABOR
-                    ? $this->workStep($business, $componentName)
+                    ? $this->workStep($business, $componentName, $unitCost)
                     : null;
 
                 if ($lineType === SkuRecipeItem::TYPE_LABOR && ! $workStep instanceof ProductionWorkStep) {
                     $skipped++;
+                    $this->addSkippedReason($skippedReasons, $rowNumber, "Work step '{$componentName}' could not be created.");
                     continue;
                 }
 
@@ -75,7 +80,6 @@ class SkuRecipeSpreadsheetImportService
                     'component_name' => $component?->name ?? $workStep?->name ?? $componentName,
                 ];
 
-                $unitCost = (float) ($data['unit_cost'] ?? 0);
                 if ($unitCost <= 0 && $component instanceof MaterialComponent) {
                     $unitCost = $component->costPerConsumptionUnit();
                 }
@@ -102,7 +106,12 @@ class SkuRecipeSpreadsheetImportService
 
         $reader->close();
 
-        return compact('created', 'updated', 'skipped');
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'skipped_reasons' => $skippedReasons,
+        ];
     }
 
     private function normalizeHeaders(array $values): array
@@ -176,15 +185,38 @@ class SkuRecipeSpreadsheetImportService
         );
     }
 
-    private function workStep(Business $business, string $name): ?ProductionWorkStep
+    /**
+     * @param  list<string>  $reasons
+     */
+    private function addSkippedReason(array &$reasons, int $rowNumber, string $reason): void
+    {
+        if (count($reasons) >= 8) {
+            return;
+        }
+
+        $reasons[] = "Row {$rowNumber}: {$reason}";
+    }
+
+    private function workStep(Business $business, string $name, float $unitCost): ?ProductionWorkStep
     {
         if (blank($name)) {
             return null;
         }
 
-        return ProductionWorkStep::query()
+        $existing = ProductionWorkStep::query()
             ->where('business_id', $business->id)
             ->whereRaw('LOWER(name) = ?', [strtolower($name)])
             ->first();
+
+        if ($existing instanceof ProductionWorkStep) {
+            return $existing;
+        }
+
+        return ProductionWorkStep::query()->create([
+            'business_id' => $business->id,
+            'name' => $name,
+            'unit_cost' => max($unitCost, 0),
+            'active' => true,
+        ]);
     }
 }

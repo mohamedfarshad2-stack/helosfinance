@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\ProductionWorkStepResource\Pages;
 
-use App\Domains\Manufacturing\Services\ProductionWorkStepSetupService;
 use App\Domains\Shared\Models\Business;
 use App\Filament\Resources\ProductionWorkStepResource;
 use Filament\Actions;
@@ -28,11 +27,12 @@ class ListProductionWorkSteps extends ListRecords
                         ->options(fn () => $this->businessOptions())
                         ->default(fn () => Auth::user()?->defaultBusinessId())
                         ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->dehydrated()
                         ->required(),
                 ])
-                ->action(function (array $data, ProductionWorkStepSetupService $service): void {
+                ->action(function (array $data): void {
                     $business = Business::query()->findOrFail($data['business_id']);
-                    $result = $service->addCommonSteps($business);
+                    $result = app(\App\Domains\Manufacturing\Services\ProductionWorkStepSetupService::class)->addCommonSteps($business);
 
                     Notification::make()
                         ->title('Common work steps are ready')

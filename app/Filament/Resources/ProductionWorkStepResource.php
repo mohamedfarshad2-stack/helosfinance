@@ -40,6 +40,7 @@ class ProductionWorkStepResource extends Resource
                 ->options(fn () => static::businessOptions())
                 ->default(fn () => Auth::user()?->defaultBusinessId())
                 ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                ->dehydrated()
                 ->required(),
             TextInput::make('name')
                 ->label('Work name')

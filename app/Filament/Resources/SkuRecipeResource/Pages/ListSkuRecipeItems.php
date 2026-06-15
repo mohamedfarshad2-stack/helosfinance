@@ -80,10 +80,17 @@ class ListSkuRecipeItems extends ListRecords
                         return;
                     }
 
+                    $skippedReasons = collect($result['skipped_reasons'] ?? [])->take(5)->implode(' ');
+                    $body = "Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.";
+
+                    if ($skippedReasons !== '') {
+                        $body .= ' '.$skippedReasons;
+                    }
+
                     Notification::make()
                         ->title('Recipe upload completed')
-                        ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.")
-                        ->success()
+                        ->body($body)
+                        ->status($result['skipped'] > 0 ? 'warning' : 'success')
                         ->send();
                 }),
             Actions\Action::make('addRecipeBundle')
