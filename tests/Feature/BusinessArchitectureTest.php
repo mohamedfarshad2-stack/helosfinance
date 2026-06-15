@@ -333,6 +333,10 @@ class BusinessArchitectureTest extends TestCase
             ->assertOk()
             ->assertSee('Material component');
 
+        $this->get(SkuRecipeResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('Delete SKU recipe');
+
         $this->get(ExpenseResource::getUrl('create'))
             ->assertOk()
             ->assertSee('What was paid for?')

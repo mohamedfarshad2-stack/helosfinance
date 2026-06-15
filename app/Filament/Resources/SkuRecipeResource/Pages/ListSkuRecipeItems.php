@@ -208,6 +208,43 @@ class ListSkuRecipeItems extends ListRecords
                         ->success()
                         ->send();
                 }),
+            Actions\Action::make('deleteSkuRecipe')
+                ->label('Delete SKU recipe')
+                ->icon('heroicon-o-trash')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalHeading('Delete all recipe lines for this SKU?')
+                ->modalDescription('This removes the material and labour recipe lines only. It does not delete the product/SKU.')
+                ->form([
+                    Select::make('business_id')
+                        ->label('Business')
+                        ->options(fn () => $this->businessOptions())
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
+                        ->live()
+                        ->required(),
+                    Select::make('sku_id')
+                        ->label('SKU')
+                        ->options(fn (Get $get) => $this->skuOptions((int) ($get('business_id') ?? 0)))
+                        ->searchable()
+                        ->required(),
+                ])
+                ->action(function (array $data): void {
+                    $business = Business::query()->findOrFail($data['business_id']);
+                    $sku = Sku::query()
+                        ->where('business_id', $business->id)
+                        ->findOrFail($data['sku_id']);
+
+                    $deleted = SkuRecipeItem::query()
+                        ->where('business_id', $business->id)
+                        ->where('sku_id', $sku->id)
+                        ->delete();
+
+                    Notification::make()
+                        ->title('SKU recipe deleted')
+                        ->body("Removed {$deleted} recipe lines for {$sku->code}. The product itself was not deleted.")
+                        ->success()
+                        ->send();
+                }),
         ];
     }
 

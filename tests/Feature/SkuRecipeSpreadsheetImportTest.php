@@ -9,7 +9,11 @@ use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
+use App\Filament\Resources\SkuRecipeResource\Pages\ListSkuRecipeItems;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -173,5 +177,67 @@ class SkuRecipeSpreadsheetImportTest extends TestCase
         $this->assertStringContainsString('<definedName name="MaterialNames">', $workbook);
 
         @unlink($path);
+    }
+
+    public function test_owner_can_delete_all_recipe_lines_for_one_sku_without_deleting_the_product(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Factory Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'recipe-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'PS364',
+            'name' => 'Classic Bag',
+            'expected_sale_price' => 1200,
+        ]);
+
+        SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_RAW_MATERIAL,
+            'component_name' => 'Rexine',
+            'quantity_per_unit' => 1,
+            'unit_cost' => 49.12,
+            'active' => true,
+        ]);
+
+        SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_RAW_MATERIAL,
+            'component_name' => 'DSI Sheet',
+            'quantity_per_unit' => 1,
+            'unit_cost' => 201.75,
+            'active' => true,
+        ]);
+
+        Livewire::actingAs($owner)
+            ->test(ListSkuRecipeItems::class)
+            ->callAction('deleteSkuRecipe', data: [
+                'business_id' => $business->id,
+                'sku_id' => $sku->id,
+            ]);
+
+        $this->assertDatabaseHas('skus', [
+            'id' => $sku->id,
+            'code' => 'PS364',
+        ]);
+        $this->assertDatabaseMissing('sku_recipe_items', [
+            'sku_id' => $sku->id,
+        ]);
     }
 }
