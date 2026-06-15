@@ -22,7 +22,11 @@ class ProductionWorkStepResource extends Resource
 
     protected static ?string $navigationGroup = 'Manufacturing';
 
-    protected static ?string $navigationLabel = 'Labour / Work Steps';
+    protected static ?string $navigationLabel = 'Work Steps';
+
+    protected static ?string $modelLabel = 'work step';
+
+    protected static ?string $pluralModelLabel = 'work steps';
 
     protected static ?string $navigationIcon = 'heroicon-o-wrench-screwdriver';
 
