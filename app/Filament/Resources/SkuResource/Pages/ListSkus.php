@@ -10,6 +10,8 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer;
@@ -25,14 +27,26 @@ class ListSkus extends ListRecords
             Actions\Action::make('downloadSample')
                 ->label('Download sample')
                 ->icon('heroicon-o-arrow-down-tray')
-                ->action(fn () => $this->downloadSample()),
+                ->form([
+                    Select::make('business_id')
+                        ->label('Business')
+                        ->options(fn () => $this->businessOptions())
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
+                        ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->dehydrated()
+                        ->required(),
+                ])
+                ->action(fn (array $data) => $this->downloadSample((int) $data['business_id'])),
             Actions\Action::make('uploadSkus')
                 ->label('Upload Excel')
                 ->icon('heroicon-o-arrow-up-tray')
                 ->form([
                     Select::make('business_id')
                         ->label('Business')
-                        ->options(Business::query()->pluck('name', 'id'))
+                        ->options(fn () => $this->businessOptions())
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
+                        ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->dehydrated()
                         ->required(),
                     FileUpload::make('file')
                         ->label('SKU Excel or CSV file')
@@ -64,24 +78,50 @@ class ListSkus extends ListRecords
 
                     Notification::make()
                         ->title('SKU upload completed')
-                        ->body("Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.")
-                        ->success()
+                        ->body($this->uploadSummary($business, $result))
+                        ->status($result['skipped'] > 0 ? 'warning' : 'success')
                         ->send();
                 }),
             Actions\CreateAction::make(),
         ];
     }
 
-    public function downloadSample()
+    public function downloadSample(int $businessId)
     {
+        $business = Business::query()->findOrFail($businessId);
         $path = storage_path('app/sku-upload-sample.xlsx');
         $writer = new Writer();
         $writer->openToFile($path);
-        $writer->addRow(Row::fromValues(['code', 'name', 'expected_sale_price', 'active', 'material_cost', 'packaging_cost', 'labor_rate', 'finishing_cost', 'note']));
-        $writer->addRow(Row::fromValues(['SLP-001', 'Black Slipper Size 8', 1200, 'yes', '', '', '', '', 'Costs should normally come from SKU Recipe / BOM.']));
-        $writer->addRow(Row::fromValues(['SLP-002', 'Brown Slipper Size 9', 1350, 'yes', '', '', '', '', 'Leave fallback costs blank if recipe will be added.']));
+        $writer->addRow(Row::fromValues(['business_name', 'code', 'name', 'expected_sale_price', 'active', 'material_cost', 'packaging_cost', 'labor_rate', 'finishing_cost', 'note']));
+        $writer->addRow(Row::fromValues([$business->name, 'SLP-001', 'Black Slipper Size 8', 1200, 'yes', '', '', '', '', 'Costs should normally come from SKU Recipe / BOM.']));
+        $writer->addRow(Row::fromValues([$business->name, 'SLP-002', 'Brown Slipper Size 9', 1350, 'yes', '', '', '', '', 'Leave fallback costs blank if recipe will be added.']));
         $writer->close();
 
         return response()->download($path, 'helos-sku-upload-sample.xlsx')->deleteFileAfterSend();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function businessOptions(): array
+    {
+        $user = Auth::user();
+
+        return Business::query()
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    /**
+     * @param  array{created:int, updated:int, skipped:int, skipped_reasons?:list<string>}  $result
+     */
+    private function uploadSummary(Business $business, array $result): string
+    {
+        $body = "Business: {$business->name}. Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.";
+        $reasons = collect($result['skipped_reasons'] ?? [])->take(5)->implode(' ');
+
+        return $reasons === '' ? $body : $body.' '.$reasons;
     }
 }
