@@ -77,9 +77,9 @@ class ListSkus extends ListRecords
         $path = storage_path('app/sku-upload-sample.xlsx');
         $writer = new Writer();
         $writer->openToFile($path);
-        $writer->addRow(Row::fromValues(['code', 'name', 'material_cost', 'packaging_cost', 'labor_rate', 'finishing_cost', 'expected_sale_price', 'active']));
-        $writer->addRow(Row::fromValues(['BAG-CLASSIC', 'Classic Bag', 950, 120, 280, 150, 3200, 'yes']));
-        $writer->addRow(Row::fromValues(['BAG-PREMIUM', 'Premium Bag', 1450, 160, 420, 260, 5200, 'yes']));
+        $writer->addRow(Row::fromValues(['code', 'name', 'expected_sale_price', 'active', 'material_cost', 'packaging_cost', 'labor_rate', 'finishing_cost', 'note']));
+        $writer->addRow(Row::fromValues(['SLP-001', 'Black Slipper Size 8', 1200, 'yes', '', '', '', '', 'Costs should normally come from SKU Recipe / BOM.']));
+        $writer->addRow(Row::fromValues(['SLP-002', 'Brown Slipper Size 9', 1350, 'yes', '', '', '', '', 'Leave fallback costs blank if recipe will be added.']));
         $writer->close();
 
         return response()->download($path, 'helos-sku-upload-sample.xlsx')->deleteFileAfterSend();
