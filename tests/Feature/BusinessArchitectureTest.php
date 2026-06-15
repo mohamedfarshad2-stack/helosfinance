@@ -9,6 +9,7 @@ use App\Filament\Pages\BankStatementImport;
 use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\ExpenseResource;
+use App\Filament\Resources\MaterialComponentResource;
 use App\Filament\Resources\IntegrationSourceResource;
 use App\Filament\Resources\MaterialLedgerResource;
 use App\Filament\Resources\ProductionEntryResource;
@@ -303,6 +304,15 @@ class BusinessArchitectureTest extends TestCase
         $this->get(MaterialLedgerResource::getUrl('create'))
             ->assertOk()
             ->assertSee('Component');
+
+        $this->get(MaterialComponentResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('Material Components');
+
+        $this->get(MaterialComponentResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Usable pieces per buying unit')
+            ->assertSee('Expected waste');
 
         $this->get(SkuRecipeResource::getUrl('create'))
             ->assertOk()
