@@ -58,15 +58,17 @@ class SkuRecipeSpreadsheetImportTest extends TestCase
 
         $result = app(SkuRecipeSpreadsheetImportService::class)->import($business, $csvPath);
 
-        $this->assertSame(3, $result['created']);
+        $this->assertSame(4, $result['created']);
         $this->assertSame(0, $result['updated']);
-        $this->assertSame(1, $result['skipped']);
-        $this->assertDatabaseCount('sku_recipe_items', 3);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertSame([], $result['skipped_reasons']);
+        $this->assertDatabaseCount('sku_recipe_items', 4);
 
         $this->assertSame(2, SkuRecipeItem::query()->where('line_type', SkuRecipeItem::TYPE_RAW_MATERIAL)->count());
-        $this->assertSame(1, SkuRecipeItem::query()->where('line_type', SkuRecipeItem::TYPE_LABOR)->count());
+        $this->assertSame(2, SkuRecipeItem::query()->where('line_type', SkuRecipeItem::TYPE_LABOR)->count());
         $this->assertDatabaseCount('material_components', 2);
-        $this->assertSame(1, SkuRecipeItem::query()->whereNotNull('production_work_step_id')->count());
+        $this->assertSame(2, SkuRecipeItem::query()->whereNotNull('production_work_step_id')->count());
+        $this->assertTrue(ProductionWorkStep::query()->where('name', 'Stiching labour')->exists());
 
         $component = MaterialComponent::query()->where('name', 'DSI sheet')->firstOrFail();
 
@@ -76,9 +78,40 @@ class SkuRecipeSpreadsheetImportTest extends TestCase
         $repeat = app(SkuRecipeSpreadsheetImportService::class)->import($business, $csvPath);
 
         $this->assertSame(0, $repeat['created']);
-        $this->assertSame(3, $repeat['updated']);
-        $this->assertSame(1, $repeat['skipped']);
-        $this->assertDatabaseCount('sku_recipe_items', 3);
+        $this->assertSame(4, $repeat['updated']);
+        $this->assertSame(0, $repeat['skipped']);
+        $this->assertDatabaseCount('sku_recipe_items', 4);
+
+        @unlink($csvPath);
+        @unlink($path);
+    }
+
+    public function test_it_reports_why_recipe_rows_are_skipped(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Factory Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'sku_recipe_');
+        $csvPath = $path.'.csv';
+
+        file_put_contents($csvPath, implode(PHP_EOL, [
+            'sku_code,line_type,component_name,quantity_per_unit,unit_cost',
+            'MISSING-001,raw_material,DSI sheet,1,100',
+            ',labour,Stitching labour,1,50',
+        ]));
+
+        $result = app(SkuRecipeSpreadsheetImportService::class)->import($business, $csvPath);
+
+        $this->assertSame(0, $result['created']);
+        $this->assertSame(0, $result['updated']);
+        $this->assertSame(2, $result['skipped']);
+        $this->assertStringContainsString("SKU 'MISSING-001' was not found", $result['skipped_reasons'][0]);
+        $this->assertStringContainsString('SKU code or component/work step name is missing', $result['skipped_reasons'][1]);
 
         @unlink($csvPath);
         @unlink($path);
