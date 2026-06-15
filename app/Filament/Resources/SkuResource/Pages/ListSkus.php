@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\SkuResource\Pages;
 
 use App\Domains\Manufacturing\Services\SkuSpreadsheetImportService;
+use App\Domains\Manufacturing\Services\SkuUploadTemplateExportService;
 use App\Domains\Shared\Models\Business;
 use App\Filament\Resources\SkuResource;
 use Filament\Actions;
@@ -13,8 +14,6 @@ use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use OpenSpout\Common\Entity\Row;
-use OpenSpout\Writer\XLSX\Writer;
 use Throwable;
 
 class ListSkus extends ListRecords
@@ -36,7 +35,7 @@ class ListSkus extends ListRecords
                         ->dehydrated()
                         ->required(),
                 ])
-                ->action(fn (array $data) => $this->downloadSample((int) $data['business_id'])),
+                ->action(fn (array $data, SkuUploadTemplateExportService $exporter) => $this->downloadSample((int) $data['business_id'], $exporter)),
             Actions\Action::make('uploadSkus')
                 ->label('Upload Excel')
                 ->icon('heroicon-o-arrow-up-tray')
@@ -86,16 +85,12 @@ class ListSkus extends ListRecords
         ];
     }
 
-    public function downloadSample(int $businessId)
+    public function downloadSample(int $businessId, SkuUploadTemplateExportService $exporter)
     {
         $business = Business::query()->findOrFail($businessId);
         $path = storage_path('app/sku-upload-sample.xlsx');
-        $writer = new Writer();
-        $writer->openToFile($path);
-        $writer->addRow(Row::fromValues(['business_name', 'code', 'name', 'expected_sale_price', 'active', 'material_cost', 'packaging_cost', 'labor_rate', 'finishing_cost', 'note']));
-        $writer->addRow(Row::fromValues([$business->name, 'SLP-001', 'Black Slipper Size 8', 1200, 'yes', '', '', '', '', 'Costs should normally come from SKU Recipe / BOM.']));
-        $writer->addRow(Row::fromValues([$business->name, 'SLP-002', 'Brown Slipper Size 9', 1350, 'yes', '', '', '', '', 'Leave fallback costs blank if recipe will be added.']));
-        $writer->close();
+
+        $exporter->export($business, $this->businessOptions(), $path);
 
         return response()->download($path, 'helos-sku-upload-sample.xlsx')->deleteFileAfterSend();
     }
