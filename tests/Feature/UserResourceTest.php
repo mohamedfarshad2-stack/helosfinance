@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\ClientGroup;
 use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
@@ -114,6 +115,93 @@ class UserResourceTest extends TestCase
             ['Client Owner', 'Client Staff'],
             $business->users()->orderBy('name')->pluck('name')->all()
         );
+    }
+
+    public function test_client_owner_can_see_employees_across_their_client_group_businesses_only(): void
+    {
+        $group = ClientGroup::query()->create(['name' => 'Horns Group']);
+        $otherGroup = ClientGroup::query()->create(['name' => 'Other Group']);
+
+        $horns = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'Horns England',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $shoehub = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'ShoeHub SL',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_TRADING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $otherBusiness = Business::query()->create([
+            'client_group_id' => $otherGroup->id,
+            'name' => 'Other Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Group Owner',
+            'email' => 'group-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $horns->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        User::query()->create([
+            'name' => 'Horns Staff',
+            'email' => 'horns-staff@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $horns->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        User::query()->create([
+            'name' => 'ShoeHub Staff',
+            'email' => 'shoehub-staff@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $shoehub->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        User::query()->create([
+            'name' => 'Other Staff',
+            'email' => 'other-staff@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $otherBusiness->id,
+            'client_group_id' => $otherGroup->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(BusinessResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('Horns England')
+            ->assertSee('ShoeHub SL')
+            ->assertDontSee('Other Client');
+
+        $this->actingAs($owner)
+            ->get(UserResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('Horns Staff')
+            ->assertSee('ShoeHub Staff')
+            ->assertDontSee('Other Staff');
     }
 
     public function test_business_can_track_employee_seat_limit_and_usage(): void

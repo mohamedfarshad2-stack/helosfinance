@@ -40,8 +40,8 @@ class UserResource extends Resource
                 ->options(fn () => static::businessOptions())
                 ->searchable()
                 ->required()
-                ->default(fn () => Auth::user()?->business_id)
-                ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false)),
+                ->default(fn () => Auth::user()?->defaultBusinessId())
+                ->disabled(fn (): bool => Auth::user()?->isStaff() ?? false),
             Placeholder::make('seat_usage')
                 ->hiddenLabel()
                 ->content(fn (Get $get): HtmlString => new HtmlString(static::seatUsageContent($get('business_id')))),
@@ -107,7 +107,7 @@ class UserResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
@@ -121,7 +121,7 @@ class UserResource extends Resource
             return $query;
         }
 
-        return $query->where('business_id', $user?->business_id);
+        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
     }
 
     private static function seatUsageContent(mixed $businessId): string

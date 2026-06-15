@@ -35,7 +35,7 @@ class QuickExpenseEntry extends Page implements HasForms
     public function mount(): void
     {
         $this->form->fill([
-            'business_id' => Auth::user()?->business_id,
+            'business_id' => Auth::user()?->defaultBusinessId(),
             'payment_status' => 'paid',
             'paid_amount' => 0,
             'spent_on' => now()->toDateString(),
@@ -54,7 +54,7 @@ class QuickExpenseEntry extends Page implements HasForms
                 Select::make('business_id')
                     ->label('Business')
                     ->options(fn () => $this->businessOptions())
-                    ->default(fn () => Auth::user()?->business_id)
+                    ->default(fn () => Auth::user()?->defaultBusinessId())
                     ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
                     ->required(),
                 TextInput::make('amount')
@@ -179,7 +179,7 @@ class QuickExpenseEntry extends Page implements HasForms
             ->send();
 
         $this->form->fill([
-            'business_id' => $data['business_id'] ?? Auth::user()?->business_id,
+            'business_id' => $data['business_id'] ?? Auth::user()?->defaultBusinessId(),
             'payment_status' => 'paid',
             'payment_method' => 'cash',
             'paid_amount' => 0,
@@ -205,10 +205,10 @@ class QuickExpenseEntry extends Page implements HasForms
 
     private function refreshRecentExpenses(): void
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         $this->recentExpenses = Expense::query()
-            ->when($businessId, fn ($query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn ($query) => $query->whereIn('business_id', $businessIds))
             ->latest('spent_on')
             ->latest('id')
             ->limit(8)
@@ -220,7 +220,7 @@ class QuickExpenseEntry extends Page implements HasForms
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
@@ -228,7 +228,7 @@ class QuickExpenseEntry extends Page implements HasForms
 
     private function expenseCategoryOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         $defaultCategories = collect([
             'Fuel',
@@ -247,7 +247,7 @@ class QuickExpenseEntry extends Page implements HasForms
         ])->mapWithKeys(fn (string $category): array => [$category => $category])->all();
 
         $savedCategories = Expense::query()
-            ->when($businessId, fn ($query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn ($query) => $query->whereIn('business_id', $businessIds))
             ->whereNotNull('category')
             ->where('category', '!=', '')
             ->distinct()
@@ -260,10 +260,10 @@ class QuickExpenseEntry extends Page implements HasForms
 
     private function payeeOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         return Expense::query()
-            ->when($businessId, fn ($query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn ($query) => $query->whereIn('business_id', $businessIds))
             ->whereNotNull('payee')
             ->where('payee', '!=', '')
             ->distinct()
@@ -274,10 +274,10 @@ class QuickExpenseEntry extends Page implements HasForms
 
     private function employeeOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         return Employee::query()
-            ->when($businessId, fn ($query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn ($query) => $query->whereIn('business_id', $businessIds))
             ->where('active', true)
             ->orderBy('name')
             ->pluck('name', 'name')

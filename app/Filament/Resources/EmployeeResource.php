@@ -31,7 +31,7 @@ class EmployeeResource extends Resource
                 ->schema([
                     Select::make('business_id')
                         ->options(fn () => static::businessOptions())
-                        ->default(fn () => Auth::user()?->business_id)
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
                         ->required(),
                     TextInput::make('name')->required(),
                     Select::make('role')
@@ -100,7 +100,7 @@ class EmployeeResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->pluck('name', 'id')
             ->all();
     }
@@ -113,12 +113,12 @@ class EmployeeResource extends Resource
             return $query;
         }
 
-        return $query->where('business_id', $user?->business_id);
+        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
     }
 
     private static function roleOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         $defaults = collect([
             'Supervisor',
@@ -134,7 +134,7 @@ class EmployeeResource extends Resource
         ])->mapWithKeys(fn (string $role): array => [$role => $role])->all();
 
         $savedRoles = Employee::query()
-            ->when($businessId, fn (Builder $query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn (Builder $query) => $query->whereIn('business_id', $businessIds))
             ->whereNotNull('role')
             ->where('role', '!=', '')
             ->distinct()

@@ -3,6 +3,7 @@
 namespace App\Domains\Shared\Services;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\ClientGroup;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -16,8 +17,14 @@ class ClientOnboardingService
     public function create(array $data): array
     {
         return DB::transaction(function () use ($data): array {
+            $clientGroup = ClientGroup::query()->create([
+                'name' => $data['client_group_name'] ?? $data['business_name'],
+                'note' => $data['client_group_note'] ?? null,
+            ]);
+
             $business = Business::query()->create([
                 'name' => $data['business_name'],
+                'client_group_id' => $clientGroup->id,
                 'currency' => $data['currency'] ?? 'LKR',
                 'industry' => $data['industry'] ?? null,
                 'business_type' => $data['business_type'],
@@ -43,6 +50,7 @@ class ClientOnboardingService
                 'email' => $data['user_email'],
                 'password' => $password,
                 'business_id' => $business->id,
+                'client_group_id' => $clientGroup->id,
                 'is_platform_admin' => false,
                 'is_employee' => false,
             ]);

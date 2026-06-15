@@ -81,7 +81,7 @@ class ClientHealthReport extends Page implements HasForms
     public function mount(BusinessHealthSnapshotService $snapshots, BusinessAdvisorService $advisor, CashIntelligenceService $cashIntelligence, CapitalIntelligenceService $capitalIntelligence, InventoryIntelligenceService $inventoryIntelligence, RevenuePipelineService $revenuePipeline, BreakEvenIntelligenceService $breakEvenIntelligence, GoalIntelligenceService $goalIntelligence, TrustValidationService $trustValidation, WorkQueueService $workQueue): void
     {
         $this->form->fill([
-            'business_id' => Auth::user()?->business_id,
+            'business_id' => Auth::user()?->defaultBusinessId(),
             'goal_type' => 'profit',
             'goal_amount' => null,
         ]);
@@ -265,7 +265,7 @@ class ClientHealthReport extends Page implements HasForms
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();

@@ -29,7 +29,7 @@ class MaterialLedgerResource extends Resource
         return $form->schema([
             Select::make('business_id')
                 ->options(fn () => static::businessOptions())
-                ->default(fn () => Auth::user()?->business_id)
+                ->default(fn () => Auth::user()?->defaultBusinessId())
                 ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
                 ->required(),
             Select::make('sku_id')
@@ -106,7 +106,7 @@ class MaterialLedgerResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
@@ -171,7 +171,7 @@ class MaterialLedgerResource extends Resource
             return $query;
         }
 
-        return $query->where('business_id', $user?->business_id);
+        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
     }
 
     private static function currentBusinessSupportsManufacturing(): bool

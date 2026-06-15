@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\ClientGroup;
 use App\Domains\Shared\Models\Expense;
 use App\Filament\Resources\BusinessResource\Pages;
 use App\Filament\Resources\BusinessResource\RelationManagers\ClientUsersRelationManager;
@@ -34,6 +35,13 @@ class BusinessResource extends Resource
         return $form->schema([
             Section::make('Client profile')
                 ->schema([
+                    Select::make('client_group_id')
+                        ->label('Client group')
+                        ->options(fn () => ClientGroup::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->searchable()
+                        ->default(fn () => Auth::user()?->client_group_id)
+                        ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->helperText('Use this when one owner has multiple businesses under the same portal.'),
                     TextInput::make('name')->label('Business name')->required(),
                     TextInput::make('currency')->default('LKR')->required()->maxLength(8),
                     TextInput::make('industry')->placeholder('COD retail, manufacturing, service, food, etc.'),
@@ -217,6 +225,7 @@ class BusinessResource extends Resource
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
             ->columns([
                 Tables\Columns\TextColumn::make('name')->searchable(),
+                Tables\Columns\TextColumn::make('clientGroup.name')->label('Client group')->searchable()->toggleable(),
                 Tables\Columns\TextColumn::make('industry'),
                 Tables\Columns\TextColumn::make('business_type')
                     ->label('Type')
@@ -256,7 +265,9 @@ class BusinessResource extends Resource
 
     public static function canCreate(): bool
     {
-        return Auth::user()?->seesAllBusinesses() ?? false;
+        $user = Auth::user();
+
+        return (bool) (($user?->seesAllBusinesses() ?? false) || ($user?->isOwner() ?? false));
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -277,7 +288,7 @@ class BusinessResource extends Resource
             return $query;
         }
 
-        return $query->whereKey($user?->business_id);
+        return $query->whereIn('id', $user?->accessibleBusinessIds() ?? []);
     }
 
     private static function activationPreview(string $businessType, string $primaryType, array $secondaryTypes, string $maturity): string

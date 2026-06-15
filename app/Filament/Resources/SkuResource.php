@@ -25,7 +25,7 @@ class SkuResource extends Resource
         return $form->schema([
             Select::make('business_id')
                 ->options(fn () => static::businessOptions())
-                ->default(fn () => Auth::user()?->business_id)
+                ->default(fn () => Auth::user()?->defaultBusinessId())
                 ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
                 ->required(),
             TextInput::make('code')->required()->maxLength(80),
@@ -83,7 +83,7 @@ class SkuResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn ($query) => $query->whereKey($user?->business_id))
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn ($query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();

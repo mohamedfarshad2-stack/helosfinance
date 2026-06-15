@@ -60,7 +60,7 @@ class ManagerWorkQueue extends Page
     {
         $user = Auth::user();
         $this->showAdminShortcuts = (bool) ($user?->isInternalAdmin() ?? false);
-        $businessId = $user?->business_id ?: $this->defaultBusinessId();
+        $businessId = $user?->defaultBusinessId() ?: $this->defaultBusinessId();
         $this->business = $businessId ? Business::query()->find($businessId) : null;
         $this->workQueue = $this->business ? $workQueue->forBusiness($this->business) : [];
     }
@@ -69,8 +69,8 @@ class ManagerWorkQueue extends Page
     {
         $user = Auth::user();
 
-        if ($user?->business_id) {
-            return (int) $user->business_id;
+        if ($user?->defaultBusinessId()) {
+            return (int) $user->defaultBusinessId();
         }
 
         return Business::query()->orderBy('name')->value('id');
