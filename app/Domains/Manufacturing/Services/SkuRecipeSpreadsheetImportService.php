@@ -3,6 +3,7 @@
 namespace App\Domains\Manufacturing\Services;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use Illuminate\Support\Str;
@@ -52,16 +53,28 @@ class SkuRecipeSpreadsheetImportService
                     continue;
                 }
 
+                $lineType = $this->lineType($data['line_type'] ?? null);
+                $componentName = trim((string) ($data['component_name'] ?? ''));
+                $component = $lineType === SkuRecipeItem::TYPE_RAW_MATERIAL
+                    ? $this->materialComponent($business, $componentName, $data)
+                    : null;
+
                 $attributes = [
                     'business_id' => $business->id,
                     'sku_id' => $sku->id,
-                    'line_type' => $this->lineType($data['line_type'] ?? null),
-                    'component_name' => trim((string) ($data['component_name'] ?? '')),
+                    'line_type' => $lineType,
+                    'component_name' => $component?->name ?? $componentName,
                 ];
 
+                $unitCost = (float) ($data['unit_cost'] ?? 0);
+                if ($unitCost <= 0 && $component instanceof MaterialComponent) {
+                    $unitCost = $component->costPerConsumptionUnit();
+                }
+
                 $values = [
+                    'material_component_id' => $component?->id,
                     'quantity_per_unit' => (float) ($data['quantity_per_unit'] ?? 0),
-                    'unit_cost' => (float) ($data['unit_cost'] ?? 0),
+                    'unit_cost' => $unitCost,
                     'active' => $this->bool($data['active'] ?? true),
                     'note' => trim((string) ($data['note'] ?? '')) ?: null,
                 ];
@@ -128,5 +141,25 @@ class SkuRecipeSpreadsheetImportService
     private function bool(mixed $value): bool
     {
         return in_array(Str::lower((string) $value), ['1', 'true', 'yes', 'active'], true);
+    }
+
+    private function materialComponent(Business $business, string $name, array $data): MaterialComponent
+    {
+        $purchaseUnitCost = (float) ($data['purchase_unit_cost'] ?? $data['latest_purchase_unit_cost'] ?? $data['unit_cost'] ?? 0);
+
+        return MaterialComponent::query()->updateOrCreate(
+            [
+                'business_id' => $business->id,
+                'name' => $name,
+            ],
+            [
+                'purchase_unit' => trim((string) ($data['purchase_unit'] ?? 'unit')) ?: 'unit',
+                'consumption_unit' => trim((string) ($data['consumption_unit'] ?? 'piece')) ?: 'piece',
+                'units_per_purchase_unit' => (float) ($data['units_per_purchase_unit'] ?? 1),
+                'waste_percent' => (float) ($data['waste_percent'] ?? 0),
+                'latest_purchase_unit_cost' => $purchaseUnitCost,
+                'active' => true,
+            ],
+        );
     }
 }

@@ -16,6 +16,7 @@ class SkuRecipeItem extends Model
         'sku_id',
         'line_type',
         'component_name',
+        'material_component_id',
         'quantity_per_unit',
         'unit_cost',
         'active',
@@ -32,6 +33,31 @@ class SkuRecipeItem extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (SkuRecipeItem $item): void {
+            if ((string) $item->line_type !== self::TYPE_RAW_MATERIAL || blank($item->material_component_id)) {
+                return;
+            }
+
+            $component = $item->materialComponent()->first();
+
+            if (! $component) {
+                return;
+            }
+
+            $item->component_name = $component->name;
+
+            if ((float) $item->unit_cost <= 0) {
+                $item->unit_cost = $component->costPerConsumptionUnit();
+            }
+
+            if ((float) $item->quantity_per_unit <= 0) {
+                $item->quantity_per_unit = 1;
+            }
+        });
+    }
+
     public function business(): BelongsTo
     {
         return $this->belongsTo(Business::class);
@@ -40,5 +66,10 @@ class SkuRecipeItem extends Model
     public function sku(): BelongsTo
     {
         return $this->belongsTo(Sku::class);
+    }
+
+    public function materialComponent(): BelongsTo
+    {
+        return $this->belongsTo(MaterialComponent::class);
     }
 }

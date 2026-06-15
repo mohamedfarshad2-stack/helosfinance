@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\MaterialLedgerEntry;
 use App\Domains\Shared\Models\Sku;
 use App\Filament\Resources\MaterialLedgerResource\Pages;
@@ -11,6 +12,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -51,10 +53,43 @@ class MaterialLedgerResource extends Resource
                 ->searchable()
                 ->options(fn (Get $get) => static::componentOptions((int) ($get('business_id') ?? 0)))
                 ->preload()
+                ->live()
+                ->createOptionForm(static::materialComponentForm())
+                ->createOptionUsing(fn (array $data, Get $get): string => static::createMaterialComponent((int) ($get('business_id') ?? 0), $data)->name)
+                ->afterStateUpdated(function (mixed $state, Get $get, Set $set): void {
+                    $component = static::materialComponent((int) ($get('business_id') ?? 0), (string) $state);
+
+                    if (! $component) {
+                        return;
+                    }
+
+                    $set('material_component_id', $component->id);
+
+                    if ((float) ($get('unit_cost') ?? 0) <= 0) {
+                        $set('unit_cost', (float) $component->latest_purchase_unit_cost);
+                    }
+                })
                 ->required(),
-            TextInput::make('quantity')->numeric()->required(),
-            TextInput::make('unit_cost')->label('Unit cost')->numeric()->required()->prefix('LKR'),
-            TextInput::make('total_cost')->label('Total cost')->numeric()->required()->prefix('LKR'),
+            TextInput::make('material_component_id')
+                ->hidden()
+                ->dehydrated(),
+            TextInput::make('quantity')
+                ->numeric()
+                ->live(onBlur: true)
+                ->afterStateUpdated(fn (Get $get, Set $set): mixed => $set('total_cost', round((float) ($get('quantity') ?? 0) * (float) ($get('unit_cost') ?? 0), 2)))
+                ->required(),
+            TextInput::make('unit_cost')
+                ->label('Unit cost')
+                ->numeric()
+                ->live(onBlur: true)
+                ->afterStateUpdated(fn (Get $get, Set $set): mixed => $set('total_cost', round((float) ($get('quantity') ?? 0) * (float) ($get('unit_cost') ?? 0), 2)))
+                ->required()
+                ->prefix('LKR'),
+            TextInput::make('total_cost')
+                ->label('Total cost')
+                ->numeric()
+                ->required()
+                ->prefix('LKR'),
             DatePicker::make('occurred_on')->required(),
             TextInput::make('note')->label('Note')->placeholder('Optional'),
         ])->columns(2);
@@ -140,7 +175,14 @@ class MaterialLedgerResource extends Resource
             ->pluck('component_name', 'component_name')
             ->all();
 
-        return static::defaultComponentOptions() + $saved;
+        $components = MaterialComponent::query()
+            ->where('business_id', $businessId)
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name', 'name')
+            ->all();
+
+        return static::defaultComponentOptions() + $components + $saved;
     }
 
     private static function defaultComponentOptions(): array
@@ -183,5 +225,75 @@ class MaterialLedgerResource extends Resource
         }
 
         return $user?->business?->supportsProductionTracking() ?? false;
+    }
+
+    private static function materialComponentForm(): array
+    {
+        return [
+            TextInput::make('name')
+                ->label('Component name')
+                ->placeholder('DSI sheet')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('purchase_unit')
+                ->label('Buying unit')
+                ->default('sheet')
+                ->required()
+                ->maxLength(50),
+            TextInput::make('consumption_unit')
+                ->label('Used as')
+                ->default('piece')
+                ->required()
+                ->maxLength(50),
+            TextInput::make('units_per_purchase_unit')
+                ->label('Usable pieces per buying unit')
+                ->numeric()
+                ->default(1)
+                ->required()
+                ->helperText('Example: one DSI sheet cuts 12 pieces.'),
+            TextInput::make('waste_percent')
+                ->label('Expected waste %')
+                ->numeric()
+                ->default(0)
+                ->required(),
+            TextInput::make('latest_purchase_unit_cost')
+                ->label('Latest buying unit cost')
+                ->numeric()
+                ->default(0)
+                ->prefix('LKR')
+                ->required(),
+        ];
+    }
+
+    private static function createMaterialComponent(int $businessId, array $data): MaterialComponent
+    {
+        $businessId = $businessId > 0 ? $businessId : (int) Auth::user()?->defaultBusinessId();
+
+        return MaterialComponent::query()->updateOrCreate(
+            [
+                'business_id' => $businessId,
+                'name' => trim((string) $data['name']),
+            ],
+            [
+                'purchase_unit' => trim((string) ($data['purchase_unit'] ?? 'unit')) ?: 'unit',
+                'consumption_unit' => trim((string) ($data['consumption_unit'] ?? 'piece')) ?: 'piece',
+                'units_per_purchase_unit' => (float) ($data['units_per_purchase_unit'] ?? 1),
+                'waste_percent' => (float) ($data['waste_percent'] ?? 0),
+                'latest_purchase_unit_cost' => (float) ($data['latest_purchase_unit_cost'] ?? 0),
+                'active' => true,
+            ],
+        );
+    }
+
+    private static function materialComponent(int $businessId, string $name): ?MaterialComponent
+    {
+        if ($businessId <= 0 || blank($name)) {
+            return null;
+        }
+
+        return MaterialComponent::query()
+            ->where('business_id', $businessId)
+            ->where('name', $name)
+            ->first();
     }
 }

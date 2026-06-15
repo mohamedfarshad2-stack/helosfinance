@@ -385,6 +385,11 @@ class Business extends Model
         return $this->hasMany(User::class);
     }
 
+    public function materialComponents(): HasMany
+    {
+        return $this->hasMany(MaterialComponent::class);
+    }
+
     public function clientGroup(): BelongsTo
     {
         return $this->belongsTo(ClientGroup::class);

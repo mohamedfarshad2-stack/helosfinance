@@ -306,7 +306,7 @@ class BusinessArchitectureTest extends TestCase
 
         $this->get(SkuRecipeResource::getUrl('create'))
             ->assertOk()
-            ->assertSee('Component / worker step');
+            ->assertSee('Material component');
 
         $this->get(ExpenseResource::getUrl('create'))
             ->assertOk()

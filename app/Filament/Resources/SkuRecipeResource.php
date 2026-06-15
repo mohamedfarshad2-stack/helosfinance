@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Filament\Resources\SkuRecipeResource\Pages;
@@ -11,6 +12,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -44,15 +46,40 @@ class SkuRecipeResource extends Resource
                     SkuRecipeItem::TYPE_LABOR => 'Manpower / labor',
                 ])
                 ->default(SkuRecipeItem::TYPE_RAW_MATERIAL)
+                ->live()
                 ->helperText('Use raw material for inputs like rubber, cloth, thread, and packaging. Use labor when this line represents paid worker effort per finished product.')
                 ->required(),
+            Select::make('material_component_id')
+                ->label('Material component')
+                ->placeholder('Search or create material component')
+                ->options(fn (Get $get) => static::materialComponentOptions((int) ($get('business_id') ?? 0)))
+                ->searchable()
+                ->preload()
+                ->live()
+                ->visible(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_RAW_MATERIAL)
+                ->required(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_RAW_MATERIAL)
+                ->createOptionForm(static::materialComponentForm())
+                ->createOptionUsing(fn (array $data, Get $get): int => static::createMaterialComponent((int) ($get('business_id') ?? 0), $data)->id)
+                ->afterStateUpdated(function (mixed $state, Set $set): void {
+                    $component = MaterialComponent::query()->find((int) $state);
+
+                    if (! $component) {
+                        return;
+                    }
+
+                    $set('component_name', $component->name);
+                    $set('quantity_per_unit', 1);
+                    $set('unit_cost', $component->costPerConsumptionUnit());
+                }),
             Select::make('component_name')
                 ->label('Component / worker step')
                 ->placeholder('Search or choose a component / step')
                 ->searchable()
                 ->options(fn (Get $get) => static::componentOptions((int) ($get('business_id') ?? 0)))
                 ->preload()
-                ->required(),
+                ->visible(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR)
+                ->required(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR)
+                ->dehydrated(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR),
             TextInput::make('quantity_per_unit')->label('Qty per unit')->numeric()->required()->prefix(''),
             TextInput::make('unit_cost')->label('Unit cost')->numeric()->required()->prefix('LKR'),
             Checkbox::make('active')->default(true),
@@ -76,6 +103,7 @@ class SkuRecipeResource extends Resource
                         default => 'Raw material',
                     }),
                 Tables\Columns\TextColumn::make('component_name')->label('Component')->searchable(),
+                Tables\Columns\TextColumn::make('materialComponent.name')->label('Material master')->toggleable(),
                 Tables\Columns\TextColumn::make('quantity_per_unit')->label('Qty / unit'),
                 Tables\Columns\TextColumn::make('unit_cost')->money('LKR'),
                 Tables\Columns\IconColumn::make('active')->boolean(),
@@ -142,7 +170,31 @@ class SkuRecipeResource extends Resource
             ->pluck('component_name', 'component_name')
             ->all();
 
-        return static::defaultComponentOptions() + $saved;
+        $components = MaterialComponent::query()
+            ->where('business_id', $businessId)
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name', 'name')
+            ->all();
+
+        return static::defaultComponentOptions() + $components + $saved;
+    }
+
+    private static function materialComponentOptions(int $businessId): array
+    {
+        if ($businessId <= 0) {
+            return [];
+        }
+
+        return MaterialComponent::query()
+            ->where('business_id', $businessId)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(fn (MaterialComponent $component): array => [
+                $component->id => $component->name.' - LKR '.number_format($component->costPerConsumptionUnit(), 2).' / '.$component->consumption_unit,
+            ])
+            ->all();
     }
 
     private static function defaultComponentOptions(): array
@@ -185,5 +237,63 @@ class SkuRecipeResource extends Resource
         }
 
         return $user?->business?->supportsProductionTracking() ?? false;
+    }
+
+    private static function materialComponentForm(): array
+    {
+        return [
+            TextInput::make('name')
+                ->label('Component name')
+                ->placeholder('DSI sheet')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('purchase_unit')
+                ->label('Buying unit')
+                ->default('sheet')
+                ->required()
+                ->maxLength(50),
+            TextInput::make('consumption_unit')
+                ->label('Used as')
+                ->default('piece')
+                ->required()
+                ->maxLength(50),
+            TextInput::make('units_per_purchase_unit')
+                ->label('Usable pieces per buying unit')
+                ->numeric()
+                ->default(1)
+                ->required()
+                ->helperText('Example: one DSI sheet cuts 12 pieces.'),
+            TextInput::make('waste_percent')
+                ->label('Expected waste %')
+                ->numeric()
+                ->default(0)
+                ->required(),
+            TextInput::make('latest_purchase_unit_cost')
+                ->label('Latest buying unit cost')
+                ->numeric()
+                ->default(0)
+                ->prefix('LKR')
+                ->required(),
+        ];
+    }
+
+    private static function createMaterialComponent(int $businessId, array $data): MaterialComponent
+    {
+        $businessId = $businessId > 0 ? $businessId : (int) Auth::user()?->defaultBusinessId();
+
+        return MaterialComponent::query()->updateOrCreate(
+            [
+                'business_id' => $businessId,
+                'name' => trim((string) $data['name']),
+            ],
+            [
+                'purchase_unit' => trim((string) ($data['purchase_unit'] ?? 'unit')) ?: 'unit',
+                'consumption_unit' => trim((string) ($data['consumption_unit'] ?? 'piece')) ?: 'piece',
+                'units_per_purchase_unit' => (float) ($data['units_per_purchase_unit'] ?? 1),
+                'waste_percent' => (float) ($data['waste_percent'] ?? 0),
+                'latest_purchase_unit_cost' => (float) ($data['latest_purchase_unit_cost'] ?? 0),
+                'active' => true,
+            ],
+        );
     }
 }
