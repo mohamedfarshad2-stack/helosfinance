@@ -8,6 +8,7 @@ use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Domains\Manufacturing\Services\SkuRecipeSpreadsheetImportService;
+use App\Domains\Manufacturing\Services\SkuRecipeTemplateExportService;
 use App\Filament\Resources\SkuRecipeResource;
 use Filament\Actions;
 use Filament\Forms\Components\FileUpload;
@@ -21,8 +22,6 @@ use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use OpenSpout\Common\Entity\Row;
-use OpenSpout\Writer\CSV\Writer;
 use Throwable;
 
 class ListSkuRecipeItems extends ListRecords
@@ -33,9 +32,16 @@ class ListSkuRecipeItems extends ListRecords
     {
         return [
             Actions\Action::make('downloadSample')
-                ->label('Download sample')
+                ->label('Download Excel template')
                 ->icon('heroicon-o-arrow-down-tray')
-                ->action(fn () => $this->downloadSample()),
+                ->form([
+                    Select::make('business_id')
+                        ->label('Business')
+                        ->options(fn () => $this->businessOptions())
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
+                        ->required(),
+                ])
+                ->action(fn (array $data, SkuRecipeTemplateExportService $exporter) => $this->downloadSample((int) $data['business_id'], $exporter)),
             Actions\Action::make('uploadRecipeSheet')
                 ->label('Upload recipe sheet')
                 ->icon('heroicon-o-arrow-up-tray')
@@ -198,84 +204,14 @@ class ListSkuRecipeItems extends ListRecords
         ];
     }
 
-    public function downloadSample()
+    public function downloadSample(int $businessId, SkuRecipeTemplateExportService $exporter)
     {
-        $path = storage_path('app/sku-recipe-upload-sample.csv');
-        $writer = new Writer();
-        $writer->openToFile($path);
-        $writer->addRow(Row::fromValues([
-            'sku_code',
-            'line_type',
-            'component_name',
-            'quantity_per_unit',
-            'unit_cost',
-            'purchase_unit',
-            'purchase_unit_cost',
-            'units_per_purchase_unit',
-            'waste_percent',
-            'consumption_unit',
-            'active',
-            'note',
-        ]));
-        $writer->addRow(Row::fromValues([
-            'SLP-001',
-            'raw_material',
-            'DSI sheet',
-            1,
-            '',
-            'sheet',
-            1200,
-            12,
-            5,
-            'piece',
-            'yes',
-            'Sheet example: leave unit_cost blank. HELOS calculates cost per piece from sheet cost, yield, and waste.',
-        ]));
-        $writer->addRow(Row::fromValues([
-            'SLP-001',
-            'raw_material',
-            'Glue',
-            0.2,
-            40,
-            'bottle',
-            '',
-            '',
-            '',
-            'use',
-            'yes',
-            'Simple material example: use unit_cost directly.',
-        ]));
-        $writer->addRow(Row::fromValues([
-            'SLP-001',
-            'labour',
-            'Cutting labor',
-            1,
-            60,
-            '',
-            '',
-            '',
-            '',
-            '',
-            'yes',
-            'Labour example: create this work step first in Labour / Work Steps, then use the same name here.',
-        ]));
-        $writer->addRow(Row::fromValues([
-            'SLP-001',
-            'labour',
-            'Stitching labor',
-            2,
-            100,
-            '',
-            '',
-            '',
-            '',
-            '',
-            'yes',
-            'Labour example: spelling must match the approved work step name.',
-        ]));
-        $writer->close();
+        $business = Business::query()->findOrFail($businessId);
+        $path = storage_path('app/helos-sku-recipe-template.xlsx');
 
-        return response()->download($path, 'helos-sku-recipe-sample.csv')->deleteFileAfterSend();
+        $exporter->export($business, $path);
+
+        return response()->download($path, 'helos-sku-recipe-template.xlsx')->deleteFileAfterSend();
     }
 
     private function businessOptions(): array
