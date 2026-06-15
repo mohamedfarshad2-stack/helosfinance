@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domains\Manufacturing\Services\SkuRecipeSpreadsheetImportService;
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,10 +39,10 @@ class SkuRecipeSpreadsheetImportTest extends TestCase
         $csvPath = $path.'.csv';
 
         file_put_contents($csvPath, implode(PHP_EOL, [
-            'sku_code,line_type,component_name,quantity_per_unit,unit_cost,active,note',
-            'SLP-001,raw_material,Rubber sheet,1,300,yes,',
-            'SLP-001,raw_material,Glue,0.2,40,yes,',
-            'SLP-001,labor,Stitching labor,2,100,yes,',
+            'sku_code,line_type,component_name,quantity_per_unit,unit_cost,purchase_unit,consumption_unit,units_per_purchase_unit,waste_percent,purchase_unit_cost,active,note',
+            'SLP-001,raw_material,DSI sheet,1,0,sheet,piece,12,5,1200,yes,',
+            'SLP-001,raw_material,Glue,0.2,40,bottle,use,1,0,40,yes,',
+            'SLP-001,labor,Stitching labor,2,100,,,,,,yes,',
         ]));
 
         $result = app(SkuRecipeSpreadsheetImportService::class)->import($business, $csvPath);
@@ -53,6 +54,12 @@ class SkuRecipeSpreadsheetImportTest extends TestCase
 
         $this->assertSame(2, SkuRecipeItem::query()->where('line_type', SkuRecipeItem::TYPE_RAW_MATERIAL)->count());
         $this->assertSame(1, SkuRecipeItem::query()->where('line_type', SkuRecipeItem::TYPE_LABOR)->count());
+        $this->assertDatabaseCount('material_components', 2);
+
+        $component = MaterialComponent::query()->where('name', 'DSI sheet')->firstOrFail();
+
+        $this->assertSame(105.26, $component->costPerConsumptionUnit());
+        $this->assertSame(105.26, (float) SkuRecipeItem::query()->where('component_name', 'DSI sheet')->value('unit_cost'));
 
         $repeat = app(SkuRecipeSpreadsheetImportService::class)->import($business, $csvPath);
 

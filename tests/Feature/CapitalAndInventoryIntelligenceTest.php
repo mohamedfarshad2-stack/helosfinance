@@ -10,6 +10,7 @@ use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
+use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\MaterialLedgerEntry;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
@@ -167,6 +168,53 @@ class CapitalAndInventoryIntelligenceTest extends TestCase
         $this->assertArrayHasKey('decision_story', $explainability);
         $this->assertNull($explainability['top_revenue_sku']);
         $this->assertNull($explainability['top_loss_sku']);
+    }
+
+    public function test_material_component_yield_and_waste_drive_recipe_cost(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Sheet Cutting Factory',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'SLP-DSI',
+            'name' => 'DSI Slipper',
+            'material_cost' => 0,
+            'packaging_cost' => 0,
+            'labor_rate' => 0,
+            'finishing_cost' => 0,
+            'expected_sale_price' => 1000,
+        ]);
+
+        $component = MaterialComponent::query()->create([
+            'business_id' => $business->id,
+            'name' => 'DSI sheet',
+            'purchase_unit' => 'sheet',
+            'consumption_unit' => 'piece',
+            'units_per_purchase_unit' => 12,
+            'waste_percent' => 5,
+            'latest_purchase_unit_cost' => 1200,
+            'active' => true,
+        ]);
+
+        SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_RAW_MATERIAL,
+            'material_component_id' => $component->id,
+            'quantity_per_unit' => 1,
+            'unit_cost' => 0,
+            'active' => true,
+        ]);
+
+        $this->assertSame(11.4, $component->usableUnitsPerPurchaseUnit());
+        $this->assertSame(105.26, $component->costPerConsumptionUnit());
+        $this->assertSame(105.26, $sku->fresh()->materialCostPerUnit());
     }
 
     public function test_production_cost_service_uses_recipe_labor_lines_for_pay_calculation(): void
