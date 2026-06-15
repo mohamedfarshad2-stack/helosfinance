@@ -88,7 +88,7 @@ class BankTransactionRuleResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->pluck('name', 'id')
             ->all();
     }
@@ -101,6 +101,6 @@ class BankTransactionRuleResource extends Resource
             return $query;
         }
 
-        return $query->where('business_id', $user?->business_id);
+        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
     }
 }

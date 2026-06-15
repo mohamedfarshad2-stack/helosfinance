@@ -22,7 +22,10 @@ class EditUser extends EditRecord
         $targetBusinessId = filled($data['business_id'] ?? null) ? (int) $data['business_id'] : (int) $this->record->business_id;
 
         if ($user?->isOwner()) {
-            $data['business_id'] = $user->business_id;
+            $allowedBusinessIds = $user->accessibleBusinessIds();
+            $targetBusinessId = in_array($targetBusinessId, $allowedBusinessIds, true) ? $targetBusinessId : (int) $user->defaultBusinessId();
+            $data['business_id'] = $targetBusinessId;
+            $data['client_group_id'] = $user->client_group_id;
         }
 
         $business = Business::query()->find($targetBusinessId);
@@ -36,6 +39,7 @@ class EditUser extends EditRecord
         $data['is_platform_admin'] = false;
         $data['is_employee'] = true;
         $data['employee_access_profile'] = $data['employee_access_profile'] ?? 'operations';
+        $data['client_group_id'] = $data['client_group_id'] ?? $business?->client_group_id;
 
         return $data;
     }

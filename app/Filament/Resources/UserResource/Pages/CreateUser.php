@@ -15,10 +15,13 @@ class CreateUser extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $user = Auth::user();
-        $businessId = $user?->isOwner() ? $user->business_id : ($data['business_id'] ?? null);
+        $businessId = $data['business_id'] ?? $user?->defaultBusinessId();
 
         if ($user?->isOwner()) {
-            $data['business_id'] = $user->business_id;
+            $allowedBusinessIds = $user->accessibleBusinessIds();
+            $businessId = in_array((int) $businessId, $allowedBusinessIds, true) ? (int) $businessId : $user->defaultBusinessId();
+            $data['business_id'] = $businessId;
+            $data['client_group_id'] = $user->client_group_id;
             $data['is_employee'] = true;
         }
 
@@ -33,6 +36,7 @@ class CreateUser extends CreateRecord
         $data['is_platform_admin'] = false;
         $data['is_employee'] = true;
         $data['employee_access_profile'] = $data['employee_access_profile'] ?? 'operations';
+        $data['client_group_id'] = $data['client_group_id'] ?? $business?->client_group_id;
 
         return $data;
     }

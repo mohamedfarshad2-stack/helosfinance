@@ -40,7 +40,7 @@ class ListSkuRecipeItems extends ListRecords
                     Select::make('business_id')
                         ->label('Business')
                         ->options(fn () => $this->businessOptions())
-                        ->default(fn () => Auth::user()?->business_id)
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
                         ->live()
                         ->required(),
                     FileUpload::make('file')
@@ -84,7 +84,7 @@ class ListSkuRecipeItems extends ListRecords
                     Select::make('business_id')
                         ->label('Business')
                         ->options(fn () => $this->businessOptions())
-                        ->default(fn () => Auth::user()?->business_id)
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
                         ->live()
                         ->required(),
                     Select::make('sku_id')
@@ -173,7 +173,7 @@ class ListSkuRecipeItems extends ListRecords
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();

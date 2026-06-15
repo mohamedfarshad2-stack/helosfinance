@@ -46,7 +46,7 @@ class ExpenseResource extends Resource
                     Select::make('business_id')
                         ->label('Business')
                         ->options(fn () => static::businessOptions())
-                        ->default(fn () => Auth::user()?->business_id)
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
                         ->disabled(fn (?Expense $record): bool => filled($record?->locked_at) || ! (Auth::user()?->isInternalAdmin() ?? false))
                         ->required(),
                     TextInput::make('amount')
@@ -258,7 +258,7 @@ class ExpenseResource extends Resource
                         Select::make('business_id')
                             ->label('Business')
                             ->options(fn () => static::businessOptions())
-                            ->default(fn () => Auth::user()?->business_id)
+                            ->default(fn () => Auth::user()?->defaultBusinessId())
                             ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
                             ->required(),
                         TextInput::make('amount')
@@ -383,7 +383,7 @@ class ExpenseResource extends Resource
                         Select::make('business_id')
                             ->label('Business')
                             ->options(fn () => static::businessOptions())
-                            ->default(fn () => Auth::user()?->business_id)
+                            ->default(fn () => Auth::user()?->defaultBusinessId())
                             ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
                             ->required(),
                     ])
@@ -431,7 +431,7 @@ class ExpenseResource extends Resource
                         Select::make('business_id')
                             ->label('Business')
                             ->options(fn () => static::businessOptions())
-                            ->default(fn () => Auth::user()?->business_id)
+                            ->default(fn () => Auth::user()?->defaultBusinessId())
                             ->required(),
                     ])
                     ->action(function (array $data): void {
@@ -552,14 +552,14 @@ class ExpenseResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->pluck('name', 'id')
             ->all();
     }
 
     private static function categoryOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         $defaultCategories = collect([
             'Fuel',
@@ -583,7 +583,7 @@ class ExpenseResource extends Resource
             ->all();
 
         $savedCategories = Expense::query()
-            ->when($businessId, fn (Builder $query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn (Builder $query) => $query->whereIn('business_id', $businessIds))
             ->whereNotNull('category')
             ->where('category', '!=', '')
             ->distinct()
@@ -596,10 +596,10 @@ class ExpenseResource extends Resource
 
     private static function payeeOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         return Expense::query()
-            ->when($businessId, fn (Builder $query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn (Builder $query) => $query->whereIn('business_id', $businessIds))
             ->whereNotNull('payee')
             ->where('payee', '!=', '')
             ->distinct()
@@ -610,7 +610,7 @@ class ExpenseResource extends Resource
 
     private static function departmentOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         $defaultDepartments = collect([
             'Operations',
@@ -634,7 +634,7 @@ class ExpenseResource extends Resource
             ->all();
 
         $savedDepartments = Expense::query()
-            ->when($businessId, fn (Builder $query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn (Builder $query) => $query->whereIn('business_id', $businessIds))
             ->whereNotNull('department')
             ->where('department', '!=', '')
             ->distinct()
@@ -647,10 +647,10 @@ class ExpenseResource extends Resource
 
     private static function employeeOptions(): array
     {
-        $businessId = Auth::user()?->business_id;
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
 
         return Employee::query()
-            ->when($businessId, fn (Builder $query) => $query->where('business_id', $businessId))
+            ->when($businessIds !== [], fn (Builder $query) => $query->whereIn('business_id', $businessIds))
             ->where('active', true)
             ->orderBy('name')
             ->pluck('name', 'name')
@@ -665,6 +665,6 @@ class ExpenseResource extends Resource
             return $query;
         }
 
-        return $query->where('business_id', $user?->business_id);
+        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
     }
 }

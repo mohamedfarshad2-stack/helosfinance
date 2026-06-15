@@ -34,7 +34,7 @@ class BankTransactionResource extends Resource
         return $form->schema([
             Select::make('business_id')
                 ->options(fn () => static::businessOptions())
-                ->default(fn () => Auth::user()?->business_id)
+                ->default(fn () => Auth::user()?->defaultBusinessId())
                 ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
                 ->required(),
             DatePicker::make('transaction_date')->required(),
@@ -257,7 +257,7 @@ class BankTransactionResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereKey($user?->business_id))
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->pluck('name', 'id')
             ->all();
     }
@@ -267,7 +267,7 @@ class BankTransactionResource extends Resource
         $user = Auth::user();
 
         $existing = BankTransaction::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->where('business_id', $user?->business_id))
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []))
             ->whereNotNull('money_container')
             ->where('money_container', '!=', '')
             ->distinct()
@@ -286,7 +286,7 @@ class BankTransactionResource extends Resource
             return $query;
         }
 
-        return $query->where('business_id', $user?->business_id);
+        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
     }
 
     private static function classificationOptions(): array

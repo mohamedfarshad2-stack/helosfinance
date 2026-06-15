@@ -37,6 +37,8 @@ class ClientOnboardingServiceTest extends TestCase
         $this->assertInstanceOf(User::class, $result['user']);
         $this->assertInstanceOf(IntegrationSource::class, $result['integration_source']);
         $this->assertSame($result['business']->id, $result['user']->business_id);
+        $this->assertNotNull($result['business']->client_group_id);
+        $this->assertSame($result['business']->client_group_id, $result['user']->client_group_id);
         $this->assertSame($result['business']->id, $result['integration_source']->business_id);
         $this->assertSame('testing', $result['integration_source']->status);
         $this->assertSame('secret123', $result['password']);

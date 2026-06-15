@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Builder;
 
 class IntegrationSourceResource extends Resource
 {
@@ -26,7 +27,10 @@ class IntegrationSourceResource extends Resource
         return $form->schema([
             Section::make('Connection')
                 ->schema([
-                    Select::make('business_id')->options(Business::query()->pluck('name', 'id'))->required(),
+                    Select::make('business_id')
+                        ->options(fn () => static::businessOptions())
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
+                        ->required(),
                     TextInput::make('name')->required(),
                     Select::make('type')->options(['stock_app' => 'stock-app', 'csv' => 'CSV fallback'])->required(),
                     TextInput::make('base_url')->url(),
@@ -92,5 +96,16 @@ class IntegrationSourceResource extends Resource
     public static function canAccess(): bool
     {
         return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+    }
+
+    private static function businessOptions(): array
+    {
+        $user = Auth::user();
+
+        return Business::query()
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 }

@@ -4,6 +4,7 @@ namespace App\Domains\Shared\Models;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Business extends Model
@@ -21,6 +22,7 @@ class Business extends Model
 
     protected $fillable = [
         'name',
+        'client_group_id',
         'currency',
         'industry',
         'business_type',
@@ -381,6 +383,11 @@ class Business extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function clientGroup(): BelongsTo
+    {
+        return $this->belongsTo(ClientGroup::class);
     }
 
     public function employeeSeatLimit(): ?int

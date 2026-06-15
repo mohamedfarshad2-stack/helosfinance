@@ -35,7 +35,7 @@ class BankStatementImport extends Page implements HasForms
 
     public function mount(): void
     {
-        $businessId = Auth::user()?->business_id;
+        $businessId = Auth::user()?->defaultBusinessId();
 
         $this->form->fill([
             'business_id' => $businessId,
@@ -104,7 +104,7 @@ class BankStatementImport extends Page implements HasForms
 
     private function refreshRecentTransactions(?int $businessId = null): void
     {
-        $businessId ??= Auth::user()?->business_id;
+        $businessId ??= Auth::user()?->defaultBusinessId();
 
         $this->recentTransactions = BankTransaction::query()
             ->when($businessId, fn ($query) => $query->where('business_id', $businessId))
@@ -119,7 +119,7 @@ class BankStatementImport extends Page implements HasForms
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->whereKey($user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
@@ -130,7 +130,7 @@ class BankStatementImport extends Page implements HasForms
         $user = Auth::user();
 
         $existing = BankTransaction::query()
-            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->where('business_id', $user?->business_id))
+            ->when(! $user?->seesAllBusinesses(), fn ($query) => $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []))
             ->whereNotNull('money_container')
             ->where('money_container', '!=', '')
             ->distinct()

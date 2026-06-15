@@ -36,8 +36,8 @@ class BusinessAdvisorWidget extends Widget
             return $user->business;
         }
 
-        if ($user?->business_id) {
-            return Business::query()->find($user->business_id);
+        if ($user?->defaultBusinessId()) {
+            return Business::query()->find($user->defaultBusinessId());
         }
 
         return null;

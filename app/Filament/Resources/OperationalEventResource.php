@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Eloquent\Builder;
 
 class OperationalEventResource extends Resource
 {
@@ -26,7 +27,10 @@ class OperationalEventResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Select::make('business_id')->options(Business::query()->pluck('name', 'id'))->required(),
+            Select::make('business_id')
+                ->options(fn () => static::businessOptions())
+                ->default(fn () => Auth::user()?->defaultBusinessId())
+                ->required(),
             Select::make('sku_id')->options(Sku::query()->pluck('code', 'id'))->searchable(),
             Select::make('event_type')->options([
                 OperationalEvent::ORDER_CREATED => 'Order created',
@@ -138,5 +142,16 @@ class OperationalEventResource extends Resource
     public static function canAccess(): bool
     {
         return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+    }
+
+    private static function businessOptions(): array
+    {
+        $user = Auth::user();
+
+        return Business::query()
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 }

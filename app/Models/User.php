@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\ClientGroup;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,6 +28,7 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'business_id',
+        'client_group_id',
         'is_platform_admin',
         'is_employee',
         'employee_access_profile',
@@ -68,6 +70,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(Business::class);
     }
 
+    public function clientGroup(): BelongsTo
+    {
+        return $this->belongsTo(ClientGroup::class);
+    }
+
     public function seesAllBusinesses(): bool
     {
         return $this->is_platform_admin;
@@ -80,7 +87,40 @@ class User extends Authenticatable implements FilamentUser
 
     public function isOwner(): bool
     {
-        return ! $this->is_platform_admin && ! $this->is_employee && filled($this->business_id);
+        return ! $this->is_platform_admin && ! $this->is_employee && (filled($this->business_id) || filled($this->client_group_id));
+    }
+
+    public function defaultBusinessId(): ?int
+    {
+        if (filled($this->business_id)) {
+            return (int) $this->business_id;
+        }
+
+        if (filled($this->client_group_id)) {
+            return Business::query()
+                ->where('client_group_id', $this->client_group_id)
+                ->orderBy('name')
+                ->value('id');
+        }
+
+        return null;
+    }
+
+    public function accessibleBusinessIds(): array
+    {
+        if ($this->seesAllBusinesses()) {
+            return Business::query()->pluck('id')->all();
+        }
+
+        if (filled($this->client_group_id) && ! $this->isStaff()) {
+            return Business::query()
+                ->where('client_group_id', $this->client_group_id)
+                ->orderBy('name')
+                ->pluck('id')
+                ->all();
+        }
+
+        return filled($this->business_id) ? [(int) $this->business_id] : [];
     }
 
     public function isStaff(): bool
