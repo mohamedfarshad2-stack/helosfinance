@@ -5,6 +5,8 @@ namespace App\Filament\Resources;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
 use App\Filament\Resources\SkuResource\Pages;
+use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
@@ -24,18 +26,40 @@ class SkuResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Select::make('business_id')
-                ->options(fn () => static::businessOptions())
-                ->default(fn () => Auth::user()?->defaultBusinessId())
-                ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
-                ->required(),
-            TextInput::make('code')->required()->maxLength(80),
-            TextInput::make('name')->required()->maxLength(160),
-            TextInput::make('material_cost')->numeric()->required()->prefix('LKR'),
-            TextInput::make('packaging_cost')->numeric()->required()->prefix('LKR'),
-            TextInput::make('labor_rate')->numeric()->required()->prefix('LKR'),
-            TextInput::make('finishing_cost')->numeric()->required()->prefix('LKR'),
-            TextInput::make('expected_sale_price')->numeric()->required()->prefix('LKR'),
+            Section::make('Product')
+                ->schema([
+                    Select::make('business_id')
+                        ->options(fn () => static::businessOptions())
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
+                        ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->required(),
+                    TextInput::make('code')
+                        ->label('SKU code')
+                        ->required()
+                        ->maxLength(80),
+                    TextInput::make('name')
+                        ->label('Product name')
+                        ->required()
+                        ->maxLength(160),
+                    TextInput::make('expected_sale_price')
+                        ->label('Expected sale price')
+                        ->numeric()
+                        ->default(0)
+                        ->required()
+                        ->prefix('LKR'),
+                    Checkbox::make('active')->default(true),
+                ])
+                ->columns(2),
+            Section::make('Fallback costs')
+                ->description('Use these only when this product does not have a SKU Recipe yet. When a recipe exists, HELOS uses recipe materials and labor first.')
+                ->collapsed()
+                ->schema([
+                    TextInput::make('material_cost')->numeric()->default(0)->required()->prefix('LKR'),
+                    TextInput::make('packaging_cost')->numeric()->default(0)->required()->prefix('LKR'),
+                    TextInput::make('labor_rate')->numeric()->default(0)->required()->prefix('LKR'),
+                    TextInput::make('finishing_cost')->numeric()->default(0)->required()->prefix('LKR'),
+                ])
+                ->columns(2),
         ]);
     }
 
@@ -46,6 +70,9 @@ class SkuResource extends Resource
             Tables\Columns\TextColumn::make('name')->searchable(),
             Tables\Columns\TextColumn::make('expected_sale_price')->money('LKR'),
             Tables\Columns\TextColumn::make('production_cost')->label('Estimated cost')->state(fn (Sku $record) => $record->productionCostPerUnit())->money('LKR'),
+            Tables\Columns\TextColumn::make('recipe_items_count')
+                ->label('Recipe lines')
+                ->counts('recipeItems'),
         ])->actions([Tables\Actions\EditAction::make()])->bulkActions([Tables\Actions\BulkActionGroup::make([Tables\Actions\DeleteBulkAction::make()])]);
     }
 

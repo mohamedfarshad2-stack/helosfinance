@@ -74,7 +74,7 @@ class SkuSpreadsheetImportService
 
     private function validateHeaders(array $headers): void
     {
-        $missing = array_diff(['code', 'name', 'material_cost', 'packaging_cost', 'labor_rate', 'finishing_cost', 'expected_sale_price'], $headers);
+        $missing = array_diff(['code', 'name'], $headers);
 
         if ($missing !== []) {
             throw new InvalidArgumentException('Missing columns: '.implode(', ', $missing));

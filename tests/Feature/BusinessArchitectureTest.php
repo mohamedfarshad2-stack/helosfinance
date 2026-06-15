@@ -317,6 +317,12 @@ class BusinessArchitectureTest extends TestCase
             ->assertSee('Usable pieces per buying unit')
             ->assertSee('Expected waste');
 
+        $this->get(SkuResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Product')
+            ->assertSee('Expected sale price')
+            ->assertSee('Fallback costs');
+
         $this->get(SkuRecipeResource::getUrl('create'))
             ->assertOk()
             ->assertSee('Material component');
