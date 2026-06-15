@@ -303,11 +303,14 @@ class BusinessArchitectureTest extends TestCase
 
         $this->get(MaterialLedgerResource::getUrl('create'))
             ->assertOk()
-            ->assertSee('Component');
+            ->assertSee('Movement type')
+            ->assertSee('Quantity bought');
 
         $this->get(MaterialComponentResource::getUrl('index'))
             ->assertOk()
-            ->assertSee('Material Components');
+            ->assertSee('Material Components')
+            ->assertSee('Upload components')
+            ->assertSee('Download sample');
 
         $this->get(MaterialComponentResource::getUrl('create'))
             ->assertOk()

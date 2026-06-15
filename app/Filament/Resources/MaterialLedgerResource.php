@@ -25,6 +25,7 @@ class MaterialLedgerResource extends Resource
     protected static ?string $navigationGroup = 'Manufacturing';
     protected static ?string $navigationLabel = 'Material Ledger';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {
@@ -38,14 +39,24 @@ class MaterialLedgerResource extends Resource
                 ->label('SKU')
                 ->options(fn (Get $get) => static::skuOptions((int) ($get('business_id') ?? 0)))
                 ->searchable()
+                ->visible(fn (Get $get): bool => in_array($get('entry_type'), ['consumption', 'waste'], true))
+                ->helperText('Select SKU only when this material was used or wasted for a specific product.')
                 ->nullable(),
             Select::make('entry_type')
+                ->label('Movement type')
                 ->options([
-                    'purchase' => 'Purchase',
-                    'consumption' => 'Consumption',
-                    'adjustment' => 'Adjustment',
-                    'waste' => 'Waste',
+                    'purchase' => 'Bought material',
+                    'consumption' => 'Used in production',
+                    'waste' => 'Wasted / damaged',
+                    'adjustment' => 'Stock correction',
                 ])
+                ->default('purchase')
+                ->live()
+                ->afterStateUpdated(function (mixed $state, Set $set): void {
+                    if ($state === 'purchase') {
+                        $set('sku_id', null);
+                    }
+                })
                 ->required(),
             Select::make('component_name')
                 ->label('Component')
@@ -74,19 +85,41 @@ class MaterialLedgerResource extends Resource
                 ->hidden()
                 ->dehydrated(),
             TextInput::make('quantity')
+                ->label(fn (Get $get): string => match ($get('entry_type')) {
+                    'purchase' => 'Quantity bought',
+                    'consumption' => 'Quantity used',
+                    'waste' => 'Quantity wasted',
+                    'adjustment' => 'Quantity adjustment',
+                    default => 'Quantity',
+                })
                 ->numeric()
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Get $get, Set $set): mixed => $set('total_cost', round((float) ($get('quantity') ?? 0) * (float) ($get('unit_cost') ?? 0), 2)))
+                ->helperText(fn (Get $get): string => match ($get('entry_type')) {
+                    'purchase' => 'Use the buying unit. Example: 10 DSI sheets.',
+                    'consumption' => 'Use the component used-as unit. Example: 80 pieces used.',
+                    'waste' => 'Use the component used-as unit. Example: 3 damaged pieces.',
+                    'adjustment' => 'Use positive or negative quantity to correct stock.',
+                    default => '',
+                })
                 ->required(),
             TextInput::make('unit_cost')
-                ->label('Unit cost')
+                ->label(fn (Get $get): string => match ($get('entry_type')) {
+                    'purchase' => 'Cost per buying unit',
+                    default => 'Cost per used unit',
+                })
                 ->numeric()
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Get $get, Set $set): mixed => $set('total_cost', round((float) ($get('quantity') ?? 0) * (float) ($get('unit_cost') ?? 0), 2)))
                 ->required()
                 ->prefix('LKR'),
             TextInput::make('total_cost')
-                ->label('Total cost')
+                ->label(fn (Get $get): string => match ($get('entry_type')) {
+                    'purchase' => 'Total purchase cost',
+                    'consumption' => 'Material used value',
+                    'waste' => 'Wasted material value',
+                    default => 'Total value',
+                })
                 ->numeric()
                 ->required()
                 ->prefix('LKR'),
@@ -196,11 +229,6 @@ class MaterialLedgerResource extends Resource
             'Tape',
             'Packaging',
             'Packing material',
-            'Labour',
-            'Labor step',
-            'Cutting',
-            'Stitching',
-            'Assembly',
             'Other',
         ])->mapWithKeys(fn (string $component): array => [$component => $component])->all();
     }
