@@ -129,7 +129,10 @@ class SkuRecipeResource extends Resource
                 Tables\Columns\TextColumn::make('unit_cost')->money('LKR'),
                 Tables\Columns\IconColumn::make('active')->boolean(),
             ])
-            ->actions([Tables\Actions\EditAction::make()])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
+            ])
             ->bulkActions([Tables\Actions\BulkActionGroup::make([Tables\Actions\DeleteBulkAction::make()])]);
     }
 

@@ -75,7 +75,9 @@ class SkuResource extends Resource
             Tables\Columns\TextColumn::make('code')->searchable(),
             Tables\Columns\TextColumn::make('name')->searchable(),
             Tables\Columns\TextColumn::make('expected_sale_price')->money('LKR'),
-            Tables\Columns\TextColumn::make('production_cost')->label('Estimated cost')->state(fn (Sku $record) => $record->productionCostPerUnit())->money('LKR'),
+            Tables\Columns\TextColumn::make('material_cost_summary')->label('Material cost')->state(fn (Sku $record) => $record->materialCostPerUnit())->money('LKR'),
+            Tables\Columns\TextColumn::make('labor_cost_summary')->label('Labour cost')->state(fn (Sku $record) => $record->laborCostPerUnit())->money('LKR'),
+            Tables\Columns\TextColumn::make('production_cost')->label('Total product cost')->state(fn (Sku $record) => $record->productionCostPerUnit())->money('LKR'),
             Tables\Columns\TextColumn::make('recipe_items_count')
                 ->label('Recipe lines')
                 ->counts('recipeItems'),
