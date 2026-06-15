@@ -13,6 +13,7 @@ use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
@@ -80,7 +81,14 @@ class UserResource extends Resource
                 ->formatStateUsing(fn (?string $state): string => User::employeeAccessProfileOptions()[$state ?? 'operations'] ?? 'Operations'),
             Tables\Columns\IconColumn::make('is_employee')->label('Employee')->boolean(),
         ])
-            ->actions([Tables\Actions\EditAction::make()]);
+            ->actions([
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Remove access')
+                    ->modalHeading('Remove user access?')
+                    ->modalDescription('This removes the login account. Business records and transactions stay in HELOS.')
+                    ->visible(fn (User $record): bool => static::canDelete($record)),
+            ]);
     }
 
     public static function getPages(): array
@@ -100,6 +108,16 @@ class UserResource extends Resource
     public static function canAccess(): bool
     {
         return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        $user = Auth::user();
+
+        return $record instanceof User
+            && ($user?->isInternalAdmin() ?? false)
+            && ! $record->isInternalAdmin()
+            && $record->id !== $user->id;
     }
 
     private static function businessOptions(): array
