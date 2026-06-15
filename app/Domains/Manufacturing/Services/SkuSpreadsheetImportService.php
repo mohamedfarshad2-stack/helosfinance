@@ -11,7 +11,7 @@ use OpenSpout\Reader\Common\Creator\ReaderFactory;
 class SkuSpreadsheetImportService
 {
     /**
-     * @return array{created:int, updated:int, skipped:int}
+     * @return array{created:int, updated:int, skipped:int, skipped_reasons:list<string>}
      */
     public function import(Business $business, string $path): array
     {
@@ -22,6 +22,7 @@ class SkuSpreadsheetImportService
         $created = 0;
         $updated = 0;
         $skipped = 0;
+        $skippedReasons = [];
 
         foreach ($reader->getSheetIterator() as $sheet) {
             foreach ($sheet->getRowIterator() as $rowNumber => $row) {
@@ -37,6 +38,14 @@ class SkuSpreadsheetImportService
 
                 if (! $this->hasMinimumData($data)) {
                     $skipped++;
+                    $this->addSkippedReason($skippedReasons, $rowNumber, 'SKU code or product name is missing.');
+                    continue;
+                }
+
+                if (! $this->matchesSelectedBusiness($business, $data)) {
+                    $skipped++;
+                    $rowBusiness = trim((string) ($data['business_name'] ?? $data['business'] ?? $data['business_id'] ?? ''));
+                    $this->addSkippedReason($skippedReasons, $rowNumber, "Business '{$rowBusiness}' does not match selected business '{$business->name}'.");
                     continue;
                 }
 
@@ -64,7 +73,12 @@ class SkuSpreadsheetImportService
 
         $reader->close();
 
-        return compact('created', 'updated', 'skipped');
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'skipped_reasons' => $skippedReasons,
+        ];
     }
 
     private function normalizeHeaders(array $values): array
@@ -99,6 +113,35 @@ class SkuSpreadsheetImportService
     private function hasMinimumData(array $data): bool
     {
         return filled($data['code'] ?? null) && filled($data['name'] ?? null);
+    }
+
+    private function matchesSelectedBusiness(Business $business, array $data): bool
+    {
+        $businessId = trim((string) ($data['business_id'] ?? ''));
+
+        if ($businessId !== '' && (int) $businessId !== $business->id) {
+            return false;
+        }
+
+        $businessName = trim((string) ($data['business_name'] ?? $data['business'] ?? ''));
+
+        if ($businessName === '') {
+            return true;
+        }
+
+        return Str::of($businessName)->lower()->squish()->toString() === Str::of($business->name)->lower()->squish()->toString();
+    }
+
+    /**
+     * @param  list<string>  $reasons
+     */
+    private function addSkippedReason(array &$reasons, int $rowNumber, string $reason): void
+    {
+        if (count($reasons) >= 8) {
+            return;
+        }
+
+        $reasons[] = "Row {$rowNumber}: {$reason}";
     }
 
     private function money(mixed $value): float
