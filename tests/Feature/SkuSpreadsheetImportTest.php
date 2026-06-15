@@ -6,7 +6,11 @@ use App\Domains\Manufacturing\Services\SkuSpreadsheetImportService;
 use App\Domains\Manufacturing\Services\SkuUploadTemplateExportService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
+use App\Filament\Resources\SkuResource\Pages\CreateSku;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -122,5 +126,62 @@ class SkuSpreadsheetImportTest extends TestCase
         $this->assertStringContainsString('<definedName name="BusinessNames">', $workbook);
 
         @unlink($path);
+    }
+
+    public function test_owner_can_create_sku_manually_and_duplicate_code_is_validated(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Factory Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'sku-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        Livewire::actingAs($owner)
+            ->test(CreateSku::class)
+            ->fillForm([
+                'business_id' => $business->id,
+                'code' => 'PS364',
+                'name' => 'Classic Bag',
+                'expected_sale_price' => 1200,
+                'active' => true,
+                'material_cost' => 0,
+                'packaging_cost' => 0,
+                'labor_rate' => 0,
+                'finishing_cost' => 0,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('skus', [
+            'business_id' => $business->id,
+            'code' => 'PS364',
+        ]);
+
+        Livewire::actingAs($owner)
+            ->test(CreateSku::class)
+            ->fillForm([
+                'business_id' => $business->id,
+                'code' => 'PS364',
+                'name' => 'Duplicate Bag',
+                'expected_sale_price' => 1300,
+                'active' => true,
+                'material_cost' => 0,
+                'packaging_cost' => 0,
+                'labor_rate' => 0,
+                'finishing_cost' => 0,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['code' => 'unique']);
     }
 }
