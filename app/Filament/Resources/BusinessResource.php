@@ -37,9 +37,20 @@ class BusinessResource extends Resource
                 ->schema([
                     Select::make('client_group_id')
                         ->label('Client group')
-                        ->options(fn () => ClientGroup::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->relationship('clientGroup', 'name')
                         ->searchable()
+                        ->preload()
                         ->default(fn () => Auth::user()?->client_group_id)
+                        ->createOptionForm([
+                            TextInput::make('name')
+                                ->label('Client group name')
+                                ->required()
+                                ->maxLength(255),
+                            TextInput::make('note')
+                                ->label('Note')
+                                ->maxLength(255),
+                        ])
+                        ->createOptionUsing(fn (array $data): int => ClientGroup::query()->create($data)->getKey())
                         ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
                         ->helperText('Use this when one owner has multiple businesses under the same portal.'),
                     TextInput::make('name')->label('Business name')->required(),
