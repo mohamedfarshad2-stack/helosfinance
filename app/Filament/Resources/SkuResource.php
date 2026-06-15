@@ -13,7 +13,9 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Forms\Get;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class SkuResource extends Resource
 {
@@ -37,6 +39,9 @@ class SkuResource extends Resource
                     TextInput::make('code')
                         ->label('SKU code')
                         ->required()
+                        ->rule(fn (Get $get, ?Sku $record): \Illuminate\Validation\Rules\Unique => Rule::unique('skus', 'code')
+                            ->where('business_id', (int) ($get('business_id') ?? Auth::user()?->defaultBusinessId()))
+                            ->ignore($record?->id))
                         ->maxLength(80),
                     TextInput::make('name')
                         ->label('Product name')
