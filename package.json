@@ -6,6 +6,10 @@
         "build": "vite build",
         "dev": "vite"
     },
+    "overrides": {
+        "esbuild": "^0.28.1",
+        "shell-quote": "^1.8.3"
+    },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
         "axios": "^1.11.0",
