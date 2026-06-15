@@ -4,6 +4,7 @@ namespace App\Filament\Resources\SkuRecipeResource\Pages;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\MaterialComponent;
+use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Domains\Manufacturing\Services\SkuRecipeSpreadsheetImportService;
@@ -103,7 +104,7 @@ class ListSkuRecipeItems extends ListRecords
                                 ->label('Line type')
                                 ->options([
                                     SkuRecipeItem::TYPE_RAW_MATERIAL => 'Raw material',
-                                    SkuRecipeItem::TYPE_LABOR => 'Manpower / labor',
+                                    SkuRecipeItem::TYPE_LABOR => 'Manpower / labour',
                                 ])
                                 ->default(SkuRecipeItem::TYPE_RAW_MATERIAL)
                                 ->live()
@@ -129,9 +130,23 @@ class ListSkuRecipeItems extends ListRecords
                                     $set('quantity_per_unit', 1);
                                     $set('unit_cost', $component->costPerConsumptionUnit());
                                 }),
-                            TextInput::make('component_name')
-                                ->label('Component / labor step')
+                            Select::make('component_name')
+                                ->label('Work step')
+                                ->options(fn (Get $get) => $this->workStepSelectOptions((int) ($get('../../business_id') ?? 0)))
+                                ->searchable()
+                                ->preload()
                                 ->visible(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR)
+                                ->createOptionForm($this->workStepForm())
+                                ->createOptionUsing(fn (array $data, Get $get): string => $this->createWorkStep((int) ($get('../../business_id') ?? 0), $data)->name)
+                                ->afterStateUpdated(function (mixed $state, Get $get, Set $set): void {
+                                    $step = $this->workStepByName((int) ($get('../../business_id') ?? 0), (string) $state);
+
+                                    if (! $step) {
+                                        return;
+                                    }
+
+                                    $set('unit_cost', (float) $step->unit_cost);
+                                })
                                 ->required(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR),
                             TextInput::make('quantity_per_unit')
                                 ->label('Qty per unit')
@@ -154,14 +169,21 @@ class ListSkuRecipeItems extends ListRecords
 
                     DB::transaction(function () use ($business, $sku, $lines): void {
                         foreach ($lines as $line) {
+                            $workStep = null;
+
+                            if (($line['line_type'] ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR) {
+                                $workStep = $this->workStep($business, trim((string) ($line['component_name'] ?? '')));
+                            }
+
                             SkuRecipeItem::query()->create([
                                 'business_id' => $business->id,
                                 'sku_id' => $sku->id,
                                 'line_type' => $line['line_type'] ?? SkuRecipeItem::TYPE_RAW_MATERIAL,
                                 'material_component_id' => $line['material_component_id'] ?? null,
-                                'component_name' => trim((string) ($line['component_name'] ?? '')),
+                                'production_work_step_id' => $workStep?->id,
+                                'component_name' => $workStep?->name ?? trim((string) ($line['component_name'] ?? '')),
                                 'quantity_per_unit' => (float) ($line['quantity_per_unit'] ?? 0),
-                                'unit_cost' => (float) ($line['unit_cost'] ?? 0),
+                                'unit_cost' => (float) ($line['unit_cost'] ?? $workStep?->unit_cost ?? 0),
                                 'active' => true,
                             ]);
                         }
@@ -225,7 +247,7 @@ class ListSkuRecipeItems extends ListRecords
         ]));
         $writer->addRow(Row::fromValues([
             'SLP-001',
-            'labor',
+            'labour',
             'Cutting labor',
             1,
             60,
@@ -235,11 +257,11 @@ class ListSkuRecipeItems extends ListRecords
             '',
             '',
             'yes',
-            'Labor example: only quantity_per_unit and unit_cost matter.',
+            'Labour example: create this work step first in Labour / Work Steps, then use the same name here.',
         ]));
         $writer->addRow(Row::fromValues([
             'SLP-001',
-            'labor',
+            'labour',
             'Stitching labor',
             2,
             100,
@@ -249,7 +271,7 @@ class ListSkuRecipeItems extends ListRecords
             '',
             '',
             'yes',
-            'Labor example: 2 stitches/steps at Rs 100 each.',
+            'Labour example: spelling must match the approved work step name.',
         ]));
         $writer->close();
 
@@ -297,6 +319,20 @@ class ListSkuRecipeItems extends ListRecords
             ->all();
     }
 
+    private function workStepSelectOptions(int $businessId): array
+    {
+        if ($businessId <= 0) {
+            return [];
+        }
+
+        return ProductionWorkStep::query()
+            ->where('business_id', $businessId)
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name', 'name')
+            ->all();
+    }
+
     private function materialComponentForm(): array
     {
         return [
@@ -327,5 +363,53 @@ class ListSkuRecipeItems extends ListRecords
                 'active' => true,
             ],
         );
+    }
+
+    private function workStepForm(): array
+    {
+        return [
+            TextInput::make('name')->label('Work name')->placeholder('Bottom labour')->required()->maxLength(255),
+            TextInput::make('unit_cost')->label('Rate per unit')->numeric()->default(0)->prefix('LKR')->required(),
+        ];
+    }
+
+    private function createWorkStep(int $businessId, array $data): ProductionWorkStep
+    {
+        $businessId = $businessId > 0 ? $businessId : (int) Auth::user()?->defaultBusinessId();
+
+        return ProductionWorkStep::query()->updateOrCreate(
+            [
+                'business_id' => $businessId,
+                'name' => trim((string) $data['name']),
+            ],
+            [
+                'unit_cost' => (float) ($data['unit_cost'] ?? 0),
+                'active' => true,
+            ],
+        );
+    }
+
+    private function workStepByName(int $businessId, string $name): ?ProductionWorkStep
+    {
+        if ($businessId <= 0 || blank($name)) {
+            return null;
+        }
+
+        return ProductionWorkStep::query()
+            ->where('business_id', $businessId)
+            ->where('name', $name)
+            ->first();
+    }
+
+    private function workStep(Business $business, string $name): ?ProductionWorkStep
+    {
+        if (blank($name)) {
+            return null;
+        }
+
+        return ProductionWorkStep::query()
+            ->where('business_id', $business->id)
+            ->whereRaw('LOWER(name) = ?', [strtolower($name)])
+            ->first();
     }
 }

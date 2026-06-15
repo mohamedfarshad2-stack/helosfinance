@@ -21,7 +21,7 @@ class SkuResource extends Resource
     protected static ?string $navigationGroup = 'Manufacturing';
     protected static ?string $navigationLabel = 'Products / SKUs';
     protected static ?string $navigationIcon = 'heroicon-o-cube';
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     public static function form(Form $form): Form
     {

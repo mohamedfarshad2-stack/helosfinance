@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\MaterialComponent;
+use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Filament\Resources\SkuRecipeResource\Pages;
@@ -25,7 +26,7 @@ class SkuRecipeResource extends Resource
     protected static ?string $navigationGroup = 'Manufacturing';
     protected static ?string $navigationLabel = 'SKU Recipe / BOM';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {
@@ -44,7 +45,7 @@ class SkuRecipeResource extends Resource
                 ->label('Line type')
                 ->options([
                     SkuRecipeItem::TYPE_RAW_MATERIAL => 'Raw material',
-                    SkuRecipeItem::TYPE_LABOR => 'Manpower / labor',
+                    SkuRecipeItem::TYPE_LABOR => 'Manpower / labour',
                 ])
                 ->default(SkuRecipeItem::TYPE_RAW_MATERIAL)
                 ->live()
@@ -73,14 +74,32 @@ class SkuRecipeResource extends Resource
                     $set('unit_cost', $component->costPerConsumptionUnit());
                 }),
             Select::make('component_name')
-                ->label('Component / worker step')
-                ->placeholder('Search or choose a component / step')
+                ->label('Work step')
+                ->placeholder('Search or choose approved work step')
                 ->searchable()
-                ->options(fn (Get $get) => static::componentOptions((int) ($get('business_id') ?? 0)))
+                ->options(fn (Get $get) => static::workStepNameOptions((int) ($get('business_id') ?? 0)))
                 ->preload()
                 ->visible(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR)
                 ->required(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR)
+                ->createOptionForm(static::workStepForm())
+                ->createOptionUsing(fn (array $data, Get $get): string => static::createWorkStep((int) ($get('business_id') ?? 0), $data)->name)
+                ->afterStateUpdated(function (mixed $state, Get $get, Set $set): void {
+                    $step = static::workStep((int) ($get('business_id') ?? 0), (string) $state);
+
+                    if (! $step) {
+                        return;
+                    }
+
+                    $set('production_work_step_id', $step->id);
+
+                    if ((float) ($get('unit_cost') ?? 0) <= 0) {
+                        $set('unit_cost', (float) $step->unit_cost);
+                    }
+                })
                 ->dehydrated(fn (Get $get): bool => ($get('line_type') ?? SkuRecipeItem::TYPE_RAW_MATERIAL) === SkuRecipeItem::TYPE_LABOR),
+            TextInput::make('production_work_step_id')
+                ->hidden()
+                ->dehydrated(),
             TextInput::make('quantity_per_unit')->label('Qty per unit')->numeric()->required()->prefix(''),
             TextInput::make('unit_cost')->label('Unit cost')->numeric()->required()->prefix('LKR'),
             Checkbox::make('active')->default(true),
@@ -105,6 +124,7 @@ class SkuRecipeResource extends Resource
                     }),
                 Tables\Columns\TextColumn::make('component_name')->label('Component')->searchable(),
                 Tables\Columns\TextColumn::make('materialComponent.name')->label('Material master')->toggleable(),
+                Tables\Columns\TextColumn::make('productionWorkStep.name')->label('Work step master')->toggleable(),
                 Tables\Columns\TextColumn::make('quantity_per_unit')->label('Qty / unit'),
                 Tables\Columns\TextColumn::make('unit_cost')->money('LKR'),
                 Tables\Columns\IconColumn::make('active')->boolean(),
@@ -195,6 +215,20 @@ class SkuRecipeResource extends Resource
             ->mapWithKeys(fn (MaterialComponent $component): array => [
                 $component->id => $component->name.' - LKR '.number_format($component->costPerConsumptionUnit(), 2).' / '.$component->consumption_unit,
             ])
+            ->all();
+    }
+
+    private static function workStepNameOptions(int $businessId): array
+    {
+        if ($businessId <= 0) {
+            return [];
+        }
+
+        return ProductionWorkStep::query()
+            ->where('business_id', $businessId)
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name', 'name')
             ->all();
     }
 
@@ -291,5 +325,50 @@ class SkuRecipeResource extends Resource
                 'active' => true,
             ],
         );
+    }
+
+    private static function workStepForm(): array
+    {
+        return [
+            TextInput::make('name')
+                ->label('Work name')
+                ->placeholder('Bottom labour')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('unit_cost')
+                ->label('Rate per unit')
+                ->numeric()
+                ->default(0)
+                ->prefix('LKR')
+                ->required(),
+        ];
+    }
+
+    private static function createWorkStep(int $businessId, array $data): ProductionWorkStep
+    {
+        $businessId = $businessId > 0 ? $businessId : (int) Auth::user()?->defaultBusinessId();
+
+        return ProductionWorkStep::query()->updateOrCreate(
+            [
+                'business_id' => $businessId,
+                'name' => trim((string) $data['name']),
+            ],
+            [
+                'unit_cost' => (float) ($data['unit_cost'] ?? 0),
+                'active' => true,
+            ],
+        );
+    }
+
+    private static function workStep(int $businessId, string $name): ?ProductionWorkStep
+    {
+        if ($businessId <= 0 || blank($name)) {
+            return null;
+        }
+
+        return ProductionWorkStep::query()
+            ->where('business_id', $businessId)
+            ->where('name', $name)
+            ->first();
     }
 }

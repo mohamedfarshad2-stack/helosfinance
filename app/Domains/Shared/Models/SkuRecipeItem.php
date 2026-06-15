@@ -17,6 +17,7 @@ class SkuRecipeItem extends Model
         'line_type',
         'component_name',
         'material_component_id',
+        'production_work_step_id',
         'quantity_per_unit',
         'unit_cost',
         'active',
@@ -36,6 +37,26 @@ class SkuRecipeItem extends Model
     protected static function booted(): void
     {
         static::saving(function (SkuRecipeItem $item): void {
+            if ((string) $item->line_type === self::TYPE_LABOR && filled($item->production_work_step_id)) {
+                $step = $item->productionWorkStep()->first();
+
+                if (! $step) {
+                    return;
+                }
+
+                $item->component_name = $step->name;
+
+                if ((float) $item->unit_cost <= 0) {
+                    $item->unit_cost = (float) $step->unit_cost;
+                }
+
+                if ((float) $item->quantity_per_unit <= 0) {
+                    $item->quantity_per_unit = 1;
+                }
+
+                return;
+            }
+
             if ((string) $item->line_type !== self::TYPE_RAW_MATERIAL || blank($item->material_component_id)) {
                 return;
             }
@@ -71,5 +92,10 @@ class SkuRecipeItem extends Model
     public function materialComponent(): BelongsTo
     {
         return $this->belongsTo(MaterialComponent::class);
+    }
+
+    public function productionWorkStep(): BelongsTo
+    {
+        return $this->belongsTo(ProductionWorkStep::class);
     }
 }

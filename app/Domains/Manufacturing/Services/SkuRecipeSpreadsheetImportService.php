@@ -4,6 +4,7 @@ namespace App\Domains\Manufacturing\Services;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\MaterialComponent;
+use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use Illuminate\Support\Str;
@@ -58,21 +59,33 @@ class SkuRecipeSpreadsheetImportService
                 $component = $lineType === SkuRecipeItem::TYPE_RAW_MATERIAL
                     ? $this->materialComponent($business, $componentName, $data)
                     : null;
+                $workStep = $lineType === SkuRecipeItem::TYPE_LABOR
+                    ? $this->workStep($business, $componentName)
+                    : null;
+
+                if ($lineType === SkuRecipeItem::TYPE_LABOR && ! $workStep instanceof ProductionWorkStep) {
+                    $skipped++;
+                    continue;
+                }
 
                 $attributes = [
                     'business_id' => $business->id,
                     'sku_id' => $sku->id,
                     'line_type' => $lineType,
-                    'component_name' => $component?->name ?? $componentName,
+                    'component_name' => $component?->name ?? $workStep?->name ?? $componentName,
                 ];
 
                 $unitCost = (float) ($data['unit_cost'] ?? 0);
                 if ($unitCost <= 0 && $component instanceof MaterialComponent) {
                     $unitCost = $component->costPerConsumptionUnit();
                 }
+                if ($unitCost <= 0 && $workStep instanceof ProductionWorkStep) {
+                    $unitCost = (float) $workStep->unit_cost;
+                }
 
                 $values = [
                     'material_component_id' => $component?->id,
+                    'production_work_step_id' => $workStep?->id,
                     'quantity_per_unit' => (float) ($data['quantity_per_unit'] ?? 0),
                     'unit_cost' => $unitCost,
                     'active' => $this->bool($data['active'] ?? true),
@@ -131,7 +144,7 @@ class SkuRecipeSpreadsheetImportService
     {
         $normalized = Str::of((string) $value)->lower()->replace([' ', '-', '/'], '_')->trim()->toString();
 
-        if (in_array($normalized, ['labor', 'manpower', 'worker', 'worker_step', 'labor_step'], true)) {
+        if (in_array($normalized, ['labor', 'labour', 'manpower', 'worker', 'worker_step', 'labor_step', 'labour_step'], true)) {
             return SkuRecipeItem::TYPE_LABOR;
         }
 
@@ -161,5 +174,17 @@ class SkuRecipeSpreadsheetImportService
                 'active' => true,
             ],
         );
+    }
+
+    private function workStep(Business $business, string $name): ?ProductionWorkStep
+    {
+        if (blank($name)) {
+            return null;
+        }
+
+        return ProductionWorkStep::query()
+            ->where('business_id', $business->id)
+            ->whereRaw('LOWER(name) = ?', [strtolower($name)])
+            ->first();
     }
 }
