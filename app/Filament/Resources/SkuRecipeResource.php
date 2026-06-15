@@ -25,6 +25,7 @@ class SkuRecipeResource extends Resource
     protected static ?string $navigationGroup = 'Manufacturing';
     protected static ?string $navigationLabel = 'SKU Recipe / BOM';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static ?int $navigationSort = 3;
 
     public static function form(Form $form): Form
     {
@@ -208,11 +209,6 @@ class SkuRecipeResource extends Resource
             'Tape',
             'Packaging',
             'Packing material',
-            'Labour',
-            'Labor step',
-            'Cutting',
-            'Stitching',
-            'Assembly',
             'Other',
         ])->mapWithKeys(fn (string $component): array => [$component => $component])->all();
     }

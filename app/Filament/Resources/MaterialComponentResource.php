@@ -26,6 +26,8 @@ class MaterialComponentResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-squares-2x2';
 
+    protected static ?int $navigationSort = 1;
+
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -95,6 +97,15 @@ class MaterialComponentResource extends Resource
                     ->label('Cost / used unit')
                     ->state(fn (MaterialComponent $record): float => $record->costPerConsumptionUnit())
                     ->money('LKR'),
+                Tables\Columns\TextColumn::make('stock_balance')
+                    ->label('Stock balance')
+                    ->state(fn (MaterialComponent $record): string => number_format($record->stockBalance(), 2).' '.$record->consumption_unit)
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('stock_value')
+                    ->label('Stock value')
+                    ->state(fn (MaterialComponent $record): float => $record->stockValue())
+                    ->money('LKR')
+                    ->toggleable(),
                 Tables\Columns\IconColumn::make('active')->boolean(),
             ])
             ->actions([

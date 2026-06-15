@@ -57,4 +57,37 @@ class MaterialComponent extends Model
     {
         return round((float) $this->latest_purchase_unit_cost / $this->usableUnitsPerPurchaseUnit(), 2);
     }
+
+    public function purchasedConsumptionUnits(): float
+    {
+        $purchaseUnits = (float) $this->ledgerEntries()
+            ->where('entry_type', 'purchase')
+            ->sum('quantity');
+
+        return round($purchaseUnits * $this->usableUnitsPerPurchaseUnit(), 4);
+    }
+
+    public function consumedUnits(): float
+    {
+        return (float) $this->ledgerEntries()
+            ->whereIn('entry_type', ['consumption', 'waste'])
+            ->sum('quantity');
+    }
+
+    public function adjustmentUnits(): float
+    {
+        return (float) $this->ledgerEntries()
+            ->where('entry_type', 'adjustment')
+            ->sum('quantity');
+    }
+
+    public function stockBalance(): float
+    {
+        return round($this->purchasedConsumptionUnits() - $this->consumedUnits() + $this->adjustmentUnits(), 4);
+    }
+
+    public function stockValue(): float
+    {
+        return round($this->stockBalance() * $this->costPerConsumptionUnit(), 2);
+    }
 }
