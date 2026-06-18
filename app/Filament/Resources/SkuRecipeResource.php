@@ -41,6 +41,17 @@ class SkuRecipeResource extends Resource
                 ->options(fn (Get $get) => static::skuOptions((int) ($get('business_id') ?? 0)))
                 ->searchable()
                 ->required(),
+            Select::make('part_name')
+                ->label('Product part')
+                ->options(fn (Get $get) => static::partOptions((int) ($get('business_id') ?? 0)))
+                ->default('General')
+                ->searchable()
+                ->preload()
+                ->createOptionForm([
+                    TextInput::make('name')->label('Part name')->placeholder('Strap')->required()->maxLength(120),
+                ])
+                ->createOptionUsing(fn (array $data): string => trim((string) $data['name']))
+                ->required(),
             Select::make('line_type')
                 ->label('Line type')
                 ->options([
@@ -111,10 +122,11 @@ class SkuRecipeResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
-            ->defaultSort('component_name')
+            ->defaultSort('sku_id')
             ->columns([
                 Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
                 Tables\Columns\TextColumn::make('sku.code')->label('SKU')->searchable(),
+                Tables\Columns\TextColumn::make('part_name')->label('Part')->searchable(),
                 Tables\Columns\TextColumn::make('line_type')
                     ->label('Type')
                     ->badge()
@@ -219,6 +231,28 @@ class SkuRecipeResource extends Resource
                 $component->id => $component->name.' - LKR '.number_format($component->costPerConsumptionUnit(), 2).' / '.$component->consumption_unit,
             ])
             ->all();
+    }
+
+    private static function partOptions(int $businessId): array
+    {
+        $defaults = collect(['Strap', 'Sole', 'Upper', 'Bottom', 'Finishing', 'Packing', 'General'])
+            ->mapWithKeys(fn (string $part): array => [$part => $part])
+            ->all();
+
+        if ($businessId <= 0) {
+            return $defaults;
+        }
+
+        $saved = SkuRecipeItem::query()
+            ->where('business_id', $businessId)
+            ->whereNotNull('part_name')
+            ->where('part_name', '!=', '')
+            ->distinct()
+            ->orderBy('part_name')
+            ->pluck('part_name', 'part_name')
+            ->all();
+
+        return $defaults + $saved;
     }
 
     private static function workStepNameOptions(int $businessId): array

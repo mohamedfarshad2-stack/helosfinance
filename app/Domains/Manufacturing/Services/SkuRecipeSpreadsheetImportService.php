@@ -45,20 +45,25 @@ class SkuRecipeSpreadsheetImportService
                     continue;
                 }
 
-                $skuCode = trim((string) ($data['sku_code'] ?? ''));
+                $skuCode = trim((string) ($data['sku_code'] ?? $data['code'] ?? ''));
                 $sku = Sku::query()
                     ->where('business_id', $business->id)
                     ->where('code', $skuCode)
                     ->first();
 
                 if (! $sku instanceof Sku) {
-                    $skipped++;
-                    $this->addSkippedReason($skippedReasons, $rowNumber, "SKU '{$skuCode}' was not found for this business.");
-                    continue;
+                    $sku = $this->createSkuFromRow($business, $skuCode, $data);
+
+                    if (! $sku instanceof Sku) {
+                        $skipped++;
+                        $this->addSkippedReason($skippedReasons, $rowNumber, "SKU '{$skuCode}' was not found for this business and product name is missing.");
+                        continue;
+                    }
                 }
 
                 $lineType = $this->lineType($data['line_type'] ?? null);
                 $componentName = trim((string) ($data['component_name'] ?? ''));
+                $partName = trim((string) ($data['part_name'] ?? $data['part'] ?? 'General')) ?: 'General';
                 $unitCost = (float) ($data['unit_cost'] ?? 0);
                 $component = $lineType === SkuRecipeItem::TYPE_RAW_MATERIAL
                     ? $this->materialComponent($business, $componentName, $data)
@@ -77,6 +82,7 @@ class SkuRecipeSpreadsheetImportService
                     'business_id' => $business->id,
                     'sku_id' => $sku->id,
                     'line_type' => $lineType,
+                    'part_name' => $partName,
                     'component_name' => $component?->name ?? $workStep?->name ?? $componentName,
                 ];
 
@@ -146,7 +152,28 @@ class SkuRecipeSpreadsheetImportService
 
     private function hasMinimumData(array $data): bool
     {
-        return filled($data['sku_code'] ?? null) && filled($data['component_name'] ?? null);
+        return filled($data['sku_code'] ?? $data['code'] ?? null) && filled($data['component_name'] ?? null);
+    }
+
+    private function createSkuFromRow(Business $business, string $skuCode, array $data): ?Sku
+    {
+        $productName = trim((string) ($data['product_name'] ?? $data['name'] ?? ''));
+
+        if ($skuCode === '' || $productName === '') {
+            return null;
+        }
+
+        return Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => $skuCode,
+            'name' => $productName,
+            'expected_sale_price' => (float) ($data['expected_sale_price'] ?? $data['selling_price'] ?? 0),
+            'material_cost' => 0,
+            'packaging_cost' => 0,
+            'labor_rate' => 0,
+            'finishing_cost' => 0,
+            'active' => true,
+        ]);
     }
 
     private function lineType(mixed $value): string

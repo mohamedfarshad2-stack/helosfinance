@@ -16,6 +16,7 @@ class SkuRecipeItem extends Model
         'sku_id',
         'line_type',
         'component_name',
+        'part_name',
         'material_component_id',
         'production_work_step_id',
         'quantity_per_unit',

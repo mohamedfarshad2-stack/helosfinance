@@ -37,13 +37,15 @@ class SkuRecipeTemplateExportService
             ->all();
 
         $recipeRows = [
-            ['sku_code', 'line_type', 'component_name', 'quantity_per_unit', 'unit_cost', 'purchase_unit', 'purchase_unit_cost', 'units_per_purchase_unit', 'waste_percent', 'consumption_unit', 'active', 'note'],
-            [$skus[0] ?? '', 'raw_material', $materials[0] ?? '', 1, '', 'sheet', 1200, 12, 5, 'piece', 'yes', 'Select values from dropdowns. Leave unit_cost blank for sheet/yield materials.'],
-            [$skus[0] ?? '', 'labour', $workSteps[0] ?? '', 1, '', '', '', '', '', '', 'yes', 'Select an approved work step. Leave unit_cost blank to use its saved rate.'],
+            ['sku_code', 'product_name', 'part_name', 'line_type', 'component_name', 'quantity_per_unit', 'unit_cost', 'purchase_unit', 'purchase_unit_cost', 'units_per_purchase_unit', 'waste_percent', 'consumption_unit', 'active', 'note'],
+            [$skus[0] ?? 'PS364', '', 'Strap', 'raw_material', $materials[0] ?? '', 1, '', 'sheet', 1200, 12, 5, 'piece', 'yes', 'One row per material or labour line. Product name is required only when SKU does not exist yet.'],
+            [$skus[0] ?? 'PS364', '', 'Strap', 'labour', $workSteps[0] ?? '', 1, '', '', '', '', '', '', 'yes', 'Select an approved work step. Leave unit_cost blank to use its saved rate.'],
+            [$skus[0] ?? 'PS364', '', 'Sole', 'raw_material', $materials[1] ?? $materials[0] ?? '', 1, '', 'sheet', 2300, 12, 5, 'piece', 'yes', 'Use part names like Strap, Sole, Finishing, Packing.'],
         ];
 
         $lists = [
             'line_types' => ['raw_material', 'labour'],
+            'parts' => $this->partNames($business),
             'materials' => $materials,
             'work_steps' => $workSteps,
             'active' => ['yes', 'no'],
@@ -72,9 +74,9 @@ class SkuRecipeTemplateExportService
             .'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
             .'<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
             .'<cols>'
-            .'<col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="16" customWidth="1"/>'
-            .'<col min="3" max="3" width="26" customWidth="1"/><col min="4" max="10" width="18" customWidth="1"/>'
-            .'<col min="11" max="11" width="10" customWidth="1"/><col min="12" max="12" width="52" customWidth="1"/>'
+            .'<col min="1" max="1" width="16" customWidth="1"/><col min="2" max="2" width="28" customWidth="1"/>'
+            .'<col min="3" max="5" width="18" customWidth="1"/><col min="6" max="12" width="18" customWidth="1"/>'
+            .'<col min="13" max="13" width="10" customWidth="1"/><col min="14" max="14" width="62" customWidth="1"/>'
             .'</cols><sheetData>';
 
         foreach ($rows as $rowIndex => $row) {
@@ -88,11 +90,12 @@ class SkuRecipeTemplateExportService
         }
 
         $xml .= '</sheetData>'
-            .'<dataValidations count="4">'
+            .'<dataValidations count="5">'
             .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose a SKU" error="Select an existing SKU code from the dropdown." sqref="A2:A500"><formula1>SKUCodes</formula1></dataValidation>'
-            .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose a line type" error="Select raw_material or labour." sqref="B2:B500"><formula1>LineTypes</formula1></dataValidation>'
-            .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose from approved names" error="Select a material component for raw_material or a labour work step for labour." sqref="C2:C500"><formula1>IF($B2=&quot;raw_material&quot;,MaterialNames,WorkStepNames)</formula1></dataValidation>'
-            .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose active" error="Select yes or no." sqref="K2:K500"><formula1>ActiveValues</formula1></dataValidation>'
+            .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose part" error="Select a product part like Strap or Sole." sqref="C2:C500"><formula1>PartNames</formula1></dataValidation>'
+            .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose a line type" error="Select raw_material or labour." sqref="D2:D500"><formula1>LineTypes</formula1></dataValidation>'
+            .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose from approved names" error="Select a material component for raw_material or a labour work step for labour." sqref="E2:E500"><formula1>IF($D2=&quot;raw_material&quot;,MaterialNames,WorkStepNames)</formula1></dataValidation>'
+            .'<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Choose active" error="Select yes or no." sqref="M2:M500"><formula1>ActiveValues</formula1></dataValidation>'
             .'</dataValidations>'
             .'</worksheet>';
 
@@ -103,13 +106,14 @@ class SkuRecipeTemplateExportService
     {
         $max = max(
             count($lists['line_types']),
+            count($lists['parts']),
             count($lists['materials']),
             count($lists['work_steps']),
             count($lists['active']),
             count($lists['skus']),
         ) + 1;
 
-        $headers = ['Line types', 'Material components', 'Labour work steps', 'Active', 'SKU codes'];
+        $headers = ['Line types', 'Product parts', 'Material components', 'Labour work steps', 'Active', 'SKU codes'];
         $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
 
@@ -119,6 +123,7 @@ class SkuRecipeTemplateExportService
                 ? $headers
                 : [
                     $lists['line_types'][$row - 2] ?? '',
+                    $lists['parts'][$row - 2] ?? '',
                     $lists['materials'][$row - 2] ?? '',
                     $lists['work_steps'][$row - 2] ?? '',
                     $lists['active'][$row - 2] ?? '',
@@ -139,6 +144,7 @@ class SkuRecipeTemplateExportService
     {
         $materialEnd = max(count($lists['materials']) + 1, 2);
         $workStepEnd = max(count($lists['work_steps']) + 1, 2);
+        $partEnd = max(count($lists['parts']) + 1, 2);
         $skuEnd = max(count($lists['skus']) + 1, 2);
 
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -146,11 +152,30 @@ class SkuRecipeTemplateExportService
             .'<sheets><sheet name="Recipe Upload" sheetId="1" r:id="rId1"/><sheet name="Lists" sheetId="2" state="hidden" r:id="rId2"/></sheets>'
             .'<definedNames>'
             .'<definedName name="LineTypes">Lists!$A$2:$A$3</definedName>'
-            .'<definedName name="MaterialNames">Lists!$B$2:$B$'.$materialEnd.'</definedName>'
-            .'<definedName name="WorkStepNames">Lists!$C$2:$C$'.$workStepEnd.'</definedName>'
-            .'<definedName name="ActiveValues">Lists!$D$2:$D$3</definedName>'
-            .'<definedName name="SKUCodes">Lists!$E$2:$E$'.$skuEnd.'</definedName>'
+            .'<definedName name="PartNames">Lists!$B$2:$B$'.$partEnd.'</definedName>'
+            .'<definedName name="MaterialNames">Lists!$C$2:$C$'.$materialEnd.'</definedName>'
+            .'<definedName name="WorkStepNames">Lists!$D$2:$D$'.$workStepEnd.'</definedName>'
+            .'<definedName name="ActiveValues">Lists!$E$2:$E$3</definedName>'
+            .'<definedName name="SKUCodes">Lists!$F$2:$F$'.$skuEnd.'</definedName>'
             .'</definedNames></workbook>';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function partNames(Business $business): array
+    {
+        $defaults = ['Strap', 'Sole', 'Upper', 'Bottom', 'Finishing', 'Packing', 'General'];
+        $saved = \App\Domains\Shared\Models\SkuRecipeItem::query()
+            ->where('business_id', $business->id)
+            ->whereNotNull('part_name')
+            ->where('part_name', '!=', '')
+            ->distinct()
+            ->orderBy('part_name')
+            ->pluck('part_name')
+            ->all();
+
+        return array_values(array_unique([...$defaults, ...$saved]));
     }
 
     private function cell(int $column, int $row, mixed $value, bool $header = false): string
