@@ -121,6 +121,54 @@ class SkuRecipeSpreadsheetImportTest extends TestCase
         @unlink($path);
     }
 
+    public function test_it_can_create_products_and_part_based_recipe_lines_from_one_sheet(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Factory Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'sku_recipe_');
+        $csvPath = $path.'.csv';
+
+        file_put_contents($csvPath, implode(PHP_EOL, [
+            'sku_code,product_name,part_name,line_type,component_name,quantity_per_unit,unit_cost,purchase_unit,purchase_unit_cost,units_per_purchase_unit,waste_percent,consumption_unit,active,note',
+            'PS364,Classic Slipper,Strap,raw_material,Rexine,1,,sheet,1400,30,5,piece,yes,',
+            'PS364,Classic Slipper,Strap,labour,Stitching labour,1,35,,,,,,yes,',
+            'PS364,Classic Slipper,Sole,raw_material,DSI Sheet,1,,sheet,2300,12,5,piece,yes,',
+        ]));
+
+        $result = app(SkuRecipeSpreadsheetImportService::class)->import($business, $csvPath);
+
+        $this->assertSame(3, $result['created']);
+        $this->assertSame(0, $result['updated']);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertDatabaseHas('skus', [
+            'business_id' => $business->id,
+            'code' => 'PS364',
+            'name' => 'Classic Slipper',
+        ]);
+        $this->assertDatabaseHas('sku_recipe_items', [
+            'part_name' => 'Strap',
+            'component_name' => 'Rexine',
+        ]);
+        $this->assertDatabaseHas('sku_recipe_items', [
+            'part_name' => 'Sole',
+            'component_name' => 'DSI Sheet',
+        ]);
+
+        $sku = Sku::query()->where('code', 'PS364')->firstOrFail();
+
+        $this->assertSame(2, $sku->recipeItems()->where('part_name', 'Strap')->count());
+        $this->assertSame(1, $sku->recipeItems()->where('part_name', 'Sole')->count());
+
+        @unlink($csvPath);
+        @unlink($path);
+    }
+
     public function test_it_exports_recipe_excel_template_with_dropdown_lists(): void
     {
         $business = Business::query()->create([
@@ -169,11 +217,15 @@ class SkuRecipeSpreadsheetImportTest extends TestCase
 
         $zip->close();
 
-        $this->assertStringContainsString('<dataValidations count="4">', $recipeSheet);
-        $this->assertStringContainsString('IF($B2=&quot;raw_material&quot;,MaterialNames,WorkStepNames)', $recipeSheet);
+        $this->assertStringContainsString('<dataValidations count="5">', $recipeSheet);
+        $this->assertStringContainsString('PartNames', $recipeSheet);
+        $this->assertStringContainsString('IF($D2=&quot;raw_material&quot;,MaterialNames,WorkStepNames)', $recipeSheet);
+        $this->assertStringContainsString('Strap', $listsSheet);
+        $this->assertStringContainsString('Sole', $listsSheet);
         $this->assertStringContainsString('DSI sheet', $listsSheet);
         $this->assertStringContainsString('Bottom labour', $listsSheet);
         $this->assertStringContainsString('SLP-001', $listsSheet);
+        $this->assertStringContainsString('<definedName name="PartNames">', $workbook);
         $this->assertStringContainsString('<definedName name="MaterialNames">', $workbook);
 
         @unlink($path);

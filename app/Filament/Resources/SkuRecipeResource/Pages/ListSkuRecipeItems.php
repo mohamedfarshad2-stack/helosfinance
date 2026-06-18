@@ -122,6 +122,17 @@ class ListSkuRecipeItems extends ListRecords
                                 ->default(SkuRecipeItem::TYPE_RAW_MATERIAL)
                                 ->live()
                                 ->required(),
+                            Select::make('part_name')
+                                ->label('Product part')
+                                ->options(fn (Get $get) => $this->partOptions((int) ($get('../../business_id') ?? 0)))
+                                ->default('General')
+                                ->searchable()
+                                ->preload()
+                                ->createOptionForm([
+                                    TextInput::make('name')->label('Part name')->placeholder('Strap')->required()->maxLength(120),
+                                ])
+                                ->createOptionUsing(fn (array $data): string => trim((string) $data['name']))
+                                ->required(),
                             Select::make('material_component_id')
                                 ->label('Material component')
                                 ->options(fn (Get $get) => $this->materialComponentOptions((int) ($get('../../business_id') ?? 0)))
@@ -192,6 +203,7 @@ class ListSkuRecipeItems extends ListRecords
                                 'business_id' => $business->id,
                                 'sku_id' => $sku->id,
                                 'line_type' => $line['line_type'] ?? SkuRecipeItem::TYPE_RAW_MATERIAL,
+                                'part_name' => trim((string) ($line['part_name'] ?? 'General')) ?: 'General',
                                 'material_component_id' => $line['material_component_id'] ?? null,
                                 'production_work_step_id' => $workStep?->id,
                                 'component_name' => $workStep?->name ?? trim((string) ($line['component_name'] ?? '')),
@@ -311,6 +323,28 @@ class ListSkuRecipeItems extends ListRecords
             ->orderBy('name')
             ->pluck('name', 'name')
             ->all();
+    }
+
+    private function partOptions(int $businessId): array
+    {
+        $defaults = collect(['Strap', 'Sole', 'Upper', 'Bottom', 'Finishing', 'Packing', 'General'])
+            ->mapWithKeys(fn (string $part): array => [$part => $part])
+            ->all();
+
+        if ($businessId <= 0) {
+            return $defaults;
+        }
+
+        $saved = SkuRecipeItem::query()
+            ->where('business_id', $businessId)
+            ->whereNotNull('part_name')
+            ->where('part_name', '!=', '')
+            ->distinct()
+            ->orderBy('part_name')
+            ->pluck('part_name', 'part_name')
+            ->all();
+
+        return $defaults + $saved;
     }
 
     private function materialComponentForm(): array
