@@ -11,6 +11,8 @@ class ProductionEntry extends Model
         'business_id',
         'sku_id',
         'sku_recipe_item_id',
+        'production_kind',
+        'part_name',
         'employee_name',
         'production_step',
         'piece_rate',
