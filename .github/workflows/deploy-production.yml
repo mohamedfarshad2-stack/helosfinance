@@ -34,6 +34,13 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Prepare Laravel environment
+        run: |
+          cp .env.example .env
+          php -r '$key = "base64:" . base64_encode(random_bytes(32)); file_put_contents(".env", preg_replace("/^APP_KEY=.*/m", "APP_KEY={$key}", file_get_contents(".env")));'
+          mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/framework/views bootstrap/cache database
+          touch database/database.sqlite
+
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
@@ -42,8 +49,7 @@ jobs:
 
       - name: Prepare test environment
         run: |
-          cp .env.example .env
-          php artisan key:generate
+          php artisan config:clear
 
       - name: Run tests
         env:
