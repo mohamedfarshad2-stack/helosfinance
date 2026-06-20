@@ -26,8 +26,8 @@ use Illuminate\Support\HtmlString;
 class BusinessResource extends Resource
 {
     protected static ?string $model = Business::class;
-    protected static ?string $navigationGroup = 'Input Center';
-    protected static ?string $navigationLabel = 'Client Businesses';
+    protected static ?string $navigationGroup = 'Setup';
+    protected static ?string $navigationLabel = 'Businesses';
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
 
     public static function form(Form $form): Form

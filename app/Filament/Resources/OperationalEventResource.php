@@ -6,6 +6,7 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
 use App\Filament\Resources\OperationalEventResource\Pages;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -20,8 +21,8 @@ use Illuminate\Database\Eloquent\Builder;
 class OperationalEventResource extends Resource
 {
     protected static ?string $model = OperationalEvent::class;
-    protected static ?string $navigationGroup = 'Operations Impact';
-    protected static ?string $navigationLabel = 'Operational Events';
+    protected static ?string $navigationGroup = 'Sales & Work';
+    protected static ?string $navigationLabel = 'Sales & Order Activity';
     protected static ?string $navigationIcon = 'heroicon-o-bolt';
 
     public static function form(Form $form): Form
@@ -47,6 +48,11 @@ class OperationalEventResource extends Resource
                 OperationalEvent::EXPENSE_ADDED => 'Expense added',
             ])->required(),
             TextInput::make('external_id')->label('Stock-app ID'),
+            TextInput::make('customer_name')
+                ->label('Customer name')
+                ->placeholder('Wholesale or service customer')
+                ->visible(fn (Get $get): bool => in_array($get('event_type'), [OperationalEvent::WHOLESALE_PARCEL_SENT], true))
+                ->dehydrated(),
             Select::make('channel')
                 ->options([
                     'cod' => 'COD',
@@ -95,6 +101,14 @@ class OperationalEventResource extends Resource
                     'mixed' => 'Mixed',
                 ])
                 ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT)
+                ->dehydrated(),
+            TextInput::make('cheque_number')
+                ->label('Cheque number')
+                ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT && $get('customer_payment_method') === 'cheque')
+                ->dehydrated(),
+            DatePicker::make('cheque_date')
+                ->label('Cheque date')
+                ->visible(fn (Get $get): bool => $get('event_type') === OperationalEvent::WHOLESALE_PARCEL_SENT && $get('customer_payment_method') === 'cheque')
                 ->dehydrated(),
             DateTimePicker::make('payment_due_at')
                 ->label('Balance due date')

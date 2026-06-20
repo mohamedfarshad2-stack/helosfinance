@@ -7,6 +7,7 @@ use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
+use App\Filament\Concerns\RespectsBusinessModules;
 use App\Filament\Resources\SkuRecipeResource\Pages;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
@@ -22,9 +23,11 @@ use Illuminate\Support\Facades\Auth;
 
 class SkuRecipeResource extends Resource
 {
+    use RespectsBusinessModules;
+
     protected static ?string $model = SkuRecipeItem::class;
-    protected static ?string $navigationGroup = 'Manufacturing';
-    protected static ?string $navigationLabel = 'SKU Recipe / BOM';
+    protected static ?string $navigationGroup = 'Products & Production';
+    protected static ?string $navigationLabel = 'Product Recipes';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?int $navigationSort = 4;
 
@@ -159,23 +162,21 @@ class SkuRecipeResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && (Auth::user()?->isOwner() ?? false);
+        return Auth::check() && (Auth::user()?->isOwner() ?? false) && static::currentBusinessSupportsManufacturing();
     }
 
     public static function canAccess(): bool
     {
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+        return Auth::check()
+            && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false))
+            && static::currentBusinessSupportsManufacturing();
     }
 
     private static function businessOptions(): array
     {
         $user = Auth::user();
 
-        return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
+        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function skuOptions(int $businessId): array
@@ -286,24 +287,14 @@ class SkuRecipeResource extends Resource
 
     private static function scopeToCurrentBusiness(Builder $query): Builder
     {
-        $user = Auth::user();
-
-        if ($user?->seesAllBusinesses()) {
-            return $query;
-        }
-
-        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
+        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function currentBusinessSupportsManufacturing(): bool
     {
         $user = Auth::user();
 
-        if ($user?->seesAllBusinesses()) {
-            return true;
-        }
-
-        return $user?->business?->supportsProductionTracking() ?? false;
+        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function materialComponentForm(): array

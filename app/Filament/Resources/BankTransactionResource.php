@@ -25,8 +25,8 @@ use Illuminate\Support\Facades\Auth;
 class BankTransactionResource extends Resource
 {
     protected static ?string $model = BankTransaction::class;
-    protected static ?string $navigationGroup = 'Integrations';
-    protected static ?string $navigationLabel = 'Bank Review';
+    protected static ?string $navigationGroup = 'Money';
+    protected static ?string $navigationLabel = 'Bank & Cash Review';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
     public static function form(Form $form): Form

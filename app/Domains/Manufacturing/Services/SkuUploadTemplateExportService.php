@@ -20,7 +20,7 @@ class SkuUploadTemplateExportService
 
         $rows = [
             ['business_name', 'code', 'name', 'expected_sale_price', 'active', 'material_cost', 'packaging_cost', 'labor_rate', 'finishing_cost', 'note'],
-            [$selectedBusiness->name, 'SLP-001', 'Black Slipper Size 8', 1200, 'yes', '', '', '', '', 'Costs should normally come from SKU Recipe / BOM.'],
+            [$selectedBusiness->name, 'SLP-001', 'Black Slipper Size 8', 1200, 'yes', '', '', '', '', 'Costs should normally come from Product Recipes.'],
             [$selectedBusiness->name, 'SLP-002', 'Brown Slipper Size 9', 1350, 'yes', '', '', '', '', 'Leave fallback costs blank if recipe will be added.'],
         ];
 

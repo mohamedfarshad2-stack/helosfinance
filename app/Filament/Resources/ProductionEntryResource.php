@@ -8,6 +8,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
+use App\Filament\Concerns\RespectsBusinessModules;
 use App\Filament\Resources\ProductionEntryResource\Pages;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -27,9 +28,11 @@ use Illuminate\Support\Facades\Auth;
 
 class ProductionEntryResource extends Resource
 {
+    use RespectsBusinessModules;
+
     protected static ?string $model = ProductionEntry::class;
-    protected static ?string $navigationGroup = 'Manufacturing';
-    protected static ?string $navigationLabel = 'Weekly Production Pay';
+    protected static ?string $navigationGroup = 'Products & Production';
+    protected static ?string $navigationLabel = 'Production Pay';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
     public static function form(Form $form): Form
@@ -302,25 +305,25 @@ class ProductionEntryResource extends Resource
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+        return Auth::check()
+            && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false))
+            && static::currentBusinessSupportsProductionTracking();
     }
 
     public static function canAccess(): bool
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+        return Auth::check()
+            && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false))
+            && static::currentBusinessSupportsProductionTracking();
     }
 
     private static function businessOptions(): array
     {
         $user = Auth::user();
 
-        return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
+        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function skuOptions(int $businessId): array
@@ -408,22 +411,14 @@ class ProductionEntryResource extends Resource
     {
         $user = Auth::user();
 
-        if ($user?->seesAllBusinesses()) {
-            return $query;
-        }
-
-        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
+        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function currentBusinessSupportsProductionTracking(): bool
     {
         $user = Auth::user();
 
-        if ($user?->seesAllBusinesses()) {
-            return true;
-        }
-
-        return $user?->business?->supportsProductionTracking() ?? false;
+        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function calculateNetPayable(Get $get): float

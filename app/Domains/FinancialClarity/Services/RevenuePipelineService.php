@@ -4,6 +4,7 @@ namespace App\Domains\FinancialClarity\Services;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\Sku;
 use Illuminate\Support\Collection;
 
@@ -11,6 +12,7 @@ class RevenuePipelineService
 {
     public function forCurrentMonth(Business $business): array
     {
+        $serviceBilling = $this->serviceBilling($business);
         $events = OperationalEvent::query()
             ->where('business_id', $business->id)
             ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
@@ -26,15 +28,25 @@ class RevenuePipelineService
             ->get();
 
         if ($events->isEmpty()) {
+            $serviceExpected = (float) ($serviceBilling['expected_revenue'] ?? 0);
+            $serviceCollected = (float) ($serviceBilling['collected_revenue'] ?? 0);
+
             return [
                 'activated' => true,
-                'headline' => 'No money coming in has been recorded yet for this month.',
+                'headline' => $serviceExpected > 0 || $serviceCollected > 0
+                    ? 'Service billing money is visible for this month.'
+                    : 'No money coming in has been recorded yet for this month.',
                 'confidence' => 'Medium',
                 'cod' => $this->emptyChannel('COD'),
                 'wholesale' => $this->emptyChannel('Wholesale'),
+                'service' => $serviceBilling,
+                'total_expected_revenue' => round($serviceExpected, 2),
+                'total_collected_revenue' => round($serviceCollected, 2),
+                'total_returned_revenue' => 0.0,
+                'orders' => [],
                 'actions' => [
-                    'Capture confirmed and tracking-added orders so the COD pipeline becomes visible.',
-                    'Tag wholesale orders clearly so collections can be read separately from COD.',
+                    $serviceExpected > 0 ? 'Follow up service clients with unpaid or part-paid monthly fees.' : 'Capture confirmed and tracking-added orders so the COD pipeline becomes visible.',
+                    $business->supportsBusinessType(Business::TYPE_SERVICE) ? 'Record registration fees and monthly subscription payments in Service Billing.' : 'Tag wholesale orders clearly so collections can be read separately from COD.',
                 ],
             ];
         }
@@ -59,8 +71,12 @@ class RevenuePipelineService
         $pendingCount = $orders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->count();
         $deliveredCount = $orders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->count();
         $returnedCount = $orders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->count();
+        $servicePending = (float) ($serviceBilling['expected_revenue'] ?? 0);
+        $serviceCollected = (float) ($serviceBilling['collected_revenue'] ?? 0);
 
         $headline = match (true) {
+            $servicePending > 0 && ($codPending > 0 || $wholesalePending > 0) => 'Service billing and order collections both need attention.',
+            $servicePending > 0 => 'Service clients still have subscription money to collect.',
             $codPending > 0 && $wholesalePending > 0 => 'COD and wholesale both need collection attention.',
             $codPending > 0 => 'COD money is still waiting to be delivered and collected.',
             $wholesalePending > 0 => 'Wholesale money is still waiting for settlement.',
@@ -89,16 +105,59 @@ class RevenuePipelineService
                 'returned_orders' => $wholesaleOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->count(),
                 'note' => 'Wholesale collection timing still needs bank or invoice matching to become exact.',
             ],
-            'total_expected_revenue' => round($codPending + $wholesalePending, 2),
-            'total_collected_revenue' => round($codCollected + $wholesaleDelivered, 2),
+            'service' => $serviceBilling,
+            'total_expected_revenue' => round($codPending + $wholesalePending + $servicePending, 2),
+            'total_collected_revenue' => round($codCollected + $wholesaleDelivered + $serviceCollected, 2),
             'total_returned_revenue' => round($codReturned + $wholesaleReturned, 2),
             'orders' => $orders->take(8)->values()->all(),
             'actions' => array_values(array_filter([
                 $codPending > 0 ? 'Review COD parcels that are confirmed or tracked but not yet delivered.' : null,
                 $wholesalePending > 0 ? 'Follow up wholesale customers with unpaid or uncollected orders.' : null,
+                $servicePending > 0 ? 'Follow up service clients with unpaid or part-paid monthly fees.' : null,
                 $returnedCount > 0 ? 'Check which returned parcels can be restocked and which should be treated as scrap.' : null,
                 $deliveredCount > 0 ? 'Match delivered money with bank settlements so money stays clear.' : null,
             ])),
+        ];
+    }
+
+    private function serviceBilling(Business $business): array
+    {
+        if (! $business->supportsBusinessType(Business::TYPE_SERVICE)) {
+            return $this->emptyChannel('Service');
+        }
+
+        $records = ServiceBillingRecord::query()
+            ->where('business_id', $business->id)
+            ->where(function ($query): void {
+                $query->whereBetween('due_on', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+                    ->orWhereBetween('paid_on', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+                    ->orWhereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])
+                    ->orWhere(function ($query): void {
+                        $query->whereDate('period_start', '<=', now()->endOfMonth()->toDateString())
+                            ->whereDate('period_end', '>=', now()->startOfMonth()->toDateString());
+                    });
+            })
+            ->get();
+
+        $pending = $records->filter(fn (ServiceBillingRecord $record): bool => $record->balanceDue() > 0);
+
+        return [
+            'expected_revenue' => round((float) $pending->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue()), 2),
+            'collected_revenue' => round((float) $records->sum('paid_amount'), 2),
+            'returned_revenue' => 0.0,
+            'pending_orders' => $pending->count(),
+            'delivered_orders' => $records->where('payment_status', 'paid')->count(),
+            'returned_orders' => 0,
+            'label' => 'Service',
+            'records' => $records->sortBy('due_on')->take(8)->map(fn (ServiceBillingRecord $record): array => [
+                'client_name' => $record->client_name,
+                'billing_type' => $record->billing_type,
+                'amount_due' => (float) $record->amount_due,
+                'paid_amount' => (float) $record->paid_amount,
+                'remaining_amount' => $record->balanceDue(),
+                'payment_status' => $record->payment_status,
+                'due_on' => optional($record->due_on)->toDateString(),
+            ])->values()->all(),
         ];
     }
 
@@ -127,11 +186,16 @@ class RevenuePipelineService
             'status' => $latest->event_type,
             'sku_code' => $sku?->code,
             'sku_name' => $sku?->name,
+            'customer_name' => $payload['customer_name'] ?? null,
             'expected_amount' => $expectedAmount,
             'recognized_amount' => $recognizedAmount,
             'paid_amount' => $paidAmount,
             'remaining_amount' => max($expectedAmount - $paidAmount - $recognizedAmount, 0.0),
             'reversed_amount' => $reversedAmount,
+            'customer_payment_method' => $payload['customer_payment_method'] ?? null,
+            'payment_due_at' => $payload['payment_due_at'] ?? null,
+            'cheque_number' => $payload['cheque_number'] ?? null,
+            'cheque_date' => $payload['cheque_date'] ?? null,
             'occurred_at' => $latest->occurred_at?->toDateTimeString(),
         ];
     }

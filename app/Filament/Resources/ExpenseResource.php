@@ -30,8 +30,8 @@ use Illuminate\Support\Facades\Auth;
 class ExpenseResource extends Resource
 {
     protected static ?string $model = Expense::class;
-    protected static ?string $navigationGroup = 'Costs';
-    protected static ?string $navigationLabel = 'Expense Review';
+    protected static ?string $navigationGroup = 'Money';
+    protected static ?string $navigationLabel = 'Expenses & Payables';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
     public static function form(Form $form): Form

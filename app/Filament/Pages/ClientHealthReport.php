@@ -19,6 +19,21 @@ use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Expense;
+use App\Domains\Shared\Models\ServiceBillingRecord;
+use App\Domains\Shared\Models\Sku;
+use App\Domains\Shared\Models\SkuRecipeItem;
+use App\Filament\Pages\BankStatementImport;
+use App\Filament\Resources\BankTransactionResource;
+use App\Filament\Resources\BusinessResource;
+use App\Filament\Resources\CostAssumptionResource;
+use App\Filament\Resources\EmployeeResource;
+use App\Filament\Resources\ExpenseResource;
+use App\Filament\Resources\MaterialComponentResource;
+use App\Filament\Resources\OperationalEventResource;
+use App\Filament\Resources\ProductionEntryResource;
+use App\Filament\Resources\ServiceBillingResource;
+use App\Filament\Resources\SkuRecipeResource;
+use App\Filament\Resources\SkuResource;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -74,6 +89,8 @@ class ClientHealthReport extends Page implements HasForms
     public array $trustStatus = [];
 
     public array $ownerBusinessMap = [];
+
+    public array $ownerSetupGuide = [];
 
     public Collection $trend;
 
@@ -153,6 +170,7 @@ class ClientHealthReport extends Page implements HasForms
             $this->treasuryStory = [];
             $this->trustStatus = [];
             $this->ownerBusinessMap = [];
+            $this->ownerSetupGuide = [];
 
             return;
         }
@@ -243,6 +261,7 @@ class ClientHealthReport extends Page implements HasForms
         ], 'goal');
         $this->treasuryStory['trust_status'] = $this->trustStatus['section_statuses']['treasury'] ?? 'Estimated';
         $this->ownerBusinessMap = $this->buildOwnerBusinessMap();
+        $this->ownerSetupGuide = $this->buildOwnerSetupGuide();
     }
 
     protected function getViewData(): array
@@ -265,9 +284,163 @@ class ClientHealthReport extends Page implements HasForms
             'treasuryStory' => $this->treasuryStory,
             'trustStatus' => $this->trustStatus,
             'ownerBusinessMap' => $this->ownerBusinessMap,
+            'ownerSetupGuide' => $this->ownerSetupGuide,
             'trend' => $this->trend,
             'topExpenses' => $this->topExpenses,
             'impact' => $this->impact,
+        ];
+    }
+
+    private function buildOwnerSetupGuide(): array
+    {
+        if (! $this->business instanceof Business) {
+            return ['steps' => [], 'next_step' => null, 'progress' => 0];
+        }
+
+        $steps = [];
+        $fixedExpenses = Expense::query()
+            ->where('business_id', $this->business->id)
+            ->where('expense_type', 'fixed')
+            ->count();
+        $employees = $this->business->employees()->count();
+        $bankRows = BankTransaction::query()->where('business_id', $this->business->id)->count();
+        $goalConfigured = (bool) ($this->goalStory['configured'] ?? false);
+        $integration = IntegrationSource::query()->where('business_id', $this->business->id)->exists();
+
+        $steps[] = $this->setupStep(
+            'business_profile',
+            'Confirm business setup',
+            'Business type, owner group, maturity, and setup stage must be correct before HELOS guides the owner.',
+            filled($this->business->business_type) && filled($this->business->business_maturity),
+            BusinessResource::getUrl('edit', ['record' => $this->business]),
+            'Open business setup'
+        );
+
+        $steps[] = $this->setupStep(
+            'fixed_costs',
+            'Add monthly fixed costs',
+            'Rent, salaries, subscriptions, and fixed commitments set the survival line for break-even.',
+            $fixedExpenses > 0,
+            ExpenseResource::getUrl('index'),
+            'Open expenses'
+        );
+
+        $steps[] = $this->setupStep(
+            'team',
+            'Add staff and salary truth',
+            'HELOS needs staff and pay-cycle truth before payroll pressure and weekly work can be trusted.',
+            $employees > 0,
+            EmployeeResource::getUrl('index'),
+            'Open staff'
+        );
+
+        if ($this->business->supportsBusinessType(Business::TYPE_SERVICE)) {
+            $serviceRecords = ServiceBillingRecord::query()
+                ->where('business_id', $this->business->id)
+                ->count();
+
+            $steps[] = $this->setupStep(
+                'service_billing',
+                'Add service clients and monthly fees',
+                'Registration fees, monthly subscriptions, paid, part-paid, and overdue service money should be recorded here.',
+                $serviceRecords > 0,
+                ServiceBillingResource::getUrl('index'),
+                'Open service billing'
+            );
+        }
+
+        if ($this->business->supportsSkuManagement()) {
+            $skuCount = Sku::query()->where('business_id', $this->business->id)->count();
+
+            $steps[] = $this->setupStep(
+                'products',
+                'Add products or SKUs',
+                'Trading and manufacturing businesses need products before HELOS can read item-level sales and cost.',
+                $skuCount > 0,
+                SkuResource::getUrl('index'),
+                'Open products'
+            );
+        }
+
+        if ($this->business->supportsProductionTracking()) {
+            $recipeCount = SkuRecipeItem::query()->where('business_id', $this->business->id)->count();
+
+            $steps[] = $this->setupStep(
+                'recipe',
+                'Add materials, work steps, and recipes',
+                'Manufacturing profit needs material components, labour steps, and SKU recipe lines before cost is trusted.',
+                $recipeCount > 0,
+                SkuRecipeResource::getUrl('index'),
+                'Open recipes'
+            );
+
+            $steps[] = $this->setupStep(
+                'production',
+                'Start weekly production records',
+                'Daily or weekly part production drives piece-work salary and production cost.',
+                ProductionEntry::query()->where('business_id', $this->business->id)->exists(),
+                ProductionEntryResource::getUrl('index'),
+                'Open production pay'
+            );
+        }
+
+        if ($this->business->supportsBusinessType(Business::TYPE_TRADING) || $this->business->supportsBusinessType(Business::TYPE_MANUFACTURING)) {
+            $steps[] = $this->setupStep(
+                'sales',
+                'Connect stock-app or add sales manually',
+                'COD, wholesale, credit, cheque, delivered, returned, and resend events feed money and profitability.',
+                $integration || OperationalEvent::query()->where('business_id', $this->business->id)->exists(),
+                $integration ? OperationalEventResource::getUrl('index') : '#helos-revenue',
+                $integration ? 'Open sales events' : 'Review revenue flow'
+            );
+        }
+
+        $steps[] = $this->setupStep(
+            'bank',
+            'Import or review bank and cash rows',
+            'Bank review separates revenue, expenses, transfers, owner money, and shared/unallocated cash.',
+            $bankRows > 0,
+            $bankRows > 0 ? BankTransactionResource::getUrl('index') : BankStatementImport::getUrl(),
+            $bankRows > 0 ? 'Open bank review' : 'Import bank statement'
+        );
+
+        $steps[] = $this->setupStep(
+            'goal',
+            'Set this month goal',
+            'A simple profit, revenue, delivery, or collection target lets HELOS explain distance and fastest path.',
+            $goalConfigured,
+            '#helos-goal',
+            'Open goal'
+        );
+
+        $completed = collect($steps)->where('done', true)->count();
+        $next = collect($steps)->firstWhere('done', false);
+        $progress = count($steps) > 0 ? (int) round(($completed / count($steps)) * 100) : 0;
+
+        return [
+            'headline' => $next
+                ? 'Start with '.$next['title'].'.'
+                : 'Setup is ready enough for daily owner review.',
+            'subheadline' => $this->business->businessTypeLabel().' setup path for a new owner.',
+            'progress' => $progress,
+            'completed' => $completed,
+            'total' => count($steps),
+            'next_step' => $next,
+            'steps' => $steps,
+        ];
+    }
+
+    private function setupStep(string $key, string $title, string $why, bool $done, string $url, string $action): array
+    {
+        return [
+            'key' => $key,
+            'title' => $title,
+            'why' => $why,
+            'done' => $done,
+            'status' => $done ? 'Done' : 'Needed',
+            'tone' => $done ? 'green' : 'amber',
+            'url' => $url,
+            'action' => $action,
         ];
     }
 

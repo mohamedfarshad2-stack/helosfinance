@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\Auth;
 class CostAssumptionResource extends Resource
 {
     protected static ?string $model = CostAssumption::class;
-    protected static ?string $navigationGroup = 'Platform Setup';
-    protected static ?string $navigationLabel = 'Operational Rules';
+    protected static ?string $navigationGroup = 'Setup';
+    protected static ?string $navigationLabel = 'Cost Rules';
     protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
     public static function getPluralModelLabel(): string

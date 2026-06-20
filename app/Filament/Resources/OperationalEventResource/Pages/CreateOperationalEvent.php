@@ -19,14 +19,20 @@ class CreateOperationalEvent extends CreateRecord
         $expectedSaleAmount = (float) ($data['expected_sale_amount'] ?? 0);
         $transportCostAmount = (float) ($data['transport_cost_amount'] ?? 0);
         $customerPaidAmount = (float) ($data['customer_paid_amount'] ?? 0);
+        $customerName = $data['customer_name'] ?? null;
         $customerPaymentMethod = $data['customer_payment_method'] ?? null;
+        $chequeNumber = $data['cheque_number'] ?? null;
+        $chequeDate = $data['cheque_date'] ?? null;
         $paymentDueAt = $data['payment_due_at'] ?? null;
 
         unset(
             $data['expected_sale_amount'],
             $data['transport_cost_amount'],
             $data['customer_paid_amount'],
+            $data['customer_name'],
             $data['customer_payment_method'],
+            $data['cheque_number'],
+            $data['cheque_date'],
             $data['payment_due_at']
         );
 
@@ -35,7 +41,10 @@ class CreateOperationalEvent extends CreateRecord
             'sale_amount' => $expectedSaleAmount > 0 ? $expectedSaleAmount : null,
             'transport_cost_amount' => $transportCostAmount > 0 ? $transportCostAmount : null,
             'customer_paid_amount' => $customerPaidAmount > 0 ? $customerPaidAmount : null,
+            'customer_name' => filled($customerName) ? $customerName : null,
             'customer_payment_method' => $customerPaymentMethod,
+            'cheque_number' => filled($chequeNumber) ? $chequeNumber : null,
+            'cheque_date' => $chequeDate,
             'payment_due_at' => $paymentDueAt,
             'channel' => $data['channel'] ?? null,
             'manual_entry' => true,

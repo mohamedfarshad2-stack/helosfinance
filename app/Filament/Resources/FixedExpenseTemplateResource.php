@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Auth;
 class FixedExpenseTemplateResource extends Resource
 {
     protected static ?string $model = FixedExpenseTemplate::class;
-    protected static ?string $navigationGroup = 'Platform Setup';
+    protected static ?string $navigationGroup = 'Setup';
     protected static ?string $navigationLabel = 'Expense Templates';
     protected static ?string $navigationIcon = 'heroicon-o-light-bulb';
 

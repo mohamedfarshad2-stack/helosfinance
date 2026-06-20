@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\ProductionWorkStep;
+use App\Filament\Concerns\RespectsBusinessModules;
 use App\Filament\Resources\ProductionWorkStepResource\Pages;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
@@ -18,11 +19,13 @@ use Illuminate\Support\Facades\Auth;
 
 class ProductionWorkStepResource extends Resource
 {
+    use RespectsBusinessModules;
+
     protected static ?string $model = ProductionWorkStep::class;
 
-    protected static ?string $navigationGroup = 'Manufacturing';
+    protected static ?string $navigationGroup = 'Products & Production';
 
-    protected static ?string $navigationLabel = 'Work Steps';
+    protected static ?string $navigationLabel = 'Production Work Types';
 
     protected static ?string $modelLabel = 'work step';
 
@@ -98,28 +101,26 @@ class ProductionWorkStepResource extends Resource
         return Auth::check() && (($user?->isOwner() ?? false)
             || ($user?->isInternalAdmin() ?? false)
             || ($user?->canAccessOperationalTasks() ?? false)
-            || ($user?->canAccessFinanceOperations() ?? false));
+            || ($user?->canAccessFinanceOperations() ?? false))
+            && static::currentBusinessSupportsManufacturing();
     }
 
     private static function businessOptions(): array
     {
         $user = Auth::user();
 
-        return Business::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
+        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function scopeToCurrentBusiness(Builder $query): Builder
     {
         $user = Auth::user();
 
-        if ($user?->seesAllBusinesses()) {
-            return $query;
-        }
+        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsProductionTracking());
+    }
 
-        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
+    private static function currentBusinessSupportsManufacturing(): bool
+    {
+        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 }

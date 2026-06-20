@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 class IntegrationSourceResource extends Resource
 {
     protected static ?string $model = IntegrationSource::class;
-    protected static ?string $navigationGroup = 'Integrations';
+    protected static ?string $navigationGroup = 'Setup';
     protected static ?string $navigationLabel = 'Stock-app Connections';
     protected static ?string $navigationIcon = 'heroicon-o-link';
 

@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Auth;
 class BankTransactionRuleResource extends Resource
 {
     protected static ?string $model = BankTransactionRule::class;
-    protected static ?string $navigationGroup = 'Integrations';
+    protected static ?string $navigationGroup = 'Setup';
     protected static ?string $navigationLabel = 'Bank Rules';
     protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 

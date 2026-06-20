@@ -14,6 +14,7 @@ use App\Filament\Resources\IntegrationSourceResource;
 use App\Filament\Resources\MaterialLedgerResource;
 use App\Filament\Resources\ProductionWorkStepResource;
 use App\Filament\Resources\ProductionEntryResource;
+use App\Filament\Resources\ServiceBillingResource;
 use App\Filament\Resources\SkuRecipeResource;
 use App\Filament\Resources\SkuResource;
 use App\Models\User;
@@ -122,8 +123,9 @@ class BusinessArchitectureTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->assertTrue(SkuResource::canAccess());
-        $this->assertTrue(ProductionEntryResource::canAccess());
+        $this->assertTrue(ServiceBillingResource::canAccess());
+        $this->assertFalse(SkuResource::canAccess());
+        $this->assertFalse(ProductionEntryResource::canAccess());
 
         $manufacturingBusiness = Business::query()->create([
             'name' => 'Manufacturing Client',
@@ -136,6 +138,7 @@ class BusinessArchitectureTest extends TestCase
         $user->update(['business_id' => $manufacturingBusiness->id]);
         $this->actingAs($user->fresh());
 
+        $this->assertFalse(ServiceBillingResource::canAccess());
         $this->assertTrue(SkuResource::canAccess());
         $this->assertTrue(ProductionEntryResource::canAccess());
     }
@@ -309,7 +312,7 @@ class BusinessArchitectureTest extends TestCase
 
         $this->get(MaterialComponentResource::getUrl('index'))
             ->assertOk()
-            ->assertSee('Material Components')
+            ->assertSee('Raw Materials')
             ->assertSee('Upload components')
             ->assertSee('Download sample');
 

@@ -127,8 +127,8 @@ class Business extends Model
             'daily_cfo_briefing' => 'Daily CFO Briefing',
             'decision_ranking' => 'Decision Ranking',
             'production_tracking' => 'Production Tracking',
-            'material_ledger' => 'Material Ledger',
-            'sku_recipe_bom' => 'SKU Recipe / BOM',
+            'material_ledger' => 'Material Stock',
+            'sku_recipe_bom' => 'Product Recipes',
             'material_consumption' => 'Material Consumption',
             'inventory_aging' => 'Inventory Aging',
         ];
@@ -388,6 +388,11 @@ class Business extends Model
     public function materialComponents(): HasMany
     {
         return $this->hasMany(MaterialComponent::class);
+    }
+
+    public function serviceBillingRecords(): HasMany
+    {
+        return $this->hasMany(ServiceBillingRecord::class);
     }
 
     public function productionWorkSteps(): HasMany

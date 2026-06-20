@@ -7,6 +7,7 @@ use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Models\ServiceBillingRecord;
 use Illuminate\Support\Carbon;
 
 class BusinessHealthSnapshotService
@@ -84,7 +85,26 @@ class BusinessHealthSnapshotService
             ->where('business_id', $business->id)
             ->whereBetween('occurred_at', [$start->startOfDay(), $end->endOfDay()]);
 
-        $revenue = (clone $events)->sum('revenue_amount');
+        $serviceBilling = ServiceBillingRecord::query()
+            ->where('business_id', $business->id)
+            ->where(function ($query) use ($start, $end): void {
+                $monthEnd = $end->copy()->endOfMonth()->toDateString();
+
+                $query->whereBetween('due_on', [$start->toDateString(), $monthEnd])
+                    ->orWhereBetween('paid_on', [$start->toDateString(), $monthEnd])
+                    ->orWhereBetween('created_at', [$start->copy()->startOfDay(), $end->copy()->endOfMonth()->endOfDay()])
+                    ->orWhere(function ($query) use ($start, $end): void {
+                        $query->whereDate('period_start', '<=', $end->toDateString())
+                            ->whereDate('period_end', '>=', $start->toDateString());
+                    });
+            })
+            ->get();
+
+        $serviceRevenue = (float) $serviceBilling->sum('paid_amount');
+        $serviceExpected = (float) $serviceBilling->sum('amount_due');
+        $serviceOutstanding = (float) $serviceBilling->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue());
+
+        $revenue = (clone $events)->sum('revenue_amount') + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
         $leakage = (clone $events)->sum('leakage_amount');
         $recovery = (clone $events)->sum('recovery_amount');
@@ -174,6 +194,10 @@ class BusinessHealthSnapshotService
                 'top_loss_sku' => $topLossSku,
                 'top_revenue_sku' => $topRevenueSku,
                 'top_expense_categories' => $topExpenseCategories,
+                'service_billing_expected' => $serviceExpected,
+                'service_billing_collected' => $serviceRevenue,
+                'service_billing_outstanding' => $serviceOutstanding,
+                'service_billing_count' => $serviceBilling->count(),
                 'pressure_note' => $leakage > 0 ? 'Leakage is creating margin pressure.' : 'No leakage recorded in this period.',
             ],
         ];

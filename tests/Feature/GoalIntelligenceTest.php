@@ -73,6 +73,8 @@ class GoalIntelligenceTest extends TestCase
             ->assertOk()
             ->assertSee('CFO Cockpit')
             ->assertSee('Control Score')
+            ->assertSee('Start Here')
+            ->assertSee('Setup Progress')
             ->assertSee('Selected flag repair path')
             ->assertSee('Go deeper')
             ->assertSee('Your Goal')
