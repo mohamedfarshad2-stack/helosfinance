@@ -23,6 +23,7 @@ use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Filament\Pages\BankStatementImport;
+use App\Filament\Pages\CodOrderWorkbench;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\CostAssumptionResource;
@@ -306,6 +307,7 @@ class ClientHealthReport extends Page implements HasForms
         $bankRows = BankTransaction::query()->where('business_id', $this->business->id)->count();
         $goalConfigured = (bool) ($this->goalStory['configured'] ?? false);
         $integration = IntegrationSource::query()->where('business_id', $this->business->id)->exists();
+        $internalCodOrders = $this->business->codOrders()->exists();
 
         $steps[] = $this->setupStep(
             'business_profile',
@@ -384,14 +386,21 @@ class ClientHealthReport extends Page implements HasForms
             );
         }
 
-        if ($this->business->supportsBusinessType(Business::TYPE_TRADING) || $this->business->supportsBusinessType(Business::TYPE_MANUFACTURING)) {
+        if (
+            ($this->business->supportsBusinessType(Business::TYPE_TRADING) || $this->business->supportsBusinessType(Business::TYPE_MANUFACTURING))
+            && $this->business->codOrderSource() !== Business::COD_SOURCE_NONE
+        ) {
+            $usesInternalCod = $this->business->usesInternalCodOrders();
+
             $steps[] = $this->setupStep(
                 'sales',
-                'Connect stock-app or add sales manually',
-                'COD, wholesale, credit, cheque, delivered, returned, and resend events feed money and profitability.',
-                $integration || OperationalEvent::query()->where('business_id', $this->business->id)->exists(),
-                $integration ? OperationalEventResource::getUrl('index') : '#helos-revenue',
-                $integration ? 'Open sales events' : 'Review revenue flow'
+                $usesInternalCod ? 'Start HELOS COD orders' : 'Connect stock-app',
+                $usesInternalCod
+                    ? 'Use this when the client does not use Stock App. Each HELOS COD order can carry its own courier, delivery charge, return charge, and resend charge.'
+                    : 'Use this when the client already runs Stock App. Stock App order events feed money and profitability.',
+                $usesInternalCod ? $internalCodOrders : ($integration || OperationalEvent::query()->where('business_id', $this->business->id)->exists()),
+                $usesInternalCod ? CodOrderWorkbench::getUrl() : ($integration ? OperationalEventResource::getUrl('index') : '#helos-revenue'),
+                $usesInternalCod ? 'Open COD orders' : ($integration ? 'Open sales events' : 'Review revenue flow')
             );
         }
 
@@ -636,6 +645,8 @@ class ClientHealthReport extends Page implements HasForms
             ->latest('last_synced_at')
             ->first();
         $integrationHeadline = match (true) {
+            $this->business->usesInternalCodOrders() => 'HELOS internal COD orders are active for this business.',
+            $this->business->codOrderSource() === Business::COD_SOURCE_NONE => 'This business is not using a COD order workflow.',
             $integration instanceof IntegrationSource && $integration->status === 'active' => 'The stock-app integration is active.',
             $integration instanceof IntegrationSource && $integration->status === 'testing' => 'The stock-app integration is still being tested.',
             $integration instanceof IntegrationSource && $integration->status === 'paused' => 'The stock-app integration is paused.',
@@ -644,7 +655,7 @@ class ClientHealthReport extends Page implements HasForms
         };
 
         return [
-            'headline' => 'Business setup, orders, stock, money, production, and the stock-app connection are readable together.',
+            'headline' => 'Business setup, orders, stock, money, production, and the sales source are readable together.',
             'summary' => [
                 $setupHeadline.' Next step: '.$nextSetupStep.'.',
                 $trackingHeadline,

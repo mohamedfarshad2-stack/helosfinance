@@ -370,12 +370,37 @@
                                 <div class="mt-2 text-sm font-semibold {{ $warningAccent }}">{{ count($items) }} item(s)</div>
                                 <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
                                     @forelse ($items as $item)
-                                        <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">
-                                            <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Warning' }}</div>
-                                            <div class="mt-1 text-xs text-gray-500">{{ $item['what_is_missing'] ?? '' }}</div>
-                                            <div class="mt-1 text-xs text-gray-500">{{ $item['why_it_matters'] ?? '' }}</div>
-                                            <div class="mt-1 text-xs uppercase tracking-wide text-gray-500">May affect: {{ $item['affected_numbers'] ?? 'Owner metrics' }}</div>
-                                        </div>
+                                        @php
+                                            $warningUrl = $item['action_url'] ?? null;
+                                        @endphp
+
+                                        @if ($warningUrl)
+                                            <a href="{{ $warningUrl }}" class="block rounded-lg bg-white/80 px-3 py-2 ring-1 ring-transparent transition hover:-translate-y-0.5 hover:bg-white hover:shadow-sm hover:ring-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-900/70 dark:hover:bg-gray-900 dark:hover:ring-gray-700">
+                                                <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Warning' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['what_is_missing'] ?? '' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['why_it_matters'] ?? '' }}</div>
+                                                <div class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                                    {{ $item['fix_guidance'] ?? 'Open the related screen and complete the missing information.' }}
+                                                </div>
+                                                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                                    <div class="text-xs uppercase tracking-wide text-gray-500">May affect: {{ $item['affected_numbers'] ?? 'Owner metrics' }}</div>
+                                                    <div class="text-xs font-semibold {{ $warningAccent }}">{{ $item['action_label'] ?? 'Review warning' }} &rarr;</div>
+                                                </div>
+                                            </a>
+                                        @else
+                                            <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">
+                                                <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Warning' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['what_is_missing'] ?? '' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['why_it_matters'] ?? '' }}</div>
+                                                <div class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                                    {{ $item['fix_guidance'] ?? 'Open the related screen and complete the missing information.' }}
+                                                </div>
+                                                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                                    <div class="text-xs uppercase tracking-wide text-gray-500">May affect: {{ $item['affected_numbers'] ?? 'Owner metrics' }}</div>
+                                                    <div class="text-xs font-semibold {{ $warningAccent }}">{{ $item['action_label'] ?? 'Review warning' }} &rarr;</div>
+                                                </div>
+                                            </div>
+                                        @endif
                                     @empty
                                         <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">No {{ strtolower($label) }} warnings right now.</div>
                                     @endforelse

@@ -18,12 +18,13 @@ class OperationalImpactCalculator
         $quantity = max((int) ($payload['quantity'] ?? 1), 1);
         $sku = $this->findSku($business, $payload);
         $saleAmount = (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? 0);
-        $productCost = $sku ? $sku->productionCostPerUnit() * $quantity : (float) ($payload['cogs_amount'] ?? 0);
+        $skipProductCost = $this->bool($payload['skip_product_cost'] ?? $payload['resend_from_stock'] ?? false);
+        $productCost = $skipProductCost ? 0.0 : ($sku ? $sku->productionCostPerUnit() * $quantity : (float) ($payload['cogs_amount'] ?? 0));
 
         $delivery = (float) ($payload['transport_cost_amount'] ?? $payload['delivery_amount'] ?? $payload['courier_amount'] ?? $this->assumption($business, ['delivery_fee'], 'Delivery cost', 0));
-        $returnCourier = $this->assumption($business, ['return_courier_fee', 'return_fee'], 'Return courier cost', 0);
+        $returnCourier = (float) ($payload['return_courier_amount'] ?? $payload['return_charge'] ?? $this->assumption($business, ['return_courier_fee', 'return_fee'], 'Return courier cost', 0));
         $returnPackaging = $this->assumption($business, ['return_packaging_fee'], 'Return packaging cost', 0);
-        $resendCourier = $this->assumption($business, ['resend_courier_fee', 'resend_fee'], 'Resend courier cost', 0);
+        $resendCourier = (float) ($payload['resend_courier_amount'] ?? $payload['resend_charge'] ?? $this->assumption($business, ['resend_courier_fee', 'resend_fee'], 'Resend courier cost', 0));
         $resendPackaging = $this->assumption($business, ['resend_packaging_fee'], 'Resend packaging cost', 0);
         $verification = $this->assumption($business, 'verification_cost', 'Verification cost', 0);
         $restockable = $this->bool($payload['restockable'] ?? $payload['return_stock'] ?? $payload['restock'] ?? false);
@@ -50,6 +51,7 @@ class OperationalImpactCalculator
                 'recovery_amount' => 0,
                 'economics' => [
                     'product_cost_amount' => $productCost,
+                    'product_cost_skipped' => $skipProductCost,
                     'courier_amount' => $delivery,
                     'sale_amount' => $saleAmount,
                 ],

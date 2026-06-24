@@ -199,11 +199,11 @@ class NewClientWizard extends Page implements HasForms
                             ])
                             ->nullable(),
                         TextInput::make('stock_app_business_key')
-                            ->label('Stock-app business key')
+                            ->label('Stock-app client code')
                             ->placeholder(fn (Get $get): string => filled($get('business_name'))
                                 ? Str::slug((string) $get('business_name'))
                                 : 'Auto-filled from business name')
-                            ->helperText('HELOS uses this to match Stock App events to the right business.'),
+                            ->helperText('Use the Code from the Stock App client screen. Example: if Stock App shows Code = horns, enter horns here.'),
                         TextInput::make('integration_webhook_secret')
                             ->label('Webhook secret')
                             ->password()

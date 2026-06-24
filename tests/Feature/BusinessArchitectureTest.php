@@ -197,7 +197,7 @@ class BusinessArchitectureTest extends TestCase
             ->assertSee('Returns and retries')
             ->assertSee('Stock movement')
             ->assertSee('Money movement')
-            ->assertSee('Stock-app connection')
+            ->assertSee('sales source')
             ->assertSee('Production activity')
             ->assertSee('What to do next')
             ->assertSee('What happened')
