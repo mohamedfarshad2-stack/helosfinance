@@ -82,4 +82,39 @@ jobs:
           ssh-keyscan -H 65.1.151.96 >> ~/.ssh/known_hosts
 
       - name: Run deployment
-        run: ssh -i ~/.ssh/helos_lightsail ubuntu@65.1.151.96 'sudo deploy-helosfinance'
+        run: |
+          ssh -i ~/.ssh/helos_lightsail ubuntu@65.1.151.96 <<'REMOTE'
+          set -euo pipefail
+
+          sudo deploy-helosfinance
+
+          APP_DIR=""
+          for candidate in /var/www/helosfinance /var/www/finance.codreturnslanka.lk /var/www/html/helosfinance /var/www/laravel/app; do
+            if [ -f "$candidate/artisan" ] && [ -d "$candidate/.git" ] && grep -q "helosfinance" "$candidate/.git/config"; then
+              APP_DIR="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$APP_DIR" ]; then
+            echo "Unable to find deployed HELOS checkout."
+            exit 1
+          fi
+
+          cd "$APP_DIR"
+          git fetch origin helosfinance
+          git checkout helosfinance
+          git reset --hard origin/helosfinance
+
+          composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader
+          php artisan migrate --force
+          php artisan optimize:clear
+          php artisan filament:clear-cached-components || true
+          php artisan icons:clear || true
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:clear
+
+          sudo systemctl reload php8.4-fpm || sudo systemctl reload php8.3-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || true
+          sudo systemctl reload nginx || true
+          REMOTE
