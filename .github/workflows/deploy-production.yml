@@ -86,34 +86,47 @@ jobs:
           ssh -i ~/.ssh/helos_lightsail ubuntu@65.1.151.96 <<'REMOTE'
           set -euo pipefail
 
-          sudo deploy-helosfinance
+          sudo deploy-helosfinance || true
 
-          APP_DIR=""
-          for candidate in /var/www/helosfinance /var/www/finance.codreturnslanka.lk /var/www/html/helosfinance /var/www/laravel/app; do
-            if [ -f "$candidate/artisan" ] && [ -d "$candidate/.git" ] && grep -q "helosfinance" "$candidate/.git/config"; then
-              APP_DIR="$candidate"
-              break
+          UPDATED=0
+
+          while IFS= read -r artisan_path; do
+            APP_DIR="$(dirname "$artisan_path")"
+
+            if [ ! -f "$APP_DIR/resources/views/filament/pages/client-health-report.blade.php" ]; then
+              continue
             fi
-          done
 
-          if [ -z "$APP_DIR" ]; then
-            echo "Unable to find deployed HELOS checkout."
+            if [ ! -d "$APP_DIR/.git" ]; then
+              continue
+            fi
+
+            if ! sudo git -C "$APP_DIR" remote -v 2>/dev/null | grep -q "helosfinance"; then
+              continue
+            fi
+
+            sudo git config --global --add safe.directory "$APP_DIR" || true
+            sudo git -C "$APP_DIR" fetch origin helosfinance
+            sudo git -C "$APP_DIR" checkout helosfinance
+            sudo git -C "$APP_DIR" reset --hard origin/helosfinance
+
+            cd "$APP_DIR"
+            sudo php artisan migrate --force
+            sudo php artisan optimize:clear
+            sudo php artisan filament:clear-cached-components || true
+            sudo php artisan icons:clear || true
+            sudo php artisan config:cache
+            sudo php artisan route:cache
+            sudo php artisan view:clear
+
+            sudo chown -R www-data:www-data "$APP_DIR/storage" "$APP_DIR/bootstrap/cache" || true
+            UPDATED=1
+          done < <(sudo find /var/www /srv /home/ubuntu -maxdepth 6 -type f -name artisan 2>/dev/null)
+
+          if [ "$UPDATED" -ne 1 ]; then
+            echo "Unable to find a HELOS git checkout to update."
             exit 1
           fi
-
-          cd "$APP_DIR"
-          git fetch origin helosfinance
-          git checkout helosfinance
-          git reset --hard origin/helosfinance
-
-          composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader
-          php artisan migrate --force
-          php artisan optimize:clear
-          php artisan filament:clear-cached-components || true
-          php artisan icons:clear || true
-          php artisan config:cache
-          php artisan route:cache
-          php artisan view:clear
 
           sudo systemctl reload php8.4-fpm || sudo systemctl reload php8.3-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || true
           sudo systemctl reload nginx || true
