@@ -162,21 +162,21 @@ class SkuRecipeResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && (Auth::user()?->isOwner() ?? false) && static::currentBusinessSupportsManufacturing();
+        return static::canAccess();
     }
 
     public static function canAccess(): bool
     {
         return Auth::check()
             && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false))
-            && static::currentBusinessSupportsManufacturing();
+            && static::currentBusinessSupportsManufacturingSetup();
     }
 
     private static function businessOptions(): array
     {
         $user = Auth::user();
 
-        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsProductionTracking());
+        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsManufacturingSetup());
     }
 
     private static function skuOptions(int $businessId): array
@@ -287,14 +287,14 @@ class SkuRecipeResource extends Resource
 
     private static function scopeToCurrentBusiness(Builder $query): Builder
     {
-        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsProductionTracking());
+        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsManufacturingSetup());
     }
 
-    private static function currentBusinessSupportsManufacturing(): bool
+    private static function currentBusinessSupportsManufacturingSetup(): bool
     {
         $user = Auth::user();
 
-        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsProductionTracking());
+        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsManufacturingSetup());
     }
 
     private static function materialComponentForm(): array
