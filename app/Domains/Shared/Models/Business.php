@@ -227,6 +227,11 @@ class Business extends Model
         return $this->maturityRank() >= 2 && ($this->supportsBusinessType(self::TYPE_TRADING) || $this->supportsBusinessType(self::TYPE_MANUFACTURING));
     }
 
+    public function supportsManufacturingSetup(): bool
+    {
+        return $this->maturityRank() >= 2 && $this->supportsBusinessType(self::TYPE_MANUFACTURING);
+    }
+
     public function codOrderSource(): string
     {
         $settings = is_array($this->settings ?? null) ? $this->settings : [];
@@ -308,10 +313,10 @@ class Business extends Model
             'impact_engine',
             'daily_cfo_briefing',
             'decision_ranking' => $this->supportsFullAdvisor(),
-            'production_tracking',
-            'material_ledger',
             'sku_recipe_bom',
-            'material_consumption' => $this->supportsProductionTracking(),
+            'material_consumption' => $this->supportsManufacturingSetup(),
+            'production_tracking',
+            'material_ledger' => $this->supportsProductionTracking(),
             default => false,
         };
     }

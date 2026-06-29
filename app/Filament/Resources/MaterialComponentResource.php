@@ -138,25 +138,25 @@ class MaterialComponentResource extends Resource
             || ($user?->isInternalAdmin() ?? false)
             || ($user?->canAccessOperationalTasks() ?? false)
             || ($user?->canAccessFinanceOperations() ?? false))
-            && static::currentBusinessSupportsManufacturing();
+            && static::currentBusinessSupportsManufacturingSetup();
     }
 
     private static function businessOptions(): array
     {
         $user = Auth::user();
 
-        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsProductionTracking());
+        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsManufacturingSetup());
     }
 
     private static function scopeToCurrentBusiness(Builder $query): Builder
     {
         $user = Auth::user();
 
-        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsProductionTracking());
+        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsManufacturingSetup());
     }
 
-    private static function currentBusinessSupportsManufacturing(): bool
+    private static function currentBusinessSupportsManufacturingSetup(): bool
     {
-        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsProductionTracking());
+        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsManufacturingSetup());
     }
 }
