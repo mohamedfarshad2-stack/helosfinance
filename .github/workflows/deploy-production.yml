@@ -4,9 +4,11 @@ on:
   pull_request:
     branches:
       - codex/aws-deploy-readiness
+      - helosfinance
   push:
     branches:
       - codex/aws-deploy-readiness
+      - helosfinance
 
 concurrency:
   group: helios-production
@@ -76,4 +78,4 @@ jobs:
           ssh-keyscan -H 65.1.151.96 >> ~/.ssh/known_hosts
 
       - name: Run deployment
-        run: ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 'sudo deploy-helosfinance'
+        run: ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 'sudo deploy-helosfinance ${{ github.ref_name }}'
