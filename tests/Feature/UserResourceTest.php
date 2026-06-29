@@ -8,9 +8,11 @@ use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\UserResource;
+use App\Filament\Resources\UserResource\Pages\CreateUser;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use ReflectionMethod;
 use Tests\TestCase;
 
 class UserResourceTest extends TestCase
@@ -38,7 +40,7 @@ class UserResourceTest extends TestCase
 
         $this->actingAs($clientUser);
         $this->assertTrue(UserResource::canAccess());
-        $this->get(UserResource::getUrl('create'))->assertOk()->assertSee('employee accounts');
+        $this->get(UserResource::getUrl('create'))->assertOk()->assertSee('staff accounts');
         $this->assertTrue($clientUser->isOwner());
     }
 
@@ -66,6 +68,94 @@ class UserResourceTest extends TestCase
         $this->assertFalse($platformUser->isOwner());
         $this->assertTrue($platformUser->isInternalAdmin());
         $this->get(UserResource::getUrl('index'))->assertOk();
+    }
+
+    public function test_internal_admin_can_create_client_owner_access(): void
+    {
+        $group = ClientGroup::query()->create(['name' => 'Owner Group']);
+        $business = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'Owner Access Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+            'settings' => [
+                'employee_seat_limit' => 1,
+            ],
+        ]);
+
+        $platformUser = User::query()->create([
+            'name' => 'Platform Admin',
+            'email' => 'owner-access-platform@example.com',
+            'password' => Hash::make('password'),
+            'is_platform_admin' => true,
+            'is_employee' => false,
+        ]);
+
+        User::query()->create([
+            'name' => 'Existing Staff',
+            'email' => 'owner-access-staff@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        $this->actingAs($platformUser);
+
+        $data = $this->mutateCreateUserData([
+            'name' => 'Client Owner',
+            'email' => 'new-client-owner@example.com',
+            'password' => 'password',
+            'business_id' => $business->id,
+            'account_role' => 'owner',
+            'employee_access_profile' => 'full_staff',
+        ]);
+
+        $this->assertFalse($data['is_employee']);
+        $this->assertFalse($data['is_platform_admin']);
+        $this->assertSame($group->id, $data['client_group_id']);
+    }
+
+    public function test_client_owner_created_user_is_always_staff(): void
+    {
+        $group = ClientGroup::query()->create(['name' => 'Staff Group']);
+        $business = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'Staff Access Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Client Owner',
+            'email' => 'staff-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $this->actingAs($owner);
+
+        $data = $this->mutateCreateUserData([
+            'name' => 'Client Staff',
+            'email' => 'new-client-staff@example.com',
+            'password' => 'password',
+            'business_id' => $business->id,
+            'account_role' => 'owner',
+            'employee_access_profile' => 'finance_ops',
+        ]);
+
+        $this->assertTrue($data['is_employee']);
+        $this->assertFalse($data['is_platform_admin']);
+        $this->assertSame($group->id, $data['client_group_id']);
+        $this->assertSame('finance_ops', $data['employee_access_profile']);
     }
 
     public function test_internal_admin_can_see_client_users_inside_client_account(): void
@@ -330,5 +420,13 @@ class UserResourceTest extends TestCase
         $this->assertTrue(QuickExpenseEntry::canAccess());
         $this->assertTrue(BankTransactionResource::canAccess());
         $this->assertSame('finance_ops', $finance->employeeAccessProfileValue());
+    }
+
+    private function mutateCreateUserData(array $data): array
+    {
+        $method = new ReflectionMethod(CreateUser::class, 'mutateFormDataBeforeCreate');
+        $method->setAccessible(true);
+
+        return $method->invoke(new CreateUser(), $data);
     }
 }

@@ -22,7 +22,7 @@ class UserResource extends Resource
 {
     protected static ?string $model = User::class;
     protected static ?string $navigationGroup = 'Admin';
-    protected static ?string $navigationLabel = 'Employee Accounts';
+    protected static ?string $navigationLabel = 'Client Users';
     protected static ?string $navigationIcon = 'heroicon-o-identification';
 
     public static function form(Form $form): Form
@@ -43,19 +43,39 @@ class UserResource extends Resource
                 ->required()
                 ->default(fn () => Auth::user()?->defaultBusinessId())
                 ->disabled(fn (): bool => Auth::user()?->isStaff() ?? false),
+            Select::make('account_role')
+                ->label('Account role')
+                ->options([
+                    'owner' => 'Client owner',
+                    'staff' => 'Staff',
+                ])
+                ->default('staff')
+                ->live()
+                ->visible(fn (): bool => Auth::user()?->isInternalAdmin() ?? false)
+                ->afterStateHydrated(function (Select $component, ?User $record): void {
+                    if (! $record) {
+                        return;
+                    }
+
+                    $component->state($record->is_employee ? 'staff' : 'owner');
+                })
+                ->helperText('Super admin chooses who owns the client portal. Client owners can create staff later.'),
             Placeholder::make('seat_usage')
                 ->hiddenLabel()
                 ->content(fn (Get $get): HtmlString => new HtmlString(static::seatUsageContent($get('business_id')))),
             Placeholder::make('employee_hint')
                 ->hiddenLabel()
-                ->content('This screen creates employee accounts for the selected business. HELOS will set employee access automatically.'),
+                ->content(fn (): string => Auth::user()?->isInternalAdmin()
+                    ? 'Create the client owner login or staff accounts for the selected business.'
+                    : 'This screen creates staff accounts for your business. Owner access stays protected.'),
             Select::make('employee_access_profile')
-                ->label('Employee access')
+                ->label('Staff access')
                 ->options(fn (): array => User::employeeAccessProfileOptions())
                 ->default('operations')
-                ->required()
-                ->visible(fn (): bool => Auth::user()?->isOwner() || Auth::user()?->isInternalAdmin())
-                ->helperText('Choose what this employee can see inside HELOS.'),
+                ->required(fn (Get $get): bool => ($get('account_role') ?? 'staff') === 'staff')
+                ->visible(fn (Get $get): bool => (Auth::user()?->isOwner() ?? false)
+                    || ((Auth::user()?->isInternalAdmin() ?? false) && ($get('account_role') ?? 'staff') === 'staff'))
+                ->helperText('Choose what this staff member can see inside HELOS. Owners automatically get owner visibility.'),
             TextInput::make('password')
                 ->password()
                 ->revealable()
@@ -75,9 +95,14 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('name')->searchable(),
             Tables\Columns\TextColumn::make('email')->searchable(),
             Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
-            Tables\Columns\TextColumn::make('employee_access_profile')
-                ->label('Access')
+            Tables\Columns\TextColumn::make('role')
+                ->label('Role')
                 ->badge()
+                ->state(fn (User $record): string => $record->is_employee ? 'Staff' : 'Owner'),
+            Tables\Columns\TextColumn::make('employee_access_profile')
+                ->label('Staff access')
+                ->badge()
+                ->placeholder('-')
                 ->formatStateUsing(fn (?string $state): string => User::employeeAccessProfileOptions()[$state ?? 'operations'] ?? 'Operations'),
             Tables\Columns\IconColumn::make('is_employee')->label('Employee')->boolean(),
         ])
