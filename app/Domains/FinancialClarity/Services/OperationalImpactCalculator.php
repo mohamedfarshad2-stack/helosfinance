@@ -42,7 +42,20 @@ class OperationalImpactCalculator
                     'verification_amount' => $verification,
                 ],
             ],
-            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::TRACKING_NUMBER_ADDED => [
+                'sku_id' => $sku?->id,
+                'revenue_amount' => 0,
+                'direct_cost_amount' => $productCost,
+                'leakage_amount' => 0,
+                'recovery_amount' => 0,
+                'economics' => [
+                    'product_cost_amount' => $productCost,
+                    'product_cost_skipped' => $skipProductCost,
+                    'courier_amount' => 0.0,
+                    'delivery_charge_pending' => $delivery,
+                    'sale_amount' => $saleAmount,
+                ],
+            ],
             OperationalEvent::WHOLESALE_PARCEL_SENT => [
                 'sku_id' => $sku?->id,
                 'revenue_amount' => 0,
@@ -59,11 +72,12 @@ class OperationalImpactCalculator
             OperationalEvent::ORDER_DELIVERED => [
                 'sku_id' => $sku?->id,
                 'revenue_amount' => $saleAmount,
-                'direct_cost_amount' => 0,
+                'direct_cost_amount' => $delivery,
                 'leakage_amount' => 0,
                 'recovery_amount' => 0,
                 'economics' => [
                     'sale_amount' => $saleAmount,
+                    'courier_amount' => $delivery,
                 ],
             ],
             OperationalEvent::ORDER_RETURNED => [

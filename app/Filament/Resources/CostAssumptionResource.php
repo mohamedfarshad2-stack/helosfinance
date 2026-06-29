@@ -107,11 +107,11 @@ class CostAssumptionResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && (Auth::user()?->isOwner() ?? false);
+        return Auth::check() && (Auth::user()?->isInternalAdmin() ?? false);
     }
 
     public static function canAccess(): bool
     {
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+        return Auth::check() && (Auth::user()?->isInternalAdmin() ?? false);
     }
 }

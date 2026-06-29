@@ -15,6 +15,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
 use App\Filament\Pages\CodOrderWorkbench;
 use App\Filament\Resources\CodOrderResource;
+use App\Filament\Resources\CostAssumptionResource;
 use App\Filament\Resources\CourierRateResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -74,8 +75,26 @@ class InternalCodOrderTest extends TestCase
 
         $this->assertSame('helos_internal_cod', $dispatchEvent->source);
         $this->assertSame('Courier A', $dispatchEvent->payload['courier_name']);
-        $this->assertSame(525.0, (float) $dispatchEvent->direct_cost_amount);
-        $this->assertSame(375.0, (float) $dispatchEvent->payload['economics']['courier_amount']);
+        $this->assertSame(150.0, (float) $dispatchEvent->direct_cost_amount);
+        $this->assertSame(0.0, (float) $dispatchEvent->payload['economics']['courier_amount']);
+        $this->assertSame(375.0, (float) $dispatchEvent->payload['economics']['delivery_charge_pending']);
+
+        $order->update([
+            'status' => CodOrder::STATUS_DELIVERED,
+            'delivered_on' => today(),
+        ]);
+
+        app(InternalCodOrderEventService::class)->sync($order->fresh());
+
+        $deliveredEvent = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->where('external_id', 'HELOS-1001')
+            ->where('event_type', OperationalEvent::ORDER_DELIVERED)
+            ->firstOrFail();
+
+        $this->assertSame(2500.0, (float) $deliveredEvent->revenue_amount);
+        $this->assertSame(375.0, (float) $deliveredEvent->direct_cost_amount);
+        $this->assertSame(375.0, (float) $deliveredEvent->payload['economics']['courier_amount']);
 
         $order->update([
             'status' => CodOrder::STATUS_RETURNED,
@@ -177,7 +196,7 @@ class InternalCodOrderTest extends TestCase
             ->where('event_type', OperationalEvent::TRACKING_NUMBER_ADDED)
             ->firstOrFail();
 
-        $this->assertSame(375.0, (float) $event->direct_cost_amount);
+        $this->assertSame(0.0, (float) $event->direct_cost_amount);
         $this->assertTrue((bool) $event->payload['resend_from_stock']);
         $this->assertTrue((bool) $event->payload['economics']['product_cost_skipped']);
         $this->assertSame(0.0, (float) $event->payload['economics']['product_cost_amount']);
@@ -319,6 +338,41 @@ class InternalCodOrderTest extends TestCase
         $this->actingAs($staff);
         $this->assertFalse(CourierRateResource::canAccess());
         $this->assertTrue(CodOrderResource::canAccess());
+    }
+
+    public function test_cost_rules_are_hidden_from_client_owners_to_avoid_duplicate_courier_setup(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Internal COD Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_TRADING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+            'settings' => ['cod_order_source' => Business::COD_SOURCE_INTERNAL],
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'owner-cost-rules@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+        ]);
+
+        $platformAdmin = User::query()->create([
+            'name' => 'Super Admin',
+            'email' => 'admin-cost-rules@example.com',
+            'password' => Hash::make('password'),
+            'is_platform_admin' => true,
+            'is_employee' => false,
+        ]);
+
+        $this->actingAs($owner);
+        $this->assertFalse(CostAssumptionResource::canAccess());
+        $this->assertTrue(CourierRateResource::canAccess());
+
+        $this->actingAs($platformAdmin);
+        $this->assertTrue(CostAssumptionResource::canAccess());
     }
 
     public function test_cod_orders_can_be_bulk_uploaded_for_calling_work(): void

@@ -73,7 +73,9 @@ class StockAppWebhookTest extends TestCase
             'quantity' => 1,
             ])->assertCreated()
             ->assertJsonPath('impact.revenue_amount', 0)
-            ->assertJsonPath('impact.direct_cost_amount', 1700)
+            ->assertJsonPath('impact.direct_cost_amount', 1350)
+            ->assertJsonPath('impact.economics.courier_amount', 0)
+            ->assertJsonPath('impact.economics.delivery_charge_pending', 350)
             ->assertJsonPath('impact.leakage_amount', 0);
 
         $this->assertSame(1, SkuStockMovement::query()->where('business_id', $business->id)->where('movement_type', 'dispatch')->count());
@@ -102,7 +104,9 @@ class StockAppWebhookTest extends TestCase
             'quantity' => 1,
         ])->assertCreated()
             ->assertJsonPath('impact.revenue_amount', 0)
-            ->assertJsonPath('impact.direct_cost_amount', 1700)
+            ->assertJsonPath('impact.direct_cost_amount', 1350)
+            ->assertJsonPath('impact.economics.courier_amount', 0)
+            ->assertJsonPath('impact.economics.delivery_charge_pending', 350)
             ->assertJsonPath('impact.leakage_amount', 0);
 
         $event = OperationalEvent::query()->where('business_id', $business->id)->where('external_id', 'ORDER-2-ALIAS')->first();
