@@ -19,8 +19,8 @@ use Illuminate\Support\Facades\Auth;
 class EmployeeResource extends Resource
 {
     protected static ?string $model = Employee::class;
-    protected static ?string $navigationGroup = 'Input Center';
-    protected static ?string $navigationLabel = 'Team Salaries';
+    protected static ?string $navigationGroup = 'Setup';
+    protected static ?string $navigationLabel = 'Staff & Pay';
     protected static ?string $navigationIcon = 'heroicon-o-user-group';
 
     public static function form(Form $form): Form
@@ -55,7 +55,7 @@ class EmployeeResource extends Resource
                         ->numeric()
                         ->prefix('LKR')
                         ->default(0)
-                        ->helperText('Leave 0 for weekly production workers. Their pay is recorded in Weekly Production Pay.'),
+                        ->helperText('Leave 0 for weekly production workers. Their pay is recorded in Production Pay.'),
                     Textarea::make('note')->label('Short note')->rows(3),
                 ])
                 ->columns(2),

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
+use App\Filament\Concerns\RespectsBusinessModules;
 use App\Filament\Resources\SkuResource\Pages;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Section;
@@ -14,14 +15,17 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Get;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
 class SkuResource extends Resource
 {
+    use RespectsBusinessModules;
+
     protected static ?string $model = Sku::class;
-    protected static ?string $navigationGroup = 'Manufacturing';
-    protected static ?string $navigationLabel = 'Products / SKUs';
+    protected static ?string $navigationGroup = 'Products & Production';
+    protected static ?string $navigationLabel = 'Products';
     protected static ?string $navigationIcon = 'heroicon-o-cube';
     protected static ?int $navigationSort = 3;
 
@@ -57,7 +61,7 @@ class SkuResource extends Resource
                 ])
                 ->columns(2),
             Section::make('Fallback costs')
-                ->description('Use these only when this product does not have a SKU Recipe yet. When a recipe exists, HELOS uses recipe materials and labor first.')
+                ->description('Use these only when this product does not have a product recipe yet. When a recipe exists, HELOS uses recipe materials and labor first.')
                 ->collapsed()
                 ->schema([
                     TextInput::make('material_cost')->numeric()->default(0)->required()->prefix('LKR'),
@@ -71,7 +75,9 @@ class SkuResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
+        return $table
+            ->modifyQueryUsing(fn (Builder $query) => static::scopeToSkuBusinesses($query))
+            ->columns([
             Tables\Columns\TextColumn::make('code')->searchable(),
             Tables\Columns\TextColumn::make('name')->searchable(),
             Tables\Columns\TextColumn::make('expected_sale_price')->money('LKR'),
@@ -95,33 +101,32 @@ class SkuResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && (Auth::user()?->isOwner() ?? false);
+        return Auth::check() && (Auth::user()?->isOwner() ?? false) && static::currentBusinessSupportsSkuManagement();
     }
 
     public static function canAccess(): bool
     {
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false));
+        return Auth::check()
+            && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false))
+            && static::currentBusinessSupportsSkuManagement();
     }
 
     private static function currentBusinessSupportsSkuManagement(): bool
     {
         $user = Auth::user();
 
-        if ($user?->seesAllBusinesses()) {
-            return true;
-        }
-
-        return $user?->business?->supportsSkuManagement() ?? false;
+        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsSkuManagement());
     }
 
     private static function businessOptions(): array
     {
         $user = Auth::user();
 
-        return Business::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn ($query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
+        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsSkuManagement());
+    }
+
+    private static function scopeToSkuBusinesses(Builder $query): Builder
+    {
+        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsSkuManagement());
     }
 }

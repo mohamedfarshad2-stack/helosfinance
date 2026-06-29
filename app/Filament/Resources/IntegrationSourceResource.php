@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 class IntegrationSourceResource extends Resource
 {
     protected static ?string $model = IntegrationSource::class;
-    protected static ?string $navigationGroup = 'Integrations';
+    protected static ?string $navigationGroup = 'Setup';
     protected static ?string $navigationLabel = 'Stock-app Connections';
     protected static ?string $navigationIcon = 'heroicon-o-link';
 
@@ -33,7 +33,13 @@ class IntegrationSourceResource extends Resource
                         ->required(),
                     TextInput::make('name')->required(),
                     Select::make('type')->options(['stock_app' => 'stock-app', 'csv' => 'CSV fallback'])->required(),
-                    TextInput::make('base_url')->url(),
+                    TextInput::make('base_url')
+                        ->label('Stock-app base URL')
+                        ->url()
+                        ->helperText('The Stock App site address. Example: https://codreturnslanka.lk'),
+                    TextInput::make('settings.stock_app_business_key')
+                        ->label('Stock-app client code')
+                        ->helperText('Use the Code from the Stock App client screen. Example: horns. HELOS uses this to match orders to this business.'),
                     Select::make('status')->options(['draft' => 'Draft', 'testing' => 'Testing', 'active' => 'Active', 'paused' => 'Paused'])->required(),
                 ])
                 ->columns(2),

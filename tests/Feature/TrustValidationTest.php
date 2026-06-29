@@ -13,6 +13,7 @@ use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Resources\EmployeeResource;
+use App\Filament\Resources\ExpenseResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -245,6 +246,17 @@ class TrustValidationTest extends TestCase
             'is_employee' => false,
         ]);
 
+        Expense::query()->create([
+            'business_id' => $business->id,
+            'category' => 'Transport',
+            'expense_type' => 'variable',
+            'amount' => 2500,
+            'paid_amount' => 0,
+            'payment_status' => 'credit_due',
+            'spent_on' => today()->toDateString(),
+            'payee' => null,
+        ]);
+
         $this->actingAs($owner)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
@@ -255,7 +267,9 @@ class TrustValidationTest extends TestCase
             ->assertSee('Estimated Numbers')
             ->assertSee('Critical warnings')
             ->assertSee('Important warnings')
-            ->assertSee('Informational warnings');
+            ->assertSee('Informational warnings')
+            ->assertSee('Fix expenses')
+            ->assertSee(ExpenseResource::getUrl('index'), false);
     }
 
     public function test_employee_role_is_selectable_from_common_roles(): void

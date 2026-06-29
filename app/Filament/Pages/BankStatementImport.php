@@ -23,8 +23,8 @@ class BankStatementImport extends Page implements HasForms
     use InteractsWithForms;
 
     protected static ?string $slug = 'bank-statement-import';
-    protected static ?string $navigationGroup = 'HELOS';
-    protected static ?string $navigationLabel = 'Cash Flow Import';
+    protected static ?string $navigationGroup = 'Money';
+    protected static ?string $navigationLabel = 'Import Bank Statement';
     protected static ?int $navigationSort = 0;
     protected static ?string $navigationIcon = 'heroicon-o-arrow-up-tray';
     protected static string $view = 'filament.pages.bank-statement-import';

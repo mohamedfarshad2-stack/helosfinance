@@ -6,6 +6,7 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\MaterialComponent;
 use App\Domains\Shared\Models\MaterialLedgerEntry;
 use App\Domains\Shared\Models\Sku;
+use App\Filament\Concerns\RespectsBusinessModules;
 use App\Filament\Resources\MaterialLedgerResource\Pages;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -21,9 +22,11 @@ use Illuminate\Support\Facades\Auth;
 
 class MaterialLedgerResource extends Resource
 {
+    use RespectsBusinessModules;
+
     protected static ?string $model = MaterialLedgerEntry::class;
-    protected static ?string $navigationGroup = 'Manufacturing';
-    protected static ?string $navigationLabel = 'Material Ledger';
+    protected static ?string $navigationGroup = 'Products & Production';
+    protected static ?string $navigationLabel = 'Material Stock';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
     protected static ?int $navigationSort = 5;
 
@@ -159,25 +162,25 @@ class MaterialLedgerResource extends Resource
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+        return Auth::check()
+            && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false))
+            && static::currentBusinessSupportsManufacturing();
     }
 
     public static function canAccess(): bool
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+        return Auth::check()
+            && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false))
+            && static::currentBusinessSupportsManufacturing();
     }
 
     private static function businessOptions(): array
     {
         $user = Auth::user();
 
-        return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
+        return static::businessOptionsMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function skuOptions(int $businessId): array
@@ -237,22 +240,14 @@ class MaterialLedgerResource extends Resource
     {
         $user = Auth::user();
 
-        if ($user?->seesAllBusinesses()) {
-            return $query;
-        }
-
-        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
+        return static::scopeToAccessibleBusinessesMatching($query, fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function currentBusinessSupportsManufacturing(): bool
     {
         $user = Auth::user();
 
-        if ($user?->seesAllBusinesses()) {
-            return true;
-        }
-
-        return $user?->business?->supportsProductionTracking() ?? false;
+        return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsProductionTracking());
     }
 
     private static function materialComponentForm(): array

@@ -34,10 +34,274 @@
                 };
                 $trustWarnings = $trustStatus['warnings'] ?? ['critical' => [], 'important' => [], 'informational' => []];
                 $trustCenter = $trustStatus['trust_center'] ?? ['headline' => '', 'cards' => []];
+                $ownerMap = $ownerBusinessMap ?? ['headline' => '', 'default_key' => 'trust', 'nodes' => [], 'top_actions' => []];
+                $setupGuide = $ownerSetupGuide ?? ['steps' => [], 'progress' => 0, 'completed' => 0, 'total' => 0];
             @endphp
 
             <x-filament::section>
+                <div
+                    x-data="{ selected: @js($ownerMap['default_key'] ?? 'trust') }"
+                    class="grid gap-4"
+                >
+                    <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
+                        <div class="border-b border-gray-100 bg-gray-50 px-5 py-4 dark:border-gray-800 dark:bg-gray-900">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">CFO Cockpit</div>
+                                    <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">Whole business at a glance</div>
+                                </div>
+                                <div class="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                                    Click any flag to open the repair path
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-5 bg-white p-5 dark:bg-gray-950 xl:grid-cols-[280px_1fr_400px]">
+                            <div class="rounded-2xl border border-sky-100 bg-sky-50 p-5 dark:border-sky-900 dark:bg-sky-950/30">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-200">Control Score</div>
+                                <div class="mt-4 flex justify-center">
+                                    <div
+                                        class="grid h-36 w-36 place-items-center rounded-full"
+                                        style="background: conic-gradient(#0ea5e9 {{ (int) ($ownerMap['overall_score'] ?? 0) }}%, #e5e7eb 0);"
+                                    >
+                                        <div class="grid h-28 w-28 place-items-center rounded-full bg-white text-center shadow-sm dark:bg-gray-950">
+                                            <div>
+                                                <div class="text-4xl font-black text-gray-950 dark:text-white">{{ (int) ($ownerMap['overall_score'] ?? 0) }}%</div>
+                                                <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Control</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-4 grid grid-cols-4 gap-2 text-center">
+                                    <div class="rounded-lg bg-red-100 p-2 text-red-800 dark:bg-red-950/60 dark:text-red-100">
+                                        <div class="text-xl font-bold">{{ (int) ($ownerMap['counts']['red'] ?? 0) }}</div>
+                                        <div class="text-[10px] uppercase opacity-70">Red</div>
+                                    </div>
+                                    <div class="rounded-lg bg-amber-100 p-2 text-amber-800 dark:bg-amber-950/60 dark:text-amber-100">
+                                        <div class="text-xl font-bold">{{ (int) ($ownerMap['counts']['amber'] ?? 0) }}</div>
+                                        <div class="text-[10px] uppercase opacity-70">Amber</div>
+                                    </div>
+                                    <div class="rounded-lg bg-emerald-100 p-2 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100">
+                                        <div class="text-xl font-bold">{{ (int) ($ownerMap['counts']['green'] ?? 0) }}</div>
+                                        <div class="text-[10px] uppercase opacity-70">Green</div>
+                                    </div>
+                                    <div class="rounded-lg bg-gray-100 p-2 text-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                        <div class="text-xl font-bold">{{ (int) ($ownerMap['counts']['gray'] ?? 0) }}</div>
+                                        <div class="text-[10px] uppercase opacity-70">Ready?</div>
+                                    </div>
+                                </div>
+                                <div class="mt-4 rounded-xl bg-white p-3 text-sm leading-6 text-gray-700 dark:bg-gray-950 dark:text-gray-300">{{ $ownerMap['headline'] ?? 'The business map is being prepared.' }}</div>
+                            </div>
+
+                            <div class="grid gap-3">
+                                <div class="grid gap-3 md:grid-cols-4">
+                                    @foreach (($ownerMap['key_metrics'] ?? []) as $metric)
+                                        @php
+                                            $metricTone = $metric['tone'] ?? 'amber';
+                                            $metricBar = match ($metricTone) {
+                                                'red' => 'bg-red-400',
+                                                'green' => 'bg-emerald-400',
+                                                'gray' => 'bg-gray-400',
+                                                default => 'bg-amber-300',
+                                            };
+                                        @endphp
+                                        <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                                            <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ $metric['label'] ?? 'Metric' }}</div>
+                                            <div class="mt-2 text-xl font-black text-gray-950 dark:text-white">{{ $metric['value'] ?? '-' }}</div>
+                                            <div class="mt-3 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
+                                                <div class="h-full rounded-full {{ $metricBar }}" style="width: {{ (int) ($metric['percent'] ?? 0) }}%"></div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+
+                                <div class="grid gap-3 md:grid-cols-[1fr_220px]">
+                                    <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+                                        @foreach (($ownerMap['nodes'] ?? []) as $node)
+                                            @php
+                                                $tone = $node['tone'] ?? 'amber';
+                                                $nodeStyle = match ($tone) {
+                                                    'red' => 'border-red-200 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100',
+                                                    'green' => 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
+                                                    'gray' => 'border-gray-200 bg-gray-50 text-gray-900 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100',
+                                                    default => 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100',
+                                                };
+                                                $dotClasses = match ($tone) {
+                                                    'red' => 'bg-red-400',
+                                                    'green' => 'bg-emerald-400',
+                                                    'gray' => 'bg-gray-300',
+                                                    default => 'bg-amber-300',
+                                                };
+                                            @endphp
+                                            <button
+                                                type="button"
+                                                x-on:click="selected = @js($node['key'])"
+                                                x-bind:class="selected === @js($node['key']) ? 'ring-2 ring-gray-950 ring-offset-2 dark:ring-white dark:ring-offset-gray-950' : ''"
+                                                class="min-h-[104px] rounded-2xl border p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md {{ $nodeStyle }}"
+                                            >
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <span class="h-2.5 w-2.5 rounded-full {{ $dotClasses }}"></span>
+                                                    <span class="text-[10px] font-bold uppercase tracking-wide opacity-75">{{ (int) ($node['progress'] ?? 0) }}%</span>
+                                                </div>
+                                                <div class="mt-3 text-xs font-semibold uppercase tracking-wide opacity-70">{{ $node['title'] ?? 'Map area' }}</div>
+                                                <div class="mt-1 text-base font-black">{{ $node['value'] ?? '-' }}</div>
+                                            </button>
+                                        @endforeach
+                                    </div>
+
+                                    <div class="grid gap-2">
+                                        @foreach (($ownerMap['mini_graphs'] ?? []) as $graph)
+                                            @php
+                                                $graphTone = $graph['tone'] ?? 'amber';
+                                                $graphBar = match ($graphTone) {
+                                                    'red' => 'bg-red-400',
+                                                    'green' => 'bg-emerald-400',
+                                                    'gray' => 'bg-gray-400',
+                                                    default => 'bg-amber-300',
+                                            };
+                                        @endphp
+                                            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900">
+                                                <div class="flex items-center justify-between gap-2 text-xs">
+                                                    <span class="font-semibold text-gray-600 dark:text-gray-300">{{ $graph['label'] ?? 'Graph' }}</span>
+                                                    <span class="font-bold text-gray-950 dark:text-white">{{ $graph['value'] ?? '-' }}</span>
+                                                </div>
+                                                <div class="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
+                                                    <div class="h-full rounded-full {{ $graphBar }}" style="width: {{ (int) ($graph['percent'] ?? 0) }}%"></div>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Selected flag repair path</div>
+                                @foreach (($ownerMap['nodes'] ?? []) as $node)
+                                    <div x-show="selected === @js($node['key'])" x-cloak class="mt-3 grid gap-3">
+                                        @php
+                                            $panelTone = $node['tone'] ?? 'amber';
+                                            $panelBadge = match ($panelTone) {
+                                                'red' => 'bg-red-400 text-red-950',
+                                                'green' => 'bg-emerald-400 text-emerald-950',
+                                                'gray' => 'bg-gray-300 text-gray-950',
+                                                default => 'bg-amber-300 text-amber-950',
+                                            };
+                                        @endphp
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div>
+                                                <div class="text-xl font-black text-gray-950 dark:text-white">{{ $node['title'] ?? 'Map area' }}</div>
+                                                <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $node['heading'] ?? '' }}</div>
+                                            </div>
+                                            <div class="rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide {{ $panelBadge }}">{{ $node['flag'] ?? 'Flag' }}</div>
+                                        </div>
+                                        <div class="rounded-xl bg-white p-3 text-sm text-gray-700 shadow-sm dark:bg-gray-950 dark:text-gray-300">
+                                            <div class="text-[11px] font-bold uppercase tracking-wide text-gray-500">Why this happened</div>
+                                            <div class="mt-1">{{ $node['why'] ?? '' }}</div>
+                                        </div>
+                                        <div class="rounded-xl bg-white p-3 text-sm text-gray-700 shadow-sm dark:bg-gray-950 dark:text-gray-300">
+                                            <div class="text-[11px] font-bold uppercase tracking-wide text-gray-500">How to turn it green</div>
+                                            <div class="mt-1">{{ $node['make_green'] ?? '' }}</div>
+                                        </div>
+                                        <div class="rounded-xl bg-white p-3 text-sm text-gray-700 shadow-sm dark:bg-gray-950 dark:text-gray-300">
+                                            <div class="text-[11px] font-bold uppercase tracking-wide text-gray-500">Next action</div>
+                                            <div class="mt-1">{{ $node['next_step'] ?? '' }}</div>
+                                        </div>
+                                        <a href="{{ $node['anchor'] ?? '#helos-details' }}" class="inline-flex items-center justify-center rounded-lg bg-gray-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
+                                            Go deeper
+                                        </a>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="grid gap-3 border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900 md:grid-cols-3">
+                            @foreach (($ownerMap['top_actions'] ?? []) as $action)
+                                @php
+                                    $miniTone = $action['tone'] ?? 'amber';
+                                    $miniClasses = match ($miniTone) {
+                                        'red' => 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100',
+                                        'green' => 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
+                                        'gray' => 'border-gray-200 bg-gray-50 text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100',
+                                        default => 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+                                    };
+                                @endphp
+                                <button
+                                    type="button"
+                                    x-on:click="selected = @js($action['key'])"
+                                    class="rounded-lg border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm {{ $miniClasses }}"
+                                >
+                                    <div class="text-[11px] font-semibold uppercase tracking-wide">{{ $action['flag'] ?? 'Watch' }}</div>
+                                    <div class="mt-1 text-sm font-bold">{{ $action['title'] ?? 'Area' }}</div>
+                                    <div class="mt-1 text-xs opacity-80">{{ $action['next_step'] ?? '' }}</div>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            </x-filament::section>
+
+            <x-filament::section>
                 <div class="grid gap-4">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Start Here</div>
+                            <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">{{ $setupGuide['headline'] ?? 'Setup path is being prepared.' }}</div>
+                            <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $setupGuide['subheadline'] ?? 'HELOS will guide the owner through the first safe setup steps.' }}</div>
+                        </div>
+                        <div class="min-w-[180px] rounded-xl border border-gray-200 bg-gray-50 p-3 text-right dark:border-gray-800 dark:bg-gray-900">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Setup Progress</div>
+                            <div class="mt-1 text-3xl font-black text-gray-950 dark:text-white">{{ (int) ($setupGuide['progress'] ?? 0) }}%</div>
+                            <div class="text-xs text-gray-500">{{ (int) ($setupGuide['completed'] ?? 0) }} of {{ (int) ($setupGuide['total'] ?? 0) }} done</div>
+                        </div>
+                    </div>
+
+                    @if (! empty($setupGuide['next_step'] ?? null))
+                        @php
+                            $next = $setupGuide['next_step'];
+                        @endphp
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div class="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-200">Next owner setup action</div>
+                                    <div class="mt-1 text-lg font-black text-gray-950 dark:text-white">{{ $next['title'] ?? 'Next step' }}</div>
+                                    <div class="mt-1 text-sm text-gray-700 dark:text-gray-300">{{ $next['why'] ?? '' }}</div>
+                                </div>
+                                <a href="{{ $next['url'] ?? '#' }}" class="inline-flex items-center justify-center rounded-lg bg-gray-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
+                                    {{ $next['action'] ?? 'Open' }}
+                                </a>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        @foreach (($setupGuide['steps'] ?? []) as $step)
+                            @php
+                                $done = (bool) ($step['done'] ?? false);
+                                $stepClasses = $done
+                                    ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'
+                                    : 'border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950';
+                                $badgeClasses = $done
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100';
+                            @endphp
+                            <div class="rounded-xl border p-4 {{ $stepClasses }}">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="font-bold text-gray-950 dark:text-white">{{ $step['title'] ?? 'Setup step' }}</div>
+                                    <div class="rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide {{ $badgeClasses }}">{{ $step['status'] ?? 'Needed' }}</div>
+                                </div>
+                                <div class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $step['why'] ?? '' }}</div>
+                                <a href="{{ $step['url'] ?? '#' }}" class="mt-3 inline-flex text-sm font-bold text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100">
+                                    {{ $step['action'] ?? 'Open' }}
+                                </a>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </x-filament::section>
+
+
+            <x-filament::section>
+                <div id="helos-trust-center" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <div>
@@ -106,12 +370,37 @@
                                 <div class="mt-2 text-sm font-semibold {{ $warningAccent }}">{{ count($items) }} item(s)</div>
                                 <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
                                     @forelse ($items as $item)
-                                        <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">
-                                            <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Warning' }}</div>
-                                            <div class="mt-1 text-xs text-gray-500">{{ $item['what_is_missing'] ?? '' }}</div>
-                                            <div class="mt-1 text-xs text-gray-500">{{ $item['why_it_matters'] ?? '' }}</div>
-                                            <div class="mt-1 text-xs uppercase tracking-wide text-gray-500">May affect: {{ $item['affected_numbers'] ?? 'Owner metrics' }}</div>
-                                        </div>
+                                        @php
+                                            $warningUrl = $item['action_url'] ?? null;
+                                        @endphp
+
+                                        @if ($warningUrl)
+                                            <a href="{{ $warningUrl }}" class="block rounded-lg bg-white/80 px-3 py-2 ring-1 ring-transparent transition hover:-translate-y-0.5 hover:bg-white hover:shadow-sm hover:ring-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-900/70 dark:hover:bg-gray-900 dark:hover:ring-gray-700">
+                                                <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Warning' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['what_is_missing'] ?? '' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['why_it_matters'] ?? '' }}</div>
+                                                <div class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                                    {{ $item['fix_guidance'] ?? 'Open the related screen and complete the missing information.' }}
+                                                </div>
+                                                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                                    <div class="text-xs uppercase tracking-wide text-gray-500">May affect: {{ $item['affected_numbers'] ?? 'Owner metrics' }}</div>
+                                                    <div class="text-xs font-semibold {{ $warningAccent }}">{{ $item['action_label'] ?? 'Review warning' }} &rarr;</div>
+                                                </div>
+                                            </a>
+                                        @else
+                                            <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">
+                                                <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Warning' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['what_is_missing'] ?? '' }}</div>
+                                                <div class="mt-1 text-xs text-gray-500">{{ $item['why_it_matters'] ?? '' }}</div>
+                                                <div class="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                                    {{ $item['fix_guidance'] ?? 'Open the related screen and complete the missing information.' }}
+                                                </div>
+                                                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                                                    <div class="text-xs uppercase tracking-wide text-gray-500">May affect: {{ $item['affected_numbers'] ?? 'Owner metrics' }}</div>
+                                                    <div class="text-xs font-semibold {{ $warningAccent }}">{{ $item['action_label'] ?? 'Review warning' }} &rarr;</div>
+                                                </div>
+                                            </div>
+                                        @endif
                                     @empty
                                         <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">No {{ strtolower($label) }} warnings right now.</div>
                                     @endforelse
@@ -147,7 +436,7 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="helos-business-picture" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         @php
                             $healthSectionTrust = $trustStatus['section_statuses']['health'] ?? 'Estimated';
@@ -215,7 +504,7 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="helos-money-safety" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         @php
                             $bucketSectionTrust = $trustStatus['section_statuses']['bucket'] ?? 'Estimated';
@@ -283,7 +572,7 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="helos-break-even" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         @php
                             $breakEvenSectionTrust = $trustStatus['section_statuses']['break_even'] ?? 'Estimated';
@@ -385,7 +674,7 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="helos-goal" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         @php
                             $goalSectionTrust = $trustStatus['section_statuses']['goal'] ?? 'Estimated';
@@ -491,7 +780,7 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="helos-business-flow" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         <div class="text-xs uppercase tracking-wide text-gray-500">Operational completion summary</div>
                         <div class="mt-2 text-lg font-semibold text-gray-950 dark:text-white">What the team finished today and what is still open</div>
@@ -588,7 +877,7 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4 lg:grid-cols-2">
+                <div id="helos-revenue" class="grid gap-4 scroll-mt-24 lg:grid-cols-{{ ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE) ?? false) ? '3' : '2' }}">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">COD money coming in</div>
                         <div class="text-xs text-gray-500">What is waiting to be delivered, collected, or reversed for parcel sales.</div>
@@ -610,6 +899,46 @@
                             </div>
                         </div>
                     </div>
+
+                    @if ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE))
+                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                            <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Service billing money</div>
+                            <div class="text-xs text-gray-500">Monthly subscriptions, registration fees, and service payments are visible here.</div>
+                            <div class="mt-4 grid gap-3 md:grid-cols-3">
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">To collect</div>
+                                    <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['service']['expected_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['pending_orders'] ?? 0) }} unpaid clients</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Collected</div>
+                                    <div class="mt-1 font-semibold text-emerald-600">LKR {{ number_format((float) ($revenuePipeline['service']['collected_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['delivered_orders'] ?? 0) }} paid records</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Returned</div>
+                                    <div class="mt-1 font-semibold text-gray-600">LKR {{ number_format((float) ($revenuePipeline['service']['returned_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">Not used for service</div>
+                                </div>
+                            </div>
+                            <div class="mt-3 grid gap-2 text-sm">
+                                @forelse (($revenuePipeline['service']['records'] ?? []) as $record)
+                                    <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900">
+                                        <div class="font-medium text-gray-950 dark:text-white">{{ $record['client_name'] ?? 'Service client' }}</div>
+                                        <div class="text-xs text-gray-500">
+                                            Due LKR {{ number_format((float) ($record['amount_due'] ?? 0), 2) }}
+                                            | Paid LKR {{ number_format((float) ($record['paid_amount'] ?? 0), 2) }}
+                                            | Still LKR {{ number_format((float) ($record['remaining_amount'] ?? 0), 2) }}
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-500 dark:border-gray-700">
+                                        No service billing records for this month yet.
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+                    @endif
 
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Wholesale money coming in</div>
@@ -652,7 +981,7 @@
                     $decisionStory = $briefing['decision_story'] ?? $advisor['decision_story'] ?? [];
                 @endphp
 
-                <div class="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+                <div id="helos-next-action" class="grid gap-4 scroll-mt-24 lg:grid-cols-[1.3fr_0.7fr]">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         <div class="text-xs uppercase tracking-wide text-gray-500">What to do next</div>
                         <div class="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">
@@ -721,7 +1050,7 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4 lg:grid-cols-2">
+                <div id="helos-cash-movement" class="grid gap-4 scroll-mt-24 lg:grid-cols-2">
                     <div class="grid gap-3">
                         <div>
                             <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Money movement</h2>
@@ -801,7 +1130,7 @@
                         </div>
                     </div>
 
-                    <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                    <div id="helos-stock" class="rounded-lg border border-gray-200 p-4 scroll-mt-24 dark:border-gray-800">
                         <div class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Stock holding cash</div>
                         <div class="grid gap-3 md:grid-cols-2">
                             <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
@@ -869,12 +1198,12 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="helos-weekly-reminders" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         <div class="text-xs uppercase tracking-wide text-gray-500">Weekly reminders</div>
                         <div class="mt-2 text-lg font-semibold text-gray-950 dark:text-white">These are the items that usually need action this week.</div>
                         <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                            Weekly COD settlements, salaries, cheque dates, and supplier payments show up here so you can handle them before they turn into a fire drill.
+                            Weekly COD settlements, salaries, cheque dates, supplier payments, and service collections show up here so you can handle them before they turn into a fire drill.
                         </div>
                     </div>
 
@@ -923,11 +1252,42 @@
                             </div>
                         </div>
                     </div>
+
+                    @if (! empty($cashIntelligence['incoming_due_soon'] ?? []) || ! empty($cashIntelligence['incoming_overdue'] ?? []))
+                        <div class="grid gap-4 lg:grid-cols-2">
+                            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+                                <div class="mb-3 text-sm font-semibold text-emerald-900 dark:text-emerald-100">Service money due soon</div>
+                                <div class="grid gap-2">
+                                    @forelse (($cashIntelligence['incoming_due_soon'] ?? []) as $item)
+                                        <div class="rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-950">
+                                            <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Service collection' }}</div>
+                                            <div class="text-xs text-gray-500">LKR {{ number_format((float) ($item['amount'] ?? 0), 2) }} @if (! empty($item['due_on'])) | Due on {{ $item['due_on'] }} @endif</div>
+                                        </div>
+                                    @empty
+                                        <div class="rounded-lg border border-dashed border-emerald-300 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:text-emerald-200">No service collections due soon.</div>
+                                    @endforelse
+                                </div>
+                            </div>
+                            <div class="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
+                                <div class="mb-3 text-sm font-semibold text-red-900 dark:text-red-100">Service money overdue</div>
+                                <div class="grid gap-2">
+                                    @forelse (($cashIntelligence['incoming_overdue'] ?? []) as $item)
+                                        <div class="rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-950">
+                                            <div class="font-medium text-gray-950 dark:text-white">{{ $item['title'] ?? 'Service collection' }}</div>
+                                            <div class="text-xs text-gray-500">LKR {{ number_format((float) ($item['amount'] ?? 0), 2) }} @if (! empty($item['due_on'])) | Due on {{ $item['due_on'] }} @endif</div>
+                                        </div>
+                                    @empty
+                                        <div class="rounded-lg border border-dashed border-red-300 p-4 text-sm text-red-700 dark:border-red-800 dark:text-red-200">No overdue service collections.</div>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             </x-filament::section>
 
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="helos-treasury" class="grid gap-4 scroll-mt-24">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         @php
                             $treasurySectionTrust = $trustStatus['section_statuses']['treasury'] ?? 'Estimated';
@@ -1006,7 +1366,7 @@
                 </div>
             </x-filament::section>
 
-            <div class="grid gap-6 lg:grid-cols-2">
+            <div id="helos-profitability" class="grid gap-6 scroll-mt-24 lg:grid-cols-2">
                 <x-filament::section>
                     <div class="grid gap-3">
                         <div>
@@ -1121,7 +1481,7 @@
             </div>
 
             <x-filament::section>
-                <div class="grid gap-3">
+                <div id="helos-returns" class="grid gap-3 scroll-mt-24">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Returns hurting profits</h2>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Return, courier and SKU pressure in one place.</p>

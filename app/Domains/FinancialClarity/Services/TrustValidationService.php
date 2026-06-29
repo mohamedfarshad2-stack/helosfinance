@@ -3,6 +3,13 @@
 namespace App\Domains\FinancialClarity\Services;
 
 use App\Domains\Shared\Models\Business;
+use App\Filament\Resources\BankTransactionResource;
+use App\Filament\Resources\EmployeeResource;
+use App\Filament\Resources\ExpenseResource;
+use App\Filament\Resources\IntegrationSourceResource;
+use App\Filament\Resources\MaterialLedgerResource;
+use App\Filament\Resources\SkuRecipeResource;
+use App\Filament\Resources\SkuResource;
 
 class TrustValidationService
 {
@@ -93,11 +100,73 @@ class TrustValidationService
 
     private function buildWarnings(Business $business, array $completeness): array
     {
-        return $completeness['issues'] ?? [
+        $warnings = $completeness['issues'] ?? [
             'critical' => [],
             'important' => [],
             'informational' => [],
         ];
+
+        foreach ($warnings as $severity => $items) {
+            $warnings[$severity] = array_map(
+                fn (array $warning): array => $this->decorateWarning($warning),
+                $items
+            );
+        }
+
+        return $warnings;
+    }
+
+    private function decorateWarning(array $warning): array
+    {
+        $repair = match ($warning['title'] ?? '') {
+            'Missing SKU recipe' => [
+                'action_label' => 'Fix product recipes',
+                'action_url' => SkuRecipeResource::getUrl('index'),
+                'fix_guidance' => 'Open Product Recipes, select the product, then add the missing material and labour lines.',
+            ],
+            'Missing material cost' => [
+                'action_label' => 'Fix product costs',
+                'action_url' => SkuResource::getUrl('index'),
+                'fix_guidance' => 'Open Products or Product Recipes and enter the missing material cost truth.',
+            ],
+            'Missing stock mapping', 'Missing lifecycle stages' => [
+                'action_label' => 'Review sales activity',
+                'action_url' => IntegrationSourceResource::getUrl('index'),
+                'fix_guidance' => 'Check the stock-app connection or review order activity so HELOS can match rows to the right product and lifecycle stage.',
+            ],
+            'Missing supplier name', 'Missing due date' => [
+                'action_label' => 'Fix expenses',
+                'action_url' => ExpenseResource::getUrl('index'),
+                'fix_guidance' => 'Open Expenses & Payables and complete the supplier/payee or due date on the warning rows.',
+            ],
+            'Missing salary mapping' => [
+                'action_label' => 'Fix staff pay',
+                'action_url' => EmployeeResource::getUrl('index'),
+                'fix_guidance' => 'Open Staff & Pay and complete the salary or pay setup for active employees.',
+            ],
+            'Missing business allocation', 'Missing treasury allocation' => [
+                'action_label' => 'Fix bank review',
+                'action_url' => BankTransactionResource::getUrl('index'),
+                'fix_guidance' => 'Open Bank & Cash Review, classify the row, and allocate it to the correct business or money container.',
+            ],
+            'Missing material SKU link' => [
+                'action_label' => 'Fix material stock',
+                'action_url' => MaterialLedgerResource::getUrl('index'),
+                'fix_guidance' => 'Open Material Stock and link material rows to the correct product where needed.',
+            ],
+            'No monthly goal set' => [
+                'action_label' => 'Set monthly goal',
+                'action_url' => '#helos-goal',
+                'fix_guidance' => 'Set a monthly goal so HELOS can explain progress and what still needs to improve.',
+            ],
+            default => [
+                'action_label' => 'Review warning',
+                'action_url' => null,
+                'fix_guidance' => 'Open the related setup or work screen and complete the missing information.',
+            ],
+        };
+
+        return array_merge($warning, $repair);
     }
 
     private function buildMetricStatuses(array $goal, array $breakEven, array $warnings): array

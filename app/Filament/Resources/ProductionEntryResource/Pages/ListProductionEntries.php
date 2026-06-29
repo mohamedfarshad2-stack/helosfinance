@@ -25,10 +25,10 @@ class ListProductionEntries extends ListRecords
             Actions\Action::make('guide')
                 ->label('Weekly pay guide')
                 ->icon('heroicon-o-question-mark-circle')
-                ->modalHeading('How Weekly Production Pay works')
+                ->modalHeading('How Production Pay works')
                 ->modalContent(new HtmlString(<<<HTML
 <div class="grid gap-3 text-sm">
-    <div><strong>Fixed salaries</strong> belong in <strong>Input Center > Team Salaries</strong> and are for month-end pressure.</div>
+    <div><strong>Fixed salaries</strong> belong in <strong>Setup > Staff & Pay</strong> and are for month-end pressure.</div>
     <div><strong>Weekly production pay</strong> belongs here and is filtered by production date so you can review one week or one month at a time.</div>
     <div><strong>Gross payout</strong> is the amount before advances and deductions. <strong>Net payable</strong> is what HELOS will settle.</div>
     <div class="pt-2 text-gray-500">Recommended flow: record production during the week, review the date range, then mark selected payouts as paid when you settle them.</div>

@@ -14,6 +14,10 @@ class Business extends Model
     public const TYPE_MANUFACTURING = 'manufacturing';
     public const TYPE_HYBRID = 'hybrid';
 
+    public const COD_SOURCE_STOCK_APP = 'stock_app';
+    public const COD_SOURCE_INTERNAL = 'helos_internal';
+    public const COD_SOURCE_NONE = 'none';
+
     public const MATURITY_LEVEL_1 = 'level_1';
     public const MATURITY_LEVEL_2 = 'level_2';
     public const MATURITY_LEVEL_3 = 'level_3';
@@ -77,6 +81,15 @@ class Business extends Model
         ];
     }
 
+    public static function codOrderSourceOptions(): array
+    {
+        return [
+            self::COD_SOURCE_STOCK_APP => 'Stock App integration',
+            self::COD_SOURCE_INTERNAL => 'HELOS internal COD orders',
+            self::COD_SOURCE_NONE => 'No COD orders',
+        ];
+    }
+
     public static function suggestedMaturityFromSignals(array $signals, ?string $businessType = null): string
     {
         $regularSales = (bool) ($signals['regular_sales'] ?? false);
@@ -127,8 +140,8 @@ class Business extends Model
             'daily_cfo_briefing' => 'Daily CFO Briefing',
             'decision_ranking' => 'Decision Ranking',
             'production_tracking' => 'Production Tracking',
-            'material_ledger' => 'Material Ledger',
-            'sku_recipe_bom' => 'SKU Recipe / BOM',
+            'material_ledger' => 'Material Stock',
+            'sku_recipe_bom' => 'Product Recipes',
             'material_consumption' => 'Material Consumption',
             'inventory_aging' => 'Inventory Aging',
         ];
@@ -212,6 +225,19 @@ class Business extends Model
     public function supportsSkuManagement(): bool
     {
         return $this->maturityRank() >= 2 && ($this->supportsBusinessType(self::TYPE_TRADING) || $this->supportsBusinessType(self::TYPE_MANUFACTURING));
+    }
+
+    public function codOrderSource(): string
+    {
+        $settings = is_array($this->settings ?? null) ? $this->settings : [];
+        $source = (string) ($settings['cod_order_source'] ?? self::COD_SOURCE_STOCK_APP);
+
+        return array_key_exists($source, static::codOrderSourceOptions()) ? $source : self::COD_SOURCE_STOCK_APP;
+    }
+
+    public function usesInternalCodOrders(): bool
+    {
+        return $this->codOrderSource() === self::COD_SOURCE_INTERNAL;
     }
 
     public function supportsInventoryIntelligence(): bool
@@ -388,6 +414,26 @@ class Business extends Model
     public function materialComponents(): HasMany
     {
         return $this->hasMany(MaterialComponent::class);
+    }
+
+    public function serviceBillingRecords(): HasMany
+    {
+        return $this->hasMany(ServiceBillingRecord::class);
+    }
+
+    public function codOrders(): HasMany
+    {
+        return $this->hasMany(CodOrder::class);
+    }
+
+    public function codOrderSources(): HasMany
+    {
+        return $this->hasMany(CodOrderSource::class);
+    }
+
+    public function courierRates(): HasMany
+    {
+        return $this->hasMany(CourierRate::class);
     }
 
     public function productionWorkSteps(): HasMany

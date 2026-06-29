@@ -19,11 +19,28 @@ use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Expense;
+use App\Domains\Shared\Models\ServiceBillingRecord;
+use App\Domains\Shared\Models\Sku;
+use App\Domains\Shared\Models\SkuRecipeItem;
+use App\Filament\Pages\BankStatementImport;
+use App\Filament\Pages\CodOrderWorkbench;
+use App\Filament\Resources\BankTransactionResource;
+use App\Filament\Resources\BusinessResource;
+use App\Filament\Resources\CostAssumptionResource;
+use App\Filament\Resources\EmployeeResource;
+use App\Filament\Resources\ExpenseResource;
+use App\Filament\Resources\MaterialComponentResource;
+use App\Filament\Resources\OperationalEventResource;
+use App\Filament\Resources\ProductionEntryResource;
+use App\Filament\Resources\ServiceBillingResource;
+use App\Filament\Resources\SkuRecipeResource;
+use App\Filament\Resources\SkuResource;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
+use Filament\Support\Enums\MaxWidth;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Collection;
@@ -72,6 +89,10 @@ class ClientHealthReport extends Page implements HasForms
 
     public array $trustStatus = [];
 
+    public array $ownerBusinessMap = [];
+
+    public array $ownerSetupGuide = [];
+
     public Collection $trend;
 
     public Collection $topExpenses;
@@ -114,6 +135,11 @@ class ClientHealthReport extends Page implements HasForms
             ->columns(3);
     }
 
+    public function getMaxContentWidth(): MaxWidth
+    {
+        return MaxWidth::Full;
+    }
+
     public function refreshReport(BusinessHealthSnapshotService $snapshots, BusinessAdvisorService $advisor, CashIntelligenceService $cashIntelligence, CapitalIntelligenceService $capitalIntelligence, InventoryIntelligenceService $inventoryIntelligence, RevenuePipelineService $revenuePipeline, BreakEvenIntelligenceService $breakEvenIntelligence, GoalIntelligenceService $goalIntelligence, TrustValidationService $trustValidation, WorkQueueService $workQueue): void
     {
         $this->loadReport($snapshots, $advisor, $cashIntelligence, $capitalIntelligence, $inventoryIntelligence, $revenuePipeline, $breakEvenIntelligence, $goalIntelligence, $trustValidation, $workQueue, true);
@@ -144,6 +170,8 @@ class ClientHealthReport extends Page implements HasForms
             $this->operationalSummary = [];
             $this->treasuryStory = [];
             $this->trustStatus = [];
+            $this->ownerBusinessMap = [];
+            $this->ownerSetupGuide = [];
 
             return;
         }
@@ -233,6 +261,8 @@ class ClientHealthReport extends Page implements HasForms
             'Fastest Path Forward' => 'goal_progress',
         ], 'goal');
         $this->treasuryStory['trust_status'] = $this->trustStatus['section_statuses']['treasury'] ?? 'Estimated';
+        $this->ownerBusinessMap = $this->buildOwnerBusinessMap();
+        $this->ownerSetupGuide = $this->buildOwnerSetupGuide();
     }
 
     protected function getViewData(): array
@@ -254,9 +284,172 @@ class ClientHealthReport extends Page implements HasForms
             'operationalSummary' => $this->operationalSummary,
             'treasuryStory' => $this->treasuryStory,
             'trustStatus' => $this->trustStatus,
+            'ownerBusinessMap' => $this->ownerBusinessMap,
+            'ownerSetupGuide' => $this->ownerSetupGuide,
             'trend' => $this->trend,
             'topExpenses' => $this->topExpenses,
             'impact' => $this->impact,
+        ];
+    }
+
+    private function buildOwnerSetupGuide(): array
+    {
+        if (! $this->business instanceof Business) {
+            return ['steps' => [], 'next_step' => null, 'progress' => 0];
+        }
+
+        $steps = [];
+        $fixedExpenses = Expense::query()
+            ->where('business_id', $this->business->id)
+            ->where('expense_type', 'fixed')
+            ->count();
+        $employees = $this->business->employees()->count();
+        $bankRows = BankTransaction::query()->where('business_id', $this->business->id)->count();
+        $goalConfigured = (bool) ($this->goalStory['configured'] ?? false);
+        $integration = IntegrationSource::query()->where('business_id', $this->business->id)->exists();
+        $internalCodOrders = $this->business->codOrders()->exists();
+
+        $steps[] = $this->setupStep(
+            'business_profile',
+            'Confirm business setup',
+            'Business type, owner group, maturity, and setup stage must be correct before HELOS guides the owner.',
+            filled($this->business->business_type) && filled($this->business->business_maturity),
+            BusinessResource::getUrl('edit', ['record' => $this->business]),
+            'Open business setup'
+        );
+
+        $steps[] = $this->setupStep(
+            'fixed_costs',
+            'Add monthly fixed costs',
+            'Rent, salaries, subscriptions, and fixed commitments set the survival line for break-even.',
+            $fixedExpenses > 0,
+            ExpenseResource::getUrl('index'),
+            'Open expenses'
+        );
+
+        $steps[] = $this->setupStep(
+            'team',
+            'Add staff and salary truth',
+            'HELOS needs staff and pay-cycle truth before payroll pressure and weekly work can be trusted.',
+            $employees > 0,
+            EmployeeResource::getUrl('index'),
+            'Open staff'
+        );
+
+        if ($this->business->supportsBusinessType(Business::TYPE_SERVICE)) {
+            $serviceRecords = ServiceBillingRecord::query()
+                ->where('business_id', $this->business->id)
+                ->count();
+
+            $steps[] = $this->setupStep(
+                'service_billing',
+                'Add service clients and monthly fees',
+                'Registration fees, monthly subscriptions, paid, part-paid, and overdue service money should be recorded here.',
+                $serviceRecords > 0,
+                ServiceBillingResource::getUrl('index'),
+                'Open service billing'
+            );
+        }
+
+        if ($this->business->supportsSkuManagement()) {
+            $skuCount = Sku::query()->where('business_id', $this->business->id)->count();
+
+            $steps[] = $this->setupStep(
+                'products',
+                'Add products or SKUs',
+                'Trading and manufacturing businesses need products before HELOS can read item-level sales and cost.',
+                $skuCount > 0,
+                SkuResource::getUrl('index'),
+                'Open products'
+            );
+        }
+
+        if ($this->business->supportsProductionTracking()) {
+            $recipeCount = SkuRecipeItem::query()->where('business_id', $this->business->id)->count();
+
+            $steps[] = $this->setupStep(
+                'recipe',
+                'Add materials, work steps, and recipes',
+                'Manufacturing profit needs material components, labour steps, and SKU recipe lines before cost is trusted.',
+                $recipeCount > 0,
+                SkuRecipeResource::getUrl('index'),
+                'Open recipes'
+            );
+
+            $steps[] = $this->setupStep(
+                'production',
+                'Start weekly production records',
+                'Daily or weekly part production drives piece-work salary and production cost.',
+                ProductionEntry::query()->where('business_id', $this->business->id)->exists(),
+                ProductionEntryResource::getUrl('index'),
+                'Open production pay'
+            );
+        }
+
+        if (
+            ($this->business->supportsBusinessType(Business::TYPE_TRADING) || $this->business->supportsBusinessType(Business::TYPE_MANUFACTURING))
+            && $this->business->codOrderSource() !== Business::COD_SOURCE_NONE
+        ) {
+            $usesInternalCod = $this->business->usesInternalCodOrders();
+
+            $steps[] = $this->setupStep(
+                'sales',
+                $usesInternalCod ? 'Start HELOS COD orders' : 'Connect stock-app',
+                $usesInternalCod
+                    ? 'Use this when the client does not use Stock App. Each HELOS COD order can carry its own courier, delivery charge, return charge, and resend charge.'
+                    : 'Use this when the client already runs Stock App. Stock App order events feed money and profitability.',
+                $usesInternalCod ? $internalCodOrders : ($integration || OperationalEvent::query()->where('business_id', $this->business->id)->exists()),
+                $usesInternalCod ? CodOrderWorkbench::getUrl() : ($integration ? OperationalEventResource::getUrl('index') : '#helos-revenue'),
+                $usesInternalCod ? 'Open COD orders' : ($integration ? 'Open sales events' : 'Review revenue flow')
+            );
+        }
+
+        $steps[] = $this->setupStep(
+            'bank',
+            'Import or review bank and cash rows',
+            'Bank review separates revenue, expenses, transfers, owner money, and shared/unallocated cash.',
+            $bankRows > 0,
+            $bankRows > 0 ? BankTransactionResource::getUrl('index') : BankStatementImport::getUrl(),
+            $bankRows > 0 ? 'Open bank review' : 'Import bank statement'
+        );
+
+        $steps[] = $this->setupStep(
+            'goal',
+            'Set this month goal',
+            'A simple profit, revenue, delivery, or collection target lets HELOS explain distance and fastest path.',
+            $goalConfigured,
+            '#helos-goal',
+            'Open goal'
+        );
+
+        $completed = collect($steps)->where('done', true)->count();
+        $next = collect($steps)->firstWhere('done', false);
+        $progress = count($steps) > 0 ? (int) round(($completed / count($steps)) * 100) : 0;
+
+        return [
+            'headline' => $next
+                ? 'Start with '.$next['title'].'.'
+                : 'Setup is ready enough for daily owner review.',
+            'subheadline' => $this->business->businessTypeLabel().' setup path for a new owner.',
+            'progress' => $progress,
+            'completed' => $completed,
+            'total' => count($steps),
+            'next_step' => $next,
+            'steps' => $steps,
+        ];
+    }
+
+    private function setupStep(string $key, string $title, string $why, bool $done, string $url, string $action): array
+    {
+        return [
+            'key' => $key,
+            'title' => $title,
+            'why' => $why,
+            'done' => $done,
+            'status' => $done ? 'Done' : 'Needed',
+            'tone' => $done ? 'green' : 'amber',
+            'url' => $url,
+            'action' => $action,
         ];
     }
 
@@ -452,6 +645,8 @@ class ClientHealthReport extends Page implements HasForms
             ->latest('last_synced_at')
             ->first();
         $integrationHeadline = match (true) {
+            $this->business->usesInternalCodOrders() => 'HELOS internal COD orders are active for this business.',
+            $this->business->codOrderSource() === Business::COD_SOURCE_NONE => 'This business is not using a COD order workflow.',
             $integration instanceof IntegrationSource && $integration->status === 'active' => 'The stock-app integration is active.',
             $integration instanceof IntegrationSource && $integration->status === 'testing' => 'The stock-app integration is still being tested.',
             $integration instanceof IntegrationSource && $integration->status === 'paused' => 'The stock-app integration is paused.',
@@ -460,7 +655,7 @@ class ClientHealthReport extends Page implements HasForms
         };
 
         return [
-            'headline' => 'Business setup, orders, stock, money, production, and the stock-app connection are readable together.',
+            'headline' => 'Business setup, orders, stock, money, production, and the sales source are readable together.',
             'summary' => [
                 $setupHeadline.' Next step: '.$nextSetupStep.'.',
                 $trackingHeadline,
@@ -724,6 +919,282 @@ class ClientHealthReport extends Page implements HasForms
             'unallocated_count' => $unallocatedCount,
             'transfer_review_count' => $transferReviewCount,
         ];
+    }
+
+    private function buildOwnerBusinessMap(): array
+    {
+        $currentProfit = (float) ($this->snapshot?->estimated_profit ?? 0);
+        $currentRevenue = (float) ($this->snapshot?->revenue_total ?? 0);
+        $currentCosts = (float) ($this->snapshot?->cost_total ?? 0);
+        $trustLabel = (string) ($this->trustStatus['status_label'] ?? 'Estimated');
+        $safeToUseCard = $this->storyCard($this->bucketStory, 'Money Safe To Use');
+        $breakEvenProgress = (float) ($this->breakEvenStory['progress']['coverage_percent'] ?? 0);
+        $breakEvenRemainingDeliveries = $this->breakEvenStory['progress']['remaining_deliveries'] ?? null;
+        $goalConfigured = (bool) ($this->goalStory['configured'] ?? false);
+        $goalProgress = (float) ($this->goalStory['goal']['progress_percent'] ?? 0);
+        $returnImpact = (float) ($this->impact['returns'] ?? 0);
+        $recipeCoverage = (int) ($this->inventoryIntelligence['recipe_coverage'] ?? 0);
+        $wasteRatio = (float) ($this->inventoryIntelligence['waste_ratio'] ?? 0);
+        $dueSoon = collect($this->cashIntelligence['due_soon_obligations'] ?? [])->count();
+        $overdue = collect($this->cashIntelligence['overdue_obligations'] ?? [])->count();
+        $treasuryReviewCount = (int) ($this->treasuryStory['review_count'] ?? 0);
+        $treasuryUnallocatedCount = (int) ($this->treasuryStory['unallocated_count'] ?? 0);
+
+        $nodes = [
+            $this->ownerMapNode(
+                key: 'trust',
+                title: 'Can I trust today?',
+                value: $trustLabel,
+                tone: match ($trustLabel) {
+                    'Verified' => 'green',
+                    'Pending Validation' => 'red',
+                    default => 'amber',
+                },
+                progress: (int) ($this->trustStatus['data_quality_percent'] ?? 0),
+                heading: $this->trustStatus['headline'] ?? 'Trust status is still being checked.',
+                why: 'HELOS checks missing information, validation issues, calculation safety, integration health, and allocation quality before the owner trusts the month.',
+                makeGreen: 'Clear critical warnings first, then review important warnings until the Trust Center becomes Verified.',
+                nextStep: 'Open the Trust Center warnings below and fix the missing information one by one.',
+                anchor: '#helos-trust-center'
+            ),
+            $this->ownerMapNode(
+                key: 'health',
+                title: 'Business health',
+                value: $currentProfit >= 0 ? 'Positive' : 'Under pressure',
+                tone: $currentProfit >= 0 ? 'green' : 'red',
+                progress: $currentProfit >= 0 ? 80 : 35,
+                heading: $this->healthStory['headline'] ?? 'Business picture is not ready yet.',
+                why: $currentProfit >= 0
+                    ? 'The current month is still showing money left after running the business.'
+                    : 'The current month is showing pressure after costs, returns, stock, or cash movement.',
+                makeGreen: 'Reduce the biggest cost or return pressure first, then push the strongest revenue stream.',
+                nextStep: 'Review the business picture cards and the What to do next panel.',
+                anchor: '#helos-business-picture'
+            ),
+            $this->ownerMapNode(
+                key: 'cash',
+                title: 'Cash safety',
+                value: $safeToUseCard['value'] ?? 'Not ready',
+                tone: ($safeToUseCard['tone'] ?? 'warning') === 'success' ? 'green' : 'amber',
+                progress: ($safeToUseCard['tone'] ?? 'warning') === 'success' ? 85 : 45,
+                heading: $this->bucketStory['headline'] ?? 'Money safety is not ready yet.',
+                why: 'This checks cash after settlement, reserves, due commitments, and tied-up money.',
+                makeGreen: 'Settle pending money, clear overdue obligations, and reduce tied-up stock or production pressure.',
+                nextStep: 'Use Money Safe To Use and Weekly Reminders before spending or withdrawing.',
+                anchor: '#helos-money-safety'
+            ),
+            $this->ownerMapNode(
+                key: 'break_even',
+                title: 'Break-even',
+                value: $breakEvenRemainingDeliveries === null
+                    ? 'Not ready'
+                    : ($breakEvenRemainingDeliveries <= 0 ? 'Covered' : $breakEvenRemainingDeliveries.' deliveries'),
+                tone: $breakEvenRemainingDeliveries === null ? 'gray' : ($breakEvenRemainingDeliveries <= 0 ? 'green' : ($breakEvenProgress >= 60 ? 'amber' : 'red')),
+                progress: (int) min(max($breakEvenProgress, 0), 100),
+                heading: $this->breakEvenStory['headline'] ?? 'Break-even is not ready yet.',
+                why: 'HELOS compares current contribution against monthly fixed costs and shows how many deliveries or how much revenue is still needed.',
+                makeGreen: 'Increase delivered profitable orders, reduce return/courier pressure, or lower fixed costs.',
+                nextStep: 'Open the break-even pressure area and fix the top obstacle first.',
+                anchor: '#helos-break-even'
+            ),
+            $this->ownerMapNode(
+                key: 'goal',
+                title: 'Goal progress',
+                value: $goalConfigured ? number_format($goalProgress, 0).'%' : 'Not set',
+                tone: ! $goalConfigured ? 'gray' : ($goalProgress >= 90 ? 'green' : ($goalProgress >= 50 ? 'amber' : 'red')),
+                progress: (int) min(max($goalProgress, 0), 100),
+                heading: $this->goalStory['headline'] ?? 'Set a monthly goal to start tracking progress.',
+                why: 'The goal view compares the current month against the target and uses break-even contribution to estimate what is still needed.',
+                makeGreen: 'Set a realistic monthly target, then improve the fastest path shown by HELOS.',
+                nextStep: 'Open Your Goal and follow Fastest Path Forward.',
+                anchor: '#helos-goal'
+            ),
+            $this->ownerMapNode(
+                key: 'profit',
+                title: 'Profitability',
+                value: 'LKR '.number_format($currentProfit, 0),
+                tone: $currentProfit >= 0 ? 'green' : 'red',
+                progress: $currentProfit >= 0 ? 80 : 25,
+                heading: $currentProfit >= 0 ? 'Profit is currently positive.' : 'Profit is currently negative.',
+                why: 'Profit depends on revenue truth, SKU costs, production costs, returns, courier cost, salaries, and expenses.',
+                makeGreen: 'Protect high-margin products, fix missing SKU recipes, and reduce costs that are not helping sales.',
+                nextStep: 'Check top expenses, product pressure, and return impact.',
+                anchor: '#helos-profitability'
+            ),
+            $this->ownerMapNode(
+                key: 'stock',
+                title: 'Stock pressure',
+                value: $recipeCoverage.'% recipes',
+                tone: $recipeCoverage < 70 || $wasteRatio > 10 ? 'red' : ($recipeCoverage < 95 || $wasteRatio > 0 ? 'amber' : 'green'),
+                progress: $recipeCoverage,
+                heading: $this->inventoryIntelligence['headline'] ?? 'Stock signal is not ready yet.',
+                why: 'Stock pressure rises when recipes are missing, material consumption is unclear, or waste is high.',
+                makeGreen: 'Complete SKU recipes, record material usage, and reduce waste or unexplained flow gaps.',
+                nextStep: 'Open stock holding cash and recipe coverage details.',
+                anchor: '#helos-stock'
+            ),
+            $this->ownerMapNode(
+                key: 'returns',
+                title: 'Returns pressure',
+                value: 'LKR '.number_format($returnImpact, 0),
+                tone: $returnImpact > 0 ? 'red' : 'green',
+                progress: $returnImpact > 0 ? 35 : 100,
+                heading: $returnImpact > 0 ? 'Returns are hurting profit.' : 'Returns are calm right now.',
+                why: 'Returned parcels can create courier cost, lost revenue, resend cost, and stock damage.',
+                makeGreen: 'Find the top return reason, fix confirmation quality, and reduce repeat courier losses.',
+                nextStep: 'Open return and courier pressure details.',
+                anchor: '#helos-returns'
+            ),
+            $this->ownerMapNode(
+                key: 'treasury',
+                title: 'Treasury review',
+                value: ($treasuryReviewCount + $treasuryUnallocatedCount).' rows',
+                tone: ($treasuryReviewCount + $treasuryUnallocatedCount) > 0 ? 'amber' : 'green',
+                progress: ($treasuryReviewCount + $treasuryUnallocatedCount) > 0 ? 55 : 100,
+                heading: $this->treasuryStory['headline'] ?? 'Treasury picture is not ready yet.',
+                why: 'Bank money must be classified and allocated before cash, profit, and business performance can be trusted.',
+                makeGreen: 'Classify review rows and allocate shared/unallocated transactions to the correct business.',
+                nextStep: 'Open Treasury picture and clear shared/unallocated rows.',
+                anchor: '#helos-treasury'
+            ),
+            $this->ownerMapNode(
+                key: 'week',
+                title: 'This week',
+                value: $overdue > 0 ? $overdue.' overdue' : $dueSoon.' due soon',
+                tone: $overdue > 0 ? 'red' : ($dueSoon > 0 ? 'amber' : 'green'),
+                progress: $overdue > 0 ? 25 : ($dueSoon > 0 ? 65 : 100),
+                heading: $overdue > 0 ? 'Some commitments are already overdue.' : ($dueSoon > 0 ? 'Some commitments need attention this week.' : 'No urgent weekly commitments are showing.'),
+                why: 'Weekly salaries, supplier payments, cheque dates, and COD settlement pressure can hurt cash if missed.',
+                makeGreen: 'Pay or schedule overdue items first, then prepare money for due-soon commitments.',
+                nextStep: 'Open Weekly reminders and handle overdue/due-soon items.',
+                anchor: '#helos-weekly-reminders'
+            ),
+        ];
+
+        $attention = collect($nodes)
+            ->whereIn('tone', ['red', 'amber', 'gray'])
+            ->sortBy(fn (array $node): int => match ($node['tone']) {
+                'red' => 0,
+                'amber' => 1,
+                'gray' => 2,
+                default => 3,
+            })
+            ->take(3)
+            ->values()
+            ->all();
+
+        $redCount = collect($nodes)->where('tone', 'red')->count();
+        $amberCount = collect($nodes)->where('tone', 'amber')->count();
+        $greenCount = collect($nodes)->where('tone', 'green')->count();
+        $notReadyCount = collect($nodes)->where('tone', 'gray')->count();
+        $overallScore = (int) round(collect($nodes)->avg('progress') ?? 0);
+        $chartMax = max($currentRevenue, $currentCosts, abs($currentProfit), 1);
+
+        return [
+            'headline' => $this->ownerMapHeadline($nodes),
+            'default_key' => $attention[0]['key'] ?? ($nodes[0]['key'] ?? 'trust'),
+            'overall_score' => $overallScore,
+            'counts' => [
+                'red' => $redCount,
+                'amber' => $amberCount,
+                'green' => $greenCount,
+                'gray' => $notReadyCount,
+            ],
+            'key_metrics' => [
+                [
+                    'label' => 'Revenue',
+                    'value' => 'LKR '.number_format($currentRevenue, 0),
+                    'tone' => $currentRevenue > 0 ? 'green' : 'gray',
+                    'percent' => (int) round(($currentRevenue / $chartMax) * 100),
+                ],
+                [
+                    'label' => 'Costs',
+                    'value' => 'LKR '.number_format($currentCosts, 0),
+                    'tone' => $currentCosts > $currentRevenue ? 'red' : 'amber',
+                    'percent' => (int) round(($currentCosts / $chartMax) * 100),
+                ],
+                [
+                    'label' => 'Profit',
+                    'value' => 'LKR '.number_format($currentProfit, 0),
+                    'tone' => $currentProfit >= 0 ? 'green' : 'red',
+                    'percent' => (int) round((abs($currentProfit) / $chartMax) * 100),
+                ],
+                [
+                    'label' => 'Safe to use',
+                    'value' => $safeToUseCard['value'] ?? 'Not ready',
+                    'tone' => ($safeToUseCard['tone'] ?? 'warning') === 'success' ? 'green' : 'amber',
+                    'percent' => ($safeToUseCard['tone'] ?? 'warning') === 'success' ? 80 : 35,
+                ],
+            ],
+            'mini_graphs' => [
+                [
+                    'label' => 'Break-even',
+                    'value' => number_format(min(max($breakEvenProgress, 0), 100), 0).'%',
+                    'percent' => (int) min(max($breakEvenProgress, 0), 100),
+                    'tone' => $breakEvenRemainingDeliveries === null ? 'gray' : ($breakEvenRemainingDeliveries <= 0 ? 'green' : ($breakEvenProgress >= 60 ? 'amber' : 'red')),
+                ],
+                [
+                    'label' => 'Goal',
+                    'value' => $goalConfigured ? number_format($goalProgress, 0).'%' : 'Not set',
+                    'percent' => (int) min(max($goalProgress, 0), 100),
+                    'tone' => ! $goalConfigured ? 'gray' : ($goalProgress >= 90 ? 'green' : ($goalProgress >= 50 ? 'amber' : 'red')),
+                ],
+                [
+                    'label' => 'Recipe coverage',
+                    'value' => $recipeCoverage.'%',
+                    'percent' => $recipeCoverage,
+                    'tone' => $recipeCoverage < 70 ? 'red' : ($recipeCoverage < 95 ? 'amber' : 'green'),
+                ],
+                [
+                    'label' => 'Data quality',
+                    'value' => (int) ($this->trustStatus['data_quality_percent'] ?? 0).'%',
+                    'percent' => (int) ($this->trustStatus['data_quality_percent'] ?? 0),
+                    'tone' => $trustLabel === 'Verified' ? 'green' : ($trustLabel === 'Pending Validation' ? 'red' : 'amber'),
+                ],
+            ],
+            'nodes' => $nodes,
+            'top_actions' => $attention,
+        ];
+    }
+
+    private function ownerMapNode(string $key, string $title, string $value, string $tone, int $progress, string $heading, string $why, string $makeGreen, string $nextStep, string $anchor): array
+    {
+        return [
+            'key' => $key,
+            'title' => $title,
+            'value' => $value,
+            'tone' => $tone,
+            'flag' => match ($tone) {
+                'green' => 'Green flag',
+                'red' => 'Red flag',
+                'gray' => 'Not ready',
+                default => 'Amber flag',
+            },
+            'progress' => max(0, min($progress, 100)),
+            'heading' => $heading,
+            'why' => $why,
+            'make_green' => $makeGreen,
+            'next_step' => $nextStep,
+            'anchor' => $anchor,
+        ];
+    }
+
+    private function ownerMapHeadline(array $nodes): string
+    {
+        $red = collect($nodes)->where('tone', 'red')->count();
+        $amber = collect($nodes)->where('tone', 'amber')->count();
+
+        return match (true) {
+            $red > 0 => $red.' red flag(s) need owner attention before the business is fully green.',
+            $amber > 0 => 'No major red flags, but '.$amber.' area(s) still need attention.',
+            default => 'The business map is mostly green right now.',
+        };
+    }
+
+    private function storyCard(array $story, string $title): ?array
+    {
+        return collect($story['cards'] ?? [])
+            ->first(fn (array $card): bool => ($card['title'] ?? null) === $title);
     }
 
     private function attachTrustStatus(array $story, array $mapping, string $section): array

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domains\FinancialClarity\Services\RevenuePipelineService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Services\WorkQueueService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -68,7 +69,9 @@ class RevenuePipelineServiceTest extends TestCase
             'payload' => [
                 'sale_amount' => 8000,
                 'customer_paid_amount' => 3000,
+                'customer_name' => 'Wholesale Customer',
                 'customer_payment_method' => 'cash',
+                'payment_due_at' => now()->addDays(3)->toDateTimeString(),
                 'channel' => 'wholesale',
                 'economics' => [
                     'product_cost_amount' => 1200,
@@ -117,6 +120,10 @@ class RevenuePipelineServiceTest extends TestCase
         $this->assertSame(15000.0, (float) $pipeline['wholesale']['collected_revenue']);
         $this->assertSame(3000.0, (float) collect($pipeline['orders'])->firstWhere('external_id', 'WHO-1')['paid_amount']);
         $this->assertSame(5000.0, (float) collect($pipeline['orders'])->firstWhere('external_id', 'WHO-1')['remaining_amount']);
+        $this->assertSame('Wholesale Customer', collect($pipeline['orders'])->firstWhere('external_id', 'WHO-1')['customer_name']);
         $this->assertNotEmpty($pipeline['actions']);
+
+        $queue = app(WorkQueueService::class)->forBusiness($business);
+        $this->assertTrue(collect($queue['tasks'])->contains(fn (array $task): bool => $task['work_type'] === 'wholesale_collection' && (float) ($task['amount'] ?? 0) === 5000.0));
     }
 }

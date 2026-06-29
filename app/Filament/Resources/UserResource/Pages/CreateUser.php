@@ -16,6 +16,9 @@ class CreateUser extends CreateRecord
     {
         $user = Auth::user();
         $businessId = $data['business_id'] ?? $user?->defaultBusinessId();
+        $isClientOwner = ($user?->isInternalAdmin() ?? false) && (($data['account_role'] ?? 'staff') === 'owner');
+
+        unset($data['account_role']);
 
         if ($user?->isOwner()) {
             $allowedBusinessIds = $user->accessibleBusinessIds();
@@ -23,18 +26,19 @@ class CreateUser extends CreateRecord
             $data['business_id'] = $businessId;
             $data['client_group_id'] = $user->client_group_id;
             $data['is_employee'] = true;
+            $isClientOwner = false;
         }
 
         $business = filled($businessId) ? Business::query()->find($businessId) : null;
 
-        if ($business instanceof Business && ! $business->employeeSeatAvailable()) {
+        if (! $isClientOwner && $business instanceof Business && ! $business->employeeSeatAvailable()) {
             throw ValidationException::withMessages([
                 'business_id' => 'This business has reached its employee account limit.',
             ]);
         }
 
         $data['is_platform_admin'] = false;
-        $data['is_employee'] = true;
+        $data['is_employee'] = ! $isClientOwner;
         $data['employee_access_profile'] = $data['employee_access_profile'] ?? 'operations';
         $data['client_group_id'] = $data['client_group_id'] ?? $business?->client_group_id;
 

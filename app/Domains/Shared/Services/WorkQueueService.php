@@ -9,12 +9,14 @@ use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\MaterialLedgerEntry;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
+use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\SkuStockMovement;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MaterialLedgerResource;
 use App\Filament\Resources\OperationalEventResource;
 use App\Filament\Resources\ProductionEntryResource;
+use App\Filament\Resources\ServiceBillingResource;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -26,6 +28,7 @@ class WorkQueueService
         $tasks = collect([
             ...$this->bankTasks($business),
             ...$this->expenseTasks($business),
+            ...$this->serviceBillingTasks($business),
             ...$this->productionTasks($business),
             ...$this->orderTasks($business),
             ...$this->inventoryTasks($business),
@@ -94,6 +97,44 @@ class WorkQueueService
             'blocked_count' => $blockedWork->count(),
             'completed_today_count' => $completedToday->count(),
         ];
+    }
+
+    private function serviceBillingTasks(Business $business): array
+    {
+        if (! $business->supportsBusinessType(Business::TYPE_SERVICE)) {
+            return [];
+        }
+
+        return ServiceBillingRecord::query()
+            ->where('business_id', $business->id)
+            ->whereIn('payment_status', ['unpaid', 'partial', 'overdue'])
+            ->orderBy('due_on')
+            ->get()
+            ->filter(fn (ServiceBillingRecord $record): bool => $record->balanceDue() > 0)
+            ->map(function (ServiceBillingRecord $record) use ($business): array {
+                $dueOn = optional($record->due_on)->toDateString() ?? now()->toDateString();
+                $related = $this->relatedRecord('service_billing_record', $record->id, $record->client_name, ServiceBillingResource::getUrl('edit', ['record' => $record]));
+
+                return $this->makeTask([
+                    'id' => 'service-billing-'.$record->id,
+                    'queue' => 'collections',
+                    'state' => 'open',
+                    'priority' => $this->datePriority($record->due_on, true),
+                    'title' => 'Service payment needs collection',
+                    'why_it_matters' => 'This service client still has money to pay for the month.',
+                    'recommended_action' => 'Open the service billing row, update the paid amount, and mark it paid or part paid.',
+                    'related_record' => $related,
+                    'assigned_team' => 'Accounts',
+                    'assigned_user' => $this->assignedUserLabel($business, ['accounts', 'finance', 'collections']),
+                    'created_at' => optional($record->created_at)->toDateString() ?? $dueOn,
+                    'due_on' => $dueOn,
+                    'status_label' => $this->statusLabel($dueOn),
+                    'work_type' => 'service_collection',
+                    'amount' => $record->balanceDue(),
+                ]);
+            })
+            ->values()
+            ->all();
     }
 
     private function bankTasks(Business $business): array
@@ -364,6 +405,7 @@ class WorkQueueService
                 OperationalEvent::ORDER_CREATED,
                 OperationalEvent::ORDER_CONFIRMED,
                 OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
                 OperationalEvent::ORDER_DELIVERED,
                 OperationalEvent::ORDER_RETURNED,
                 OperationalEvent::ORDER_RESENT,
@@ -449,6 +491,37 @@ class WorkQueueService
                     'status_label' => $this->statusLabel($latestDate),
                     'work_type' => 'resend_follow_up',
                 ]);
+            }
+
+            if ($latest->event_type === OperationalEvent::WHOLESALE_PARCEL_SENT) {
+                $payload = is_array($latest->payload ?? null) ? $latest->payload : [];
+                $expected = (float) ($payload['sale_amount'] ?? 0);
+                $paid = (float) ($payload['customer_paid_amount'] ?? 0);
+                $remaining = max($expected - $paid, 0);
+
+                if ($remaining > 0) {
+                    $dueOn = filled($payload['payment_due_at'] ?? null)
+                        ? Carbon::parse($payload['payment_due_at'])->toDateString()
+                        : $latestDate;
+
+                    $tasks[] = $this->makeTask([
+                        'id' => 'wholesale-collection-'.($latest->external_id ?: $latest->id),
+                        'queue' => 'collections',
+                        'state' => 'open',
+                        'priority' => $this->datePriority($dueOn, true),
+                        'title' => 'Wholesale payment needs collection',
+                        'why_it_matters' => 'This wholesale parcel was sent, but the full customer money is not collected yet.',
+                        'recommended_action' => 'Follow up the customer, cheque, or credit balance and update the wholesale event or bank match.',
+                        'related_record' => $related,
+                        'assigned_team' => 'Accounts',
+                        'assigned_user' => $this->assignedUserLabel($business, ['accounts', 'finance', 'collections']),
+                        'created_at' => $latestDate,
+                        'due_on' => $dueOn,
+                        'status_label' => $this->statusLabel($dueOn),
+                        'work_type' => 'wholesale_collection',
+                        'amount' => $remaining,
+                    ]);
+                }
             }
 
             if ($latest->event_type === OperationalEvent::FAKE_ORDER_DETECTED) {

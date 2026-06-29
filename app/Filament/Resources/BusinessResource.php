@@ -26,8 +26,8 @@ use Illuminate\Support\HtmlString;
 class BusinessResource extends Resource
 {
     protected static ?string $model = Business::class;
-    protected static ?string $navigationGroup = 'Input Center';
-    protected static ?string $navigationLabel = 'Client Businesses';
+    protected static ?string $navigationGroup = 'Setup';
+    protected static ?string $navigationLabel = 'Businesses';
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
 
     public static function form(Form $form): Form
@@ -86,6 +86,13 @@ class BusinessResource extends Resource
                         ->options(Business::businessMaturityOptions())
                         ->default(Business::MATURITY_LEVEL_1)
                         ->required(),
+                    Select::make('settings.cod_order_source')
+                        ->label('COD order source')
+                        ->options(Business::codOrderSourceOptions())
+                        ->default(Business::COD_SOURCE_STOCK_APP)
+                        ->required()
+                        ->visible(fn (): bool => Auth::user()?->isInternalAdmin() ?? false)
+                        ->helperText('Super admin decides whether this business uses Stock App, HELOS internal COD orders, or no COD order workflow.'),
                     TextInput::make('settings.employee_seat_limit')
                         ->label('Employee accounts allowed')
                         ->numeric()
@@ -246,6 +253,15 @@ class BusinessResource extends Resource
                     ->label('Maturity')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => Business::businessMaturityOptions()[$state] ?? 'Level 1 - Survival'),
+                Tables\Columns\TextColumn::make('cod_order_source')
+                    ->label('COD source')
+                    ->state(fn (Business $record): string => Business::codOrderSourceOptions()[$record->codOrderSource()] ?? 'Stock App integration')
+                    ->badge()
+                    ->color(fn (Business $record): string => match ($record->codOrderSource()) {
+                        Business::COD_SOURCE_INTERNAL => 'success',
+                        Business::COD_SOURCE_NONE => 'gray',
+                        default => 'info',
+                    }),
                 Tables\Columns\TextColumn::make('currency')->badge(),
                 Tables\Columns\TextColumn::make('onboarding_status')->label('Setup stage')->badge(),
                 Tables\Columns\TextColumn::make('next_step')
