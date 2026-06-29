@@ -8,6 +8,7 @@ use App\Domains\FinancialClarity\Services\SkuStockMovementService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\StockAppIntegrationSecurityService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,8 @@ class StockAppSyncController extends Controller
             'orders.*.order_id' => ['nullable', 'string'],
             'orders.*.reference' => ['nullable', 'string'],
             'orders.*.sku_code' => ['nullable', 'string'],
+            'orders.*.sku_name' => ['nullable', 'string'],
+            'orders.*.product_name' => ['nullable', 'string'],
             'orders.*.quantity' => ['nullable', 'integer', 'min:1'],
             'orders.*.sale_amount' => ['nullable', 'numeric'],
             'orders.*.transport_cost_amount' => ['nullable', 'numeric'],
@@ -89,6 +92,8 @@ class StockAppSyncController extends Controller
                     $security->recordRejected($integrationSource, 'An order row was missing an event type.');
                     continue;
                 }
+
+                $this->ensureSkuExists($business, $order);
 
                 $payload = array_merge($order, ['event_type' => $eventType]);
                 $impact = $calculator->calculate($business, $payload);
@@ -241,5 +246,30 @@ class StockAppSyncController extends Controller
             'confirmed' => OperationalEvent::ORDER_CONFIRMED,
             default => $eventType,
         };
+    }
+
+    private function ensureSkuExists(Business $business, array $order): ?Sku
+    {
+        $code = trim((string) ($order['sku_code'] ?? ''));
+
+        if ($code === '') {
+            return null;
+        }
+
+        return Sku::query()->firstOrCreate(
+            [
+                'business_id' => $business->id,
+                'code' => $code,
+            ],
+            [
+                'name' => trim((string) ($order['sku_name'] ?? $order['product_name'] ?? $code)) ?: $code,
+                'material_cost' => 0,
+                'packaging_cost' => 0,
+                'labor_rate' => 0,
+                'finishing_cost' => 0,
+                'expected_sale_price' => (float) ($order['sale_amount'] ?? 0),
+                'active' => true,
+            ]
+        );
     }
 }

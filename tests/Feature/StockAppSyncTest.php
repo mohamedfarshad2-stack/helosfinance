@@ -136,6 +136,55 @@ class StockAppSyncTest extends TestCase
         $this->assertSame(1, SkuStockMovement::query()->where('business_id', $business->id)->where('movement_type', 'dispatch')->count());
     }
 
+    public function test_sku_list_endpoint_returns_business_item_codes(): void
+    {
+        $business = Business::query()->create(['name' => 'Sync Business']);
+        IntegrationSource::query()->create([
+            'business_id' => $business->id,
+            'name' => 'Sync stock-app',
+            'type' => 'stock_app',
+            'status' => 'testing',
+            'settings' => ['stock_app_business_key' => 'SYNC-001'],
+        ]);
+        Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'SYNC-SKU-3',
+            'name' => 'Sync SKU 3',
+            'active' => true,
+        ]);
+
+        $this->getJson('/api/v1/stock-app/skus?business_key=SYNC-001')
+            ->assertOk()
+            ->assertJsonPath('items.0.code', 'SYNC-SKU-3')
+            ->assertJsonPath('items.0.name', 'Sync SKU 3');
+    }
+
+    public function test_sync_orders_create_missing_sku_for_finance_setup(): void
+    {
+        $business = Business::query()->create(['name' => 'Sync Business']);
+
+        $this->postJson('/api/v1/stock-app/sync/orders', [
+            'business_id' => $business->id,
+            'orders' => [
+                [
+                    'status' => 'dispatched',
+                    'external_id' => 'SYNC-NEW-SKU-1',
+                    'sku_code' => 'NEW-SKU-1',
+                    'sku_name' => 'New SKU 1',
+                    'quantity' => 1,
+                    'sale_amount' => 2500,
+                    'tracking_number' => 'TRK-NEW-001',
+                ],
+            ],
+        ])->assertOk();
+
+        $sku = Sku::query()->where('business_id', $business->id)->where('code', 'NEW-SKU-1')->first();
+
+        $this->assertNotNull($sku);
+        $this->assertSame('New SKU 1', $sku->name);
+        $this->assertSame(0.0, (float) $sku->productionCostPerUnit());
+    }
+
     public function test_sync_orders_keep_return_revenue_zero_and_preserve_recovery_truth(): void
     {
         $business = Business::query()->create(['name' => 'Sync Business']);
