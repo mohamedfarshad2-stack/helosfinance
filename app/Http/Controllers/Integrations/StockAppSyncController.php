@@ -8,6 +8,7 @@ use App\Domains\FinancialClarity\Services\SkuStockMovementService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\StockAppIntegrationSecurityService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,8 @@ class StockAppSyncController extends Controller
             'orders.*.order_id' => ['nullable', 'string'],
             'orders.*.reference' => ['nullable', 'string'],
             'orders.*.sku_code' => ['nullable', 'string'],
+            'orders.*.sku_name' => ['nullable', 'string'],
+            'orders.*.product_name' => ['nullable', 'string'],
             'orders.*.quantity' => ['nullable', 'integer', 'min:1'],
             'orders.*.sale_amount' => ['nullable', 'numeric'],
             'orders.*.transport_cost_amount' => ['nullable', 'numeric'],
@@ -90,9 +93,16 @@ class StockAppSyncController extends Controller
                     continue;
                 }
 
+                $this->ensureSkuExists($business, $order);
+
                 $payload = array_merge($order, ['event_type' => $eventType]);
                 $impact = $calculator->calculate($business, $payload);
+                $eventImpact = $impact;
+                unset($eventImpact['economics']);
                 $externalId = $order['external_id'] ?? $this->stableExternalId($business->id, $payload);
+                $eventPayload = array_merge($payload, [
+                    'economics' => $impact['economics'] ?? [],
+                ]);
 
                 $event = OperationalEvent::query()->firstOrCreate(
                     [
@@ -102,16 +112,25 @@ class StockAppSyncController extends Controller
                         'external_id' => $externalId,
                     ],
                     [
-                        ...$impact,
+                        ...$eventImpact,
                         'channel' => $order['channel'] ?? null,
                         'department' => $order['department'] ?? 'Operations',
                         'quantity' => $order['quantity'] ?? 1,
-                        'payload' => array_merge($payload, [
-                            'economics' => $impact['economics'] ?? [],
-                        ]),
+                        'payload' => $eventPayload,
                         'occurred_at' => $order['occurred_at'] ?? now(),
                     ]
                 );
+
+                if (! $event->wasRecentlyCreated) {
+                    $event->forceFill([
+                        ...$eventImpact,
+                        'channel' => $order['channel'] ?? $event->channel,
+                        'department' => $order['department'] ?? $event->department,
+                        'quantity' => $order['quantity'] ?? $event->quantity,
+                        'payload' => array_merge($event->payload ?? [], $eventPayload),
+                        'occurred_at' => $order['occurred_at'] ?? $event->occurred_at,
+                    ])->save();
+                }
 
                 $stockMovements->record($business, $event, $payload);
 
@@ -227,5 +246,30 @@ class StockAppSyncController extends Controller
             'confirmed' => OperationalEvent::ORDER_CONFIRMED,
             default => $eventType,
         };
+    }
+
+    private function ensureSkuExists(Business $business, array $order): ?Sku
+    {
+        $code = trim((string) ($order['sku_code'] ?? ''));
+
+        if ($code === '') {
+            return null;
+        }
+
+        return Sku::query()->firstOrCreate(
+            [
+                'business_id' => $business->id,
+                'code' => $code,
+            ],
+            [
+                'name' => trim((string) ($order['sku_name'] ?? $order['product_name'] ?? $code)) ?: $code,
+                'material_cost' => 0,
+                'packaging_cost' => 0,
+                'labor_rate' => 0,
+                'finishing_cost' => 0,
+                'expected_sale_price' => (float) ($order['sale_amount'] ?? 0),
+                'active' => true,
+            ]
+        );
     }
 }

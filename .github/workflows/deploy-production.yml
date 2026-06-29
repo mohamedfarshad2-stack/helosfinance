@@ -3,13 +3,13 @@ name: Production checks and deploy
 on:
   pull_request:
     branches:
-      - helosfinance
+      - codex/aws-deploy-readiness
   push:
     branches:
-      - helosfinance
+      - codex/aws-deploy-readiness
 
 concurrency:
-  group: helos-production
+  group: helios-production
   cancel-in-progress: false
 
 jobs:
@@ -34,13 +34,6 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Prepare Laravel environment
-        run: |
-          cp .env.example .env
-          php -r '$key = "base64:" . base64_encode(random_bytes(32)); file_put_contents(".env", preg_replace("/^APP_KEY=.*/m", "APP_KEY={$key}", file_get_contents(".env")));'
-          mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/framework/views bootstrap/cache database
-          touch database/database.sqlite
-
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
@@ -49,7 +42,8 @@ jobs:
 
       - name: Prepare test environment
         run: |
-          php artisan config:clear
+          cp .env.example .env
+          php artisan key:generate
 
       - name: Run tests
         env:
@@ -77,57 +71,9 @@ jobs:
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
-          install -m 600 /dev/null ~/.ssh/helos_lightsail
-          printf '%s\n' "${{ secrets.HELIOS_LIGHTSAIL_SSH_KEY }}" > ~/.ssh/helos_lightsail
+          install -m 600 /dev/null ~/.ssh/helios_lightsail
+          printf '%s\n' "${{ secrets.HELIOS_LIGHTSAIL_SSH_KEY }}" > ~/.ssh/helios_lightsail
           ssh-keyscan -H 65.1.151.96 >> ~/.ssh/known_hosts
 
       - name: Run deployment
-        run: |
-          ssh -i ~/.ssh/helos_lightsail ubuntu@65.1.151.96 <<'REMOTE'
-          set -euo pipefail
-
-          sudo deploy-helosfinance || true
-
-          UPDATED=0
-
-          while IFS= read -r artisan_path; do
-            APP_DIR="$(dirname "$artisan_path")"
-
-            if [ ! -f "$APP_DIR/resources/views/filament/pages/client-health-report.blade.php" ]; then
-              continue
-            fi
-
-            if [ ! -d "$APP_DIR/.git" ]; then
-              continue
-            fi
-
-            if ! sudo git -C "$APP_DIR" remote -v 2>/dev/null | grep -q "helosfinance"; then
-              continue
-            fi
-
-            sudo git config --global --add safe.directory "$APP_DIR" || true
-            sudo git -C "$APP_DIR" fetch origin helosfinance
-            sudo git -C "$APP_DIR" checkout helosfinance
-            sudo git -C "$APP_DIR" reset --hard origin/helosfinance
-
-            cd "$APP_DIR"
-            sudo php artisan migrate --force
-            sudo php artisan optimize:clear
-            sudo php artisan filament:clear-cached-components || true
-            sudo php artisan icons:clear || true
-            sudo php artisan config:cache
-            sudo php artisan route:cache
-            sudo php artisan view:clear
-
-            sudo chown -R www-data:www-data "$APP_DIR/storage" "$APP_DIR/bootstrap/cache" || true
-            UPDATED=1
-          done < <(sudo find /var/www /srv /home/ubuntu -maxdepth 6 -type f -name artisan 2>/dev/null)
-
-          if [ "$UPDATED" -ne 1 ]; then
-            echo "Unable to find a HELOS git checkout to update."
-            exit 1
-          fi
-
-          sudo systemctl reload php8.4-fpm || sudo systemctl reload php8.3-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || true
-          sudo systemctl reload nginx || true
-          REMOTE
+        run: ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 'sudo deploy-helosfinance'
