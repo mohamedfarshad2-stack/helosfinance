@@ -82,7 +82,12 @@ class StockAppSyncController extends Controller
 
                 $payload = array_merge($order, ['event_type' => $eventType]);
                 $impact = $calculator->calculate($business, $payload);
+                $eventImpact = $impact;
+                unset($eventImpact['economics']);
                 $externalId = $order['external_id'] ?? $this->stableExternalId($business->id, $payload);
+                $eventPayload = array_merge($payload, [
+                    'economics' => $impact['economics'] ?? [],
+                ]);
 
                 $event = OperationalEvent::query()->firstOrCreate(
                     [
@@ -92,16 +97,25 @@ class StockAppSyncController extends Controller
                         'external_id' => $externalId,
                     ],
                     [
-                        ...$impact,
+                        ...$eventImpact,
                         'channel' => $order['channel'] ?? null,
                         'department' => $order['department'] ?? 'Operations',
                         'quantity' => $order['quantity'] ?? 1,
-                        'payload' => array_merge($payload, [
-                            'economics' => $impact['economics'] ?? [],
-                        ]),
+                        'payload' => $eventPayload,
                         'occurred_at' => $order['occurred_at'] ?? now(),
                     ]
                 );
+
+                if (! $event->wasRecentlyCreated) {
+                    $event->forceFill([
+                        ...$eventImpact,
+                        'channel' => $order['channel'] ?? $event->channel,
+                        'department' => $order['department'] ?? $event->department,
+                        'quantity' => $order['quantity'] ?? $event->quantity,
+                        'payload' => array_merge($event->payload ?? [], $eventPayload),
+                        'occurred_at' => $order['occurred_at'] ?? $event->occurred_at,
+                    ])->save();
+                }
 
                 $stockMovements->record($business, $event, $payload);
 
