@@ -93,6 +93,8 @@ class ClientHealthReport extends Page implements HasForms
 
     public array $ownerSetupGuide = [];
 
+    public array $ownerCoach = [];
+
     public Collection $trend;
 
     public Collection $topExpenses;
@@ -172,6 +174,7 @@ class ClientHealthReport extends Page implements HasForms
             $this->trustStatus = [];
             $this->ownerBusinessMap = [];
             $this->ownerSetupGuide = [];
+            $this->ownerCoach = [];
 
             return;
         }
@@ -263,6 +266,7 @@ class ClientHealthReport extends Page implements HasForms
         $this->treasuryStory['trust_status'] = $this->trustStatus['section_statuses']['treasury'] ?? 'Estimated';
         $this->ownerBusinessMap = $this->buildOwnerBusinessMap();
         $this->ownerSetupGuide = $this->buildOwnerSetupGuide();
+        $this->ownerCoach = $this->buildOwnerCoach();
     }
 
     protected function getViewData(): array
@@ -286,6 +290,7 @@ class ClientHealthReport extends Page implements HasForms
             'trustStatus' => $this->trustStatus,
             'ownerBusinessMap' => $this->ownerBusinessMap,
             'ownerSetupGuide' => $this->ownerSetupGuide,
+            'ownerCoach' => $this->ownerCoach,
             'trend' => $this->trend,
             'topExpenses' => $this->topExpenses,
             'impact' => $this->impact,
@@ -315,7 +320,10 @@ class ClientHealthReport extends Page implements HasForms
             'Business type, owner group, maturity, and setup stage must be correct before HELOS guides the owner.',
             filled($this->business->business_type) && filled($this->business->business_maturity),
             BusinessResource::getUrl('edit', ['record' => $this->business]),
-            'Open business setup'
+            'Open business setup',
+            'Select the real business type, maturity level, client group, staff limit, and COD order source.',
+            'HELOS will show the correct screens for this client and hide the screens they do not need.',
+            'Wrong modules, wrong menu visibility, wrong owner guidance.'
         );
 
         $steps[] = $this->setupStep(
@@ -324,7 +332,10 @@ class ClientHealthReport extends Page implements HasForms
             'Rent, salaries, subscriptions, and fixed commitments set the survival line for break-even.',
             $fixedExpenses > 0,
             ExpenseResource::getUrl('index'),
-            'Open expenses'
+            'Open expenses',
+            'Add recurring rent, fixed salaries, subscriptions, loan payments, and other monthly commitments.',
+            'Break-even and cash pressure will know how much money the business must cover each month.',
+            'Break-even, safe to use, safe to withdraw, cash pressure.'
         );
 
         $steps[] = $this->setupStep(
@@ -333,7 +344,10 @@ class ClientHealthReport extends Page implements HasForms
             'HELOS needs staff and pay-cycle truth before payroll pressure and weekly work can be trusted.',
             $employees > 0,
             EmployeeResource::getUrl('index'),
-            'Open staff'
+            'Open staff',
+            'Add each staff member, choose their role, pay cycle, fixed salary if any, and active status.',
+            'Owner can see salary pressure, staff can be selected in work screens, and weekly pay can be tracked.',
+            'Salary pressure, weekly commitments, production pay, work assignment.'
         );
 
         if ($this->business->supportsBusinessType(Business::TYPE_SERVICE)) {
@@ -347,7 +361,10 @@ class ClientHealthReport extends Page implements HasForms
                 'Registration fees, monthly subscriptions, paid, part-paid, and overdue service money should be recorded here.',
                 $serviceRecords > 0,
                 ServiceBillingResource::getUrl('index'),
-                'Open service billing'
+                'Open service billing',
+                'Add each service client, monthly fee, registration fee, due date, paid amount, and balance.',
+                'HELOS can show who paid, who still owes, and what service money is due this month.',
+                'Service revenue, collections, overdue money, cash pressure.'
             );
         }
 
@@ -360,20 +377,29 @@ class ClientHealthReport extends Page implements HasForms
                 'Trading and manufacturing businesses need products before HELOS can read item-level sales and cost.',
                 $skuCount > 0,
                 SkuResource::getUrl('index'),
-                'Open products'
+                'Open products',
+                'Add or upload the product code, product name, business, sale price if known, and active status.',
+                'Orders and recipes can point to the right product instead of staff typing different names.',
+                'Product profit, order matching, SKU costing, stock movement.'
             );
         }
 
         if ($this->business->supportsProductionTracking()) {
             $recipeCount = SkuRecipeItem::query()->where('business_id', $this->business->id)->count();
+            $productionFoundationCount = $recipeCount
+                + $this->business->materialComponents()->count()
+                + $this->business->productionWorkSteps()->count();
 
             $steps[] = $this->setupStep(
                 'recipe',
                 'Add materials, work steps, and recipes',
                 'Manufacturing profit needs material components, labour steps, and SKU recipe lines before cost is trusted.',
-                $recipeCount > 0,
+                $productionFoundationCount > 0 && $recipeCount > 0,
                 SkuRecipeResource::getUrl('index'),
-                'Open recipes'
+                'Open recipes',
+                'Create reusable raw material components and labour work types, then upload or enter each product cost recipe.',
+                'HELOS can calculate product cost, production pay rates, and whether COD/wholesale parcels are profitable.',
+                'Product COGS, profit, break-even, production salary, stock value.'
             );
 
             $steps[] = $this->setupStep(
@@ -382,7 +408,10 @@ class ClientHealthReport extends Page implements HasForms
                 'Daily or weekly part production drives piece-work salary and production cost.',
                 ProductionEntry::query()->where('business_id', $this->business->id)->exists(),
                 ProductionEntryResource::getUrl('index'),
-                'Open production pay'
+                'Open production pay',
+                'Select worker, SKU, product part, work step, quantity produced, advance or deduction, then save.',
+                'HELOS can calculate pending weekly production salary separately from finished product sales.',
+                'Weekly salary, production commitments, material flow, cash pressure.'
             );
         }
 
@@ -400,7 +429,14 @@ class ClientHealthReport extends Page implements HasForms
                     : 'Use this when the client already runs Stock App. Stock App order events feed money and profitability.',
                 $usesInternalCod ? $internalCodOrders : ($integration || OperationalEvent::query()->where('business_id', $this->business->id)->exists()),
                 $usesInternalCod ? CodOrderWorkbench::getUrl() : ($integration ? OperationalEventResource::getUrl('index') : '#helos-revenue'),
-                $usesInternalCod ? 'Open COD orders' : ($integration ? 'Open sales events' : 'Review revenue flow')
+                $usesInternalCod ? 'Open COD orders' : ($integration ? 'Open sales events' : 'Review revenue flow'),
+                $usesInternalCod
+                    ? 'Upload the daily order sheet, confirm orders, add tracking numbers, and update delivered, returned, pending, or resend status.'
+                    : 'Enter the Stock App site URL and business code, then confirm orders are syncing into HELOS.',
+                $usesInternalCod
+                    ? 'HELOS can read COD lifecycle, courier cost, returns, resends, revenue, and delivery progress without Stock App.'
+                    : 'HELOS can receive real order lifecycle events from Stock App.',
+                'Revenue, COD profitability, returns, courier cost, goal progress.'
             );
         }
 
@@ -410,7 +446,10 @@ class ClientHealthReport extends Page implements HasForms
             'Bank review separates revenue, expenses, transfers, owner money, and shared/unallocated cash.',
             $bankRows > 0,
             $bankRows > 0 ? BankTransactionResource::getUrl('index') : BankStatementImport::getUrl(),
-            $bankRows > 0 ? 'Open bank review' : 'Import bank statement'
+            $bankRows > 0 ? 'Open bank review' : 'Import bank statement',
+            'Import bank rows or add cash rows, then classify each row as revenue, expense, transfer, loan, owner contribution, or owner withdrawal.',
+            'HELOS can separate real business money from transfers and owner money.',
+            'Treasury, safe to use, safe to withdraw, cash pressure, shared allocation.'
         );
 
         $steps[] = $this->setupStep(
@@ -419,7 +458,10 @@ class ClientHealthReport extends Page implements HasForms
             'A simple profit, revenue, delivery, or collection target lets HELOS explain distance and fastest path.',
             $goalConfigured,
             '#helos-goal',
-            'Open goal'
+            'Open goal',
+            'Choose one target for this month, such as profit, revenue, deliveries, or collections, and enter the amount.',
+            'HELOS can explain the gap, progress percentage, and what should improve first.',
+            'Goal progress, remaining deliveries, remaining revenue, owner focus.'
         );
 
         $completed = collect($steps)->where('done', true)->count();
@@ -439,17 +481,104 @@ class ClientHealthReport extends Page implements HasForms
         ];
     }
 
-    private function setupStep(string $key, string $title, string $why, bool $done, string $url, string $action): array
+    private function setupStep(string $key, string $title, string $why, bool $done, string $url, string $action, string $whatToEnter = '', string $whenDone = '', string $numbersAtRisk = ''): array
     {
         return [
             'key' => $key,
             'title' => $title,
             'why' => $why,
+            'what_to_enter' => $whatToEnter,
+            'when_done' => $whenDone,
+            'numbers_at_risk' => $numbersAtRisk,
             'done' => $done,
             'status' => $done ? 'Done' : 'Needed',
             'tone' => $done ? 'green' : 'amber',
             'url' => $url,
             'action' => $action,
+        ];
+    }
+
+    private function buildOwnerCoach(): array
+    {
+        if (! $this->business instanceof Business) {
+            return [];
+        }
+
+        $steps = collect($this->ownerSetupGuide['steps'] ?? []);
+        $next = $this->ownerSetupGuide['next_step'] ?? null;
+        $progress = (int) ($this->ownerSetupGuide['progress'] ?? 0);
+        $criticalWarnings = count($this->trustStatus['warnings']['critical'] ?? []);
+        $importantWarnings = count($this->trustStatus['warnings']['important'] ?? []);
+        $trustLabel = $this->trustStatus['status_label'] ?? 'Estimated';
+        $openTasks = (int) ($this->operationalSummary['Tasks due today'] ?? 0) + (int) ($this->operationalSummary['High priority'] ?? 0);
+
+        $mode = match (true) {
+            $progress < 50 => 'Setup mode',
+            $criticalWarnings > 0 => 'Repair mode',
+            $importantWarnings > 0 || $trustLabel !== 'Verified' => 'Validation mode',
+            $openTasks > 0 => 'Daily work mode',
+            default => 'Owner review mode',
+        };
+
+        $headline = match ($mode) {
+            'Setup mode' => 'HELOS is not ready to guide decisions yet. Finish setup first.',
+            'Repair mode' => 'HELOS found critical gaps. Fix these before trusting owner numbers.',
+            'Validation mode' => 'HELOS can read the business, but some numbers are still estimated.',
+            'Daily work mode' => 'The business is set up enough to operate. Clear today\'s work next.',
+            default => 'The business is ready for owner review today.',
+        };
+
+        $newUserVerdict = match (true) {
+            $progress < 70 => 'Needs guided onboarding',
+            $criticalWarnings > 0 => 'Needs owner or admin review',
+            $importantWarnings > 0 || $trustLabel !== 'Verified' => 'Can operate with caution',
+            default => 'Can operate normally',
+        };
+
+        $nextAction = $next ?: [
+            'title' => $openTasks > 0 ? 'Open today\'s work' : 'Review Owner Home',
+            'why' => $openTasks > 0
+                ? 'Daily work is waiting. Staff should clear operational tasks before owner reads the month.'
+                : 'Setup is complete enough for owner review. Use the map and warnings to keep the business controlled.',
+            'what_to_enter' => $openTasks > 0 ? 'Open the task list and complete the oldest high-priority item.' : 'Refresh the report and review red or amber flags.',
+            'when_done' => $openTasks > 0 ? 'The queue becomes lighter and owner numbers become more current.' : 'Owner can read the month with more confidence.',
+            'numbers_at_risk' => $openTasks > 0 ? 'Daily work, cash pressure, order lifecycle.' : 'Owner health, goals, break-even.',
+            'url' => $openTasks > 0 ? TodaysWork::getUrl() : '#helos-business-picture',
+            'action' => $openTasks > 0 ? 'Open today\'s work' : 'Review owner map',
+        ];
+
+        return [
+            'mode' => $mode,
+            'headline' => $headline,
+            'new_user_verdict' => $newUserVerdict,
+            'trust_label' => $trustLabel,
+            'setup_progress' => $progress,
+            'next_action' => $nextAction,
+            'can_client_handle_alone' => $newUserVerdict === 'Can operate normally',
+            'coach_cards' => [
+                [
+                    'title' => 'Can a new person use this today?',
+                    'value' => $newUserVerdict,
+                    'note' => $newUserVerdict === 'Can operate normally'
+                        ? 'A non-finance user can follow the daily work and owner map.'
+                        : 'They should follow the next guided step before relying on the dashboard.',
+                ],
+                [
+                    'title' => 'What should they do first?',
+                    'value' => $nextAction['title'] ?? 'Review Owner Home',
+                    'note' => $nextAction['why'] ?? 'Open the next guided step.',
+                ],
+                [
+                    'title' => 'What number is unsafe if skipped?',
+                    'value' => $nextAction['numbers_at_risk'] ?? 'Owner metrics',
+                    'note' => 'HELOS keeps this visible so missing setup does not become false confidence.',
+                ],
+            ],
+            'do_first' => $steps
+                ->where('done', false)
+                ->take(3)
+                ->values()
+                ->all(),
         ];
     }
 

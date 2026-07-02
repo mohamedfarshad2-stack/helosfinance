@@ -69,14 +69,14 @@ class WebsiteInsights extends Page
     {
         $user = Auth::user();
 
-        return $user?->isInternalAdmin() || false;
+        return $user?->isInternalAdmin() || $user?->isOwner() || false;
     }
 
     public static function canAccess(): bool
     {
         $user = Auth::user();
 
-        return Auth::check() && ($user?->isInternalAdmin() || false);
+        return Auth::check() && ($user?->isInternalAdmin() || $user?->isOwner() || false);
     }
 
     private function loadInsights(): void

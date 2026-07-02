@@ -36,6 +36,7 @@
                 $trustCenter = $trustStatus['trust_center'] ?? ['headline' => '', 'cards' => []];
                 $ownerMap = $ownerBusinessMap ?? ['headline' => '', 'default_key' => 'trust', 'nodes' => [], 'top_actions' => []];
                 $setupGuide = $ownerSetupGuide ?? ['steps' => [], 'progress' => 0, 'completed' => 0, 'total' => 0];
+                $coach = $ownerCoach ?? ['coach_cards' => [], 'next_action' => null, 'do_first' => []];
             @endphp
 
             <x-filament::section>
@@ -242,6 +243,70 @@
 
             <x-filament::section>
                 <div class="grid gap-4">
+                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/30">
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <div class="text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-200">HELOS Coach</div>
+                                <div class="mt-2 text-2xl font-black text-gray-950 dark:text-white">{{ $coach['headline'] ?? 'HELOS is checking what to do next.' }}</div>
+                                <div class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                                    Mode: <strong>{{ $coach['mode'] ?? 'Setup mode' }}</strong>
+                                    <span class="mx-2">|</span>
+                                    New user verdict: <strong>{{ $coach['new_user_verdict'] ?? 'Needs guided onboarding' }}</strong>
+                                </div>
+                            </div>
+                            <div class="min-w-[160px] rounded-xl bg-white p-3 text-right shadow-sm dark:bg-gray-950">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Setup Ready</div>
+                                <div class="mt-1 text-3xl font-black text-gray-950 dark:text-white">{{ (int) ($coach['setup_progress'] ?? 0) }}%</div>
+                                <div class="text-xs text-gray-500">{{ $coach['trust_label'] ?? 'Estimated' }}</div>
+                            </div>
+                        </div>
+
+                        @if (! empty($coach['next_action'] ?? null))
+                            @php
+                                $coachNext = $coach['next_action'];
+                            @endphp
+                            <div class="mt-4 rounded-xl border border-emerald-200 bg-white p-4 shadow-sm dark:border-emerald-900 dark:bg-gray-950">
+                                <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+                                    <div>
+                                        <div class="text-xs font-bold uppercase tracking-wide text-gray-500">Do this next</div>
+                                        <div class="mt-1 text-lg font-black text-gray-950 dark:text-white">{{ $coachNext['title'] ?? 'Next step' }}</div>
+                                        <div class="mt-2 grid gap-2 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-3">
+                                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                                <div class="text-[11px] font-bold uppercase tracking-wide text-gray-500">What to enter</div>
+                                                <div class="mt-1">{{ $coachNext['what_to_enter'] ?? 'Open the screen and complete the missing information.' }}</div>
+                                            </div>
+                                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                                <div class="text-[11px] font-bold uppercase tracking-wide text-gray-500">When done</div>
+                                                <div class="mt-1">{{ $coachNext['when_done'] ?? 'HELOS can trust this part more.' }}</div>
+                                            </div>
+                                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                                <div class="text-[11px] font-bold uppercase tracking-wide text-gray-500">Unsafe if skipped</div>
+                                                <div class="mt-1">{{ $coachNext['numbers_at_risk'] ?? 'Owner numbers' }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <a href="{{ $coachNext['url'] ?? '#' }}" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-500">
+                                        {{ $coachNext['action'] ?? 'Open next step' }}
+                                    </a>
+                                </div>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="grid gap-3 md:grid-cols-3">
+                        @foreach (($coach['coach_cards'] ?? []) as $card)
+                            <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ $card['title'] ?? 'Coach item' }}</div>
+                                <div class="mt-2 text-lg font-black text-gray-950 dark:text-white">{{ $card['value'] ?? '-' }}</div>
+                                <div class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $card['note'] ?? '' }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </x-filament::section>
+
+            <x-filament::section>
+                <div class="grid gap-4">
                     <div class="flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Start Here</div>
@@ -290,6 +355,17 @@
                                     <div class="rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide {{ $badgeClasses }}">{{ $step['status'] ?? 'Needed' }}</div>
                                 </div>
                                 <div class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $step['why'] ?? '' }}</div>
+                                <div class="mt-3 grid gap-2 text-xs text-gray-600 dark:text-gray-300">
+                                    <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">
+                                        <span class="font-bold text-gray-800 dark:text-gray-100">Enter: </span>{{ $step['what_to_enter'] ?? 'Complete the required fields on this screen.' }}
+                                    </div>
+                                    <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">
+                                        <span class="font-bold text-gray-800 dark:text-gray-100">Then HELOS can trust: </span>{{ $step['when_done'] ?? 'This setup area.' }}
+                                    </div>
+                                    <div class="rounded-lg bg-white/70 px-3 py-2 dark:bg-gray-900/70">
+                                        <span class="font-bold text-gray-800 dark:text-gray-100">Unsafe if skipped: </span>{{ $step['numbers_at_risk'] ?? 'Owner metrics.' }}
+                                    </div>
+                                </div>
                                 <a href="{{ $step['url'] ?? '#' }}" class="mt-3 inline-flex text-sm font-bold text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100">
                                     {{ $step['action'] ?? 'Open' }}
                                 </a>
