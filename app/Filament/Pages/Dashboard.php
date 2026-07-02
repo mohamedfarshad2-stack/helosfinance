@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Pages\WebsiteInsights;
 use App\Filament\Pages\TodaysWork;
 use Filament\Pages\Dashboard as BaseDashboard;
@@ -27,7 +26,7 @@ class Dashboard extends BaseDashboard
         }
 
         if ($user?->isOwner()) {
-            $this->redirect(ClientHealthReport::getUrl());
+            $this->redirect(WebsiteInsights::getUrl());
 
             return;
         }
@@ -35,6 +34,6 @@ class Dashboard extends BaseDashboard
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::user()?->isInternalAdmin() ?? false;
+        return (bool) (Auth::user()?->isInternalAdmin());
     }
 }
