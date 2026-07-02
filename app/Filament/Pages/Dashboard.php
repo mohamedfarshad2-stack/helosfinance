@@ -2,8 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Pages\WebsiteInsights;
 use App\Filament\Pages\TodaysWork;
+use App\Filament\Pages\WebsiteInsights;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Illuminate\Support\Facades\Auth;
 

@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Expense;
-use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Pages\BankStatementImport;
 use App\Filament\Pages\QuickExpenseEntry;
+use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MaterialComponentResource;
@@ -143,7 +143,7 @@ class BusinessArchitectureTest extends TestCase
         $this->assertTrue(ProductionEntryResource::canAccess());
     }
 
-    public function test_client_owners_land_on_the_cfo_dashboard_and_can_access_setup_surfaces(): void
+    public function test_client_owners_land_on_owner_home_and_can_access_setup_surfaces(): void
     {
         $business = Business::query()->create([
             'name' => 'Service Client',
@@ -199,6 +199,13 @@ class BusinessArchitectureTest extends TestCase
             ->assertSee('Money movement')
             ->assertSee('sales source')
             ->assertSee('Production activity')
+            ->assertSee('HELOS Coach')
+            ->assertSee('New user verdict')
+            ->assertSee('Needs guided onboarding')
+            ->assertSee('What to enter')
+            ->assertSee('Then HELOS can trust')
+            ->assertSee('Unsafe if skipped')
+            ->assertSee('Can a new person use this today?')
             ->assertSee('What to do next')
             ->assertSee('What happened')
             ->assertSee('Why it matters')
