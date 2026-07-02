@@ -32,7 +32,7 @@ class ProductionEntryResource extends Resource
 
     protected static ?string $model = ProductionEntry::class;
     protected static ?string $navigationGroup = 'Products & Production';
-    protected static ?string $navigationLabel = 'Production Pay';
+    protected static ?string $navigationLabel = 'Production & Piece Pay';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
     public static function form(Form $form): Form
@@ -185,6 +185,8 @@ class ProductionEntryResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
             ->defaultSort('produced_on', 'desc')
+            ->emptyStateHeading('No production or piece-pay records yet')
+            ->emptyStateDescription('Record daily part or finished-product production here. HELOS uses these rows to calculate weekly employee piece-pay.')
             ->columns([
                 Tables\Columns\TextColumn::make('produced_on')->date()->sortable(),
                 Tables\Columns\TextColumn::make('employee_name')->searchable(),

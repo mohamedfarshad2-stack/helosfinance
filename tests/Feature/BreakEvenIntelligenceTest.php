@@ -132,7 +132,7 @@ class BreakEvenIntelligenceTest extends TestCase
                 'leakage_amount' => 0,
                 'recovery_amount' => 0,
                 'payload' => ['economics' => []],
-                'occurred_at' => now()->subDays(5),
+                'occurred_at' => now()->subHours(6),
             ]);
 
             OperationalEvent::query()->create([
@@ -148,7 +148,7 @@ class BreakEvenIntelligenceTest extends TestCase
                 'leakage_amount' => 0,
                 'recovery_amount' => 0,
                 'payload' => ['economics' => []],
-                'occurred_at' => now()->subDays(4),
+                'occurred_at' => now()->subHours(5),
             ]);
         }
 
@@ -165,7 +165,7 @@ class BreakEvenIntelligenceTest extends TestCase
             'leakage_amount' => 0,
             'recovery_amount' => 0,
             'payload' => ['economics' => []],
-            'occurred_at' => now()->subDays(5),
+            'occurred_at' => now()->subHours(6),
         ]);
 
         OperationalEvent::query()->create([
@@ -181,7 +181,7 @@ class BreakEvenIntelligenceTest extends TestCase
             'leakage_amount' => 0,
             'recovery_amount' => 0,
             'payload' => ['economics' => []],
-            'occurred_at' => now()->subDays(4),
+            'occurred_at' => now()->subHours(5),
         ]);
 
         $report = app(BreakEvenIntelligenceService::class)->forCurrentMonth($business);

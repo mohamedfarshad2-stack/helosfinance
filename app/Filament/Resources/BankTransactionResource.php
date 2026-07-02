@@ -26,7 +26,7 @@ class BankTransactionResource extends Resource
 {
     protected static ?string $model = BankTransaction::class;
     protected static ?string $navigationGroup = 'Money';
-    protected static ?string $navigationLabel = 'Bank & Cash Review';
+    protected static ?string $navigationLabel = 'Bank Review';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
     public static function form(Form $form): Form
@@ -96,7 +96,10 @@ class BankTransactionResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))->defaultSort('transaction_date', 'desc')->columns([
+        return $table->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))->defaultSort('transaction_date', 'desc')
+            ->emptyStateHeading('No bank or cash rows to review')
+            ->emptyStateDescription('Import a statement or add a cash transaction. Then choose whether each row is revenue, expense, transfer, owner money, loan, or other.')
+            ->columns([
             Tables\Columns\TextColumn::make('transaction_date')->date()->sortable(),
             Tables\Columns\TextColumn::make('description')->searchable()->limit(30),
             Tables\Columns\TextColumn::make('money_container')->label('Account')->placeholder('Unassigned')->badge(),

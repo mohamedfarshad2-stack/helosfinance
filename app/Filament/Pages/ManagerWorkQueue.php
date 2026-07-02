@@ -20,7 +20,7 @@ class ManagerWorkQueue extends Page
 {
     protected static ?string $slug = 'work-queue';
     protected static ?string $navigationGroup = 'Work';
-    protected static ?string $navigationLabel = 'Work Queue';
+    protected static ?string $navigationLabel = 'Owner Work Queue';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?int $navigationSort = 1;
     protected static string $view = 'filament.pages.manager-work-queue';
@@ -108,13 +108,13 @@ class ManagerWorkQueue extends Page
                 'icon' => 'heroicon-o-arrow-up-tray',
             ],
             [
-                'label' => 'Bank & Cash Review',
+                'label' => 'Bank Review',
                 'description' => 'Classify bank transactions and shared treasury rows.',
                 'url' => BankTransactionResource::getUrl('index'),
                 'icon' => 'heroicon-o-banknotes',
             ],
             [
-                'label' => 'Staff & Pay',
+                'label' => 'Staff & Salary Setup',
                 'description' => 'Review salaried staff for the client business.',
                 'url' => EmployeeResource::getUrl('index'),
                 'icon' => 'heroicon-o-user-group',
@@ -132,7 +132,7 @@ class ManagerWorkQueue extends Page
                 'icon' => 'heroicon-o-receipt-percent',
             ],
             [
-                'label' => 'Material Stock',
+                'label' => 'Raw Material Stock',
                 'description' => 'Track stock and material movements for manufacturing clients.',
                 'url' => MaterialLedgerResource::getUrl('index'),
                 'icon' => 'heroicon-o-rectangle-stack',

@@ -37,23 +37,26 @@ class NavigationLanguageTest extends TestCase
             ProductionWorkStepResource::getNavigationLabel(),
         ];
 
-        $this->assertContains('Businesses', $labels);
-        $this->assertContains('Staff & Pay', $labels);
+        $this->assertContains('Business Setup', $labels);
+        $this->assertContains('Staff & Salary Setup', $labels);
         $this->assertContains('Expenses & Payables', $labels);
-        $this->assertContains('Bank & Cash Review', $labels);
-        $this->assertContains('Add Expense', $labels);
+        $this->assertContains('Bank Review', $labels);
+        $this->assertContains('Quick Expense', $labels);
         $this->assertContains('Import Bank Statement', $labels);
-        $this->assertContains('Sales & Order Activity', $labels);
-        $this->assertContains('Products', $labels);
-        $this->assertContains('Product Recipes', $labels);
-        $this->assertContains('Raw Materials', $labels);
-        $this->assertContains('Material Stock', $labels);
-        $this->assertContains('Production Pay', $labels);
-        $this->assertContains('Production Work Types', $labels);
+        $this->assertContains('Stock App Order Events', $labels);
+        $this->assertContains('Products / SKUs', $labels);
+        $this->assertContains('Product Cost Recipes', $labels);
+        $this->assertContains('Raw Material Components', $labels);
+        $this->assertContains('Raw Material Stock', $labels);
+        $this->assertContains('Production & Piece Pay', $labels);
+        $this->assertContains('Labour Work Types', $labels);
 
         $this->assertNotContains('Operational Events', $labels);
         $this->assertNotContains('Expense Review', $labels);
         $this->assertNotContains('Client Businesses', $labels);
         $this->assertNotContains('Weekly Production Pay', $labels);
+        $this->assertNotContains('Staff & Pay', $labels);
+        $this->assertNotContains('Bank & Cash Review', $labels);
+        $this->assertNotContains('Product Recipes', $labels);
     }
 }

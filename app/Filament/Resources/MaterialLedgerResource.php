@@ -26,7 +26,7 @@ class MaterialLedgerResource extends Resource
 
     protected static ?string $model = MaterialLedgerEntry::class;
     protected static ?string $navigationGroup = 'Products & Production';
-    protected static ?string $navigationLabel = 'Material Stock';
+    protected static ?string $navigationLabel = 'Raw Material Stock';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
     protected static ?int $navigationSort = 5;
 

@@ -26,7 +26,7 @@ class ServiceBillingResource extends Resource
 
     protected static ?string $model = ServiceBillingRecord::class;
     protected static ?string $navigationGroup = 'Sales & Work';
-    protected static ?string $navigationLabel = 'Service Billing';
+    protected static ?string $navigationLabel = 'Service Income';
     protected static ?string $navigationIcon = 'heroicon-o-credit-card';
     protected static ?int $navigationSort = 2;
 
@@ -120,6 +120,8 @@ class ServiceBillingResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToServiceBusinesses($query))
             ->defaultSort('due_on')
+            ->emptyStateHeading('No service income records yet')
+            ->emptyStateDescription('Use this for service businesses that collect registration fees or monthly subscription money. Add the client, amount to collect, due date, and paid status.')
             ->columns([
                 Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
                 Tables\Columns\TextColumn::make('client_name')->label('Client')->searchable(),

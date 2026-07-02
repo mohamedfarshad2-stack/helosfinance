@@ -400,7 +400,8 @@ class WorkQueueService
     {
         $events = OperationalEvent::query()
             ->where('business_id', $business->id)
-            ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
+            ->where('occurred_at', '>=', now()->subDays(45))
+            ->where('occurred_at', '<=', now()->endOfDay())
             ->whereIn('event_type', [
                 OperationalEvent::ORDER_CREATED,
                 OperationalEvent::ORDER_CONFIRMED,

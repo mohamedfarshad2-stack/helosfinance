@@ -24,7 +24,7 @@ class CodOrderSourceResource extends Resource
 
     protected static ?string $model = CodOrderSource::class;
     protected static ?string $navigationGroup = 'Setup';
-    protected static ?string $navigationLabel = 'Order Sources';
+    protected static ?string $navigationLabel = 'COD Order Sources';
     protected static ?string $navigationIcon = 'heroicon-o-megaphone';
     protected static ?int $navigationSort = 13;
 

@@ -25,14 +25,14 @@ class SkuResource extends Resource
 
     protected static ?string $model = Sku::class;
     protected static ?string $navigationGroup = 'Products & Production';
-    protected static ?string $navigationLabel = 'Products';
+    protected static ?string $navigationLabel = 'Products / SKUs';
     protected static ?string $navigationIcon = 'heroicon-o-cube';
     protected static ?int $navigationSort = 3;
 
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Section::make('Product')
+            Section::make('Product / SKU')
                 ->schema([
                     Select::make('business_id')
                         ->options(fn () => static::businessOptions())
@@ -60,7 +60,7 @@ class SkuResource extends Resource
                     Checkbox::make('active')->default(true),
                 ])
                 ->columns(2),
-            Section::make('Fallback costs')
+            Section::make('Simple fallback costs')
                 ->description('Use these only when this product does not have a product recipe yet. When a recipe exists, HELOS uses recipe materials and labor first.')
                 ->collapsed()
                 ->schema([
@@ -77,6 +77,8 @@ class SkuResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToSkuBusinesses($query))
+            ->emptyStateHeading('No products added yet')
+            ->emptyStateDescription('Start here before product costing. Add or upload each product/SKU, then build its cost recipe with materials and labour.')
             ->columns([
             Tables\Columns\TextColumn::make('code')->searchable(),
             Tables\Columns\TextColumn::make('name')->searchable(),

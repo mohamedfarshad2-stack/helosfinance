@@ -122,12 +122,12 @@ class TrustValidationService
             'Missing SKU recipe' => [
                 'action_label' => 'Fix product recipes',
                 'action_url' => SkuRecipeResource::getUrl('index'),
-                'fix_guidance' => 'Open Product Recipes, select the product, then add the missing material and labour lines.',
+                'fix_guidance' => 'Open Product Cost Recipes, select the product, then add the missing material and labour lines.',
             ],
             'Missing material cost' => [
                 'action_label' => 'Fix product costs',
                 'action_url' => SkuResource::getUrl('index'),
-                'fix_guidance' => 'Open Products or Product Recipes and enter the missing material cost truth.',
+                'fix_guidance' => 'Open Products / SKUs or Product Cost Recipes and enter the missing material cost truth.',
             ],
             'Missing stock mapping', 'Missing lifecycle stages' => [
                 'action_label' => 'Review sales activity',
@@ -142,17 +142,17 @@ class TrustValidationService
             'Missing salary mapping' => [
                 'action_label' => 'Fix staff pay',
                 'action_url' => EmployeeResource::getUrl('index'),
-                'fix_guidance' => 'Open Staff & Pay and complete the salary or pay setup for active employees.',
+                'fix_guidance' => 'Open Staff & Salary Setup and complete the salary or pay setup for active employees.',
             ],
             'Missing business allocation', 'Missing treasury allocation' => [
                 'action_label' => 'Fix bank review',
                 'action_url' => BankTransactionResource::getUrl('index'),
-                'fix_guidance' => 'Open Bank & Cash Review, classify the row, and allocate it to the correct business or money container.',
+                'fix_guidance' => 'Open Bank Review, classify the row, and allocate it to the correct business or money container.',
             ],
             'Missing material SKU link' => [
                 'action_label' => 'Fix material stock',
                 'action_url' => MaterialLedgerResource::getUrl('index'),
-                'fix_guidance' => 'Open Material Stock and link material rows to the correct product where needed.',
+                'fix_guidance' => 'Open Raw Material Stock and link material rows to the correct product where needed.',
             ],
             'No monthly goal set' => [
                 'action_label' => 'Set monthly goal',

@@ -83,50 +83,54 @@
                 };
             };
 
-            $renderTask = function (array $task) use ($taskTone, $taskValue): void {
+            $renderTask = function (array $task) use ($taskTone, $taskValue): string {
                 $tone = $taskTone($task['priority'] ?? 'medium');
                 $value = $taskValue($task['priority'] ?? 'medium');
                 $related = $task['related_record'] ?? null;
                 $hasLink = is_array($related) && ! empty($related['url']);
-                ?>
-                <div class="rounded-lg border p-4 dark:border-gray-800 {{ $tone }}">
+                $status = e($task['status_label'] ?? 'Waiting');
+                $title = e($task['title'] ?? 'Work item');
+                $why = e($task['why_it_matters'] ?? '');
+                $priority = e(ucfirst((string) ($task['priority'] ?? 'medium')));
+                $action = e($task['recommended_action'] ?? 'Open the item and finish the next step.');
+                $assigned = e($task['assigned_user'] ?? 'Unassigned');
+                $relatedLabel = is_array($related) ? e($related['label'] ?? 'Related record') : '';
+                $relatedUrl = $hasLink ? e($related['url']) : '';
+                $link = $hasLink
+                    ? '<a href="'.$relatedUrl.'" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Open record</a>'
+                    : '';
+
+                return <<<HTML
+                <div class="rounded-lg border p-4 dark:border-gray-800 {$tone}">
                     <div class="flex items-start justify-between gap-4">
                         <div>
-                            <div class="text-xs uppercase tracking-wide text-gray-500">{{ $task['status_label'] ?? 'Waiting' }}</div>
-                            <div class="mt-1 text-base font-semibold text-gray-950 dark:text-white">{{ $task['title'] ?? 'Work item' }}</div>
-                            <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $task['why_it_matters'] ?? '' }}</div>
+                            <div class="text-xs uppercase tracking-wide text-gray-500">{$status}</div>
+                            <div class="mt-1 text-base font-semibold text-gray-950 dark:text-white">{$title}</div>
+                            <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">{$why}</div>
                         </div>
                         <div class="text-right">
                             <div class="text-xs uppercase tracking-wide text-gray-500">Priority</div>
-                            <div class="mt-1 text-sm font-semibold {{ $value }}">{{ ucfirst((string) ($task['priority'] ?? 'medium')) }}</div>
+                            <div class="mt-1 text-sm font-semibold {$value}">{$priority}</div>
                         </div>
                     </div>
 
                     <div class="mt-4 grid gap-3 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
                         <div>
                             <div class="text-xs uppercase tracking-wide text-gray-500">What to do</div>
-                            <div class="mt-1">{{ $task['recommended_action'] ?? 'Open the item and finish the next step.' }}</div>
+                            <div class="mt-1">{$action}</div>
                         </div>
                         <div>
                             <div class="text-xs uppercase tracking-wide text-gray-500">Who should take it</div>
-                            <div class="mt-1">{{ $task['assigned_user'] ?? 'Unassigned' }}</div>
+                            <div class="mt-1">{$assigned}</div>
                         </div>
                     </div>
 
                     <div class="mt-4 flex flex-wrap items-center gap-3 text-sm">
-                        @if ($hasLink)
-                            <x-filament::button tag="a" href="{{ $related['url'] }}" color="gray" size="sm" icon="heroicon-o-arrow-top-right-on-square">
-                                Open record
-                            </x-filament::button>
-                        @endif
-                        @if (is_array($related))
-                            <div class="text-gray-500 dark:text-gray-400">
-                                {{ $related['label'] ?? 'Related record' }}
-                            </div>
-                        @endif
+                        {$link}
+                        <div class="text-gray-500 dark:text-gray-400">{$relatedLabel}</div>
                     </div>
                 </div>
-                <?php
+HTML;
             };
         @endphp
 

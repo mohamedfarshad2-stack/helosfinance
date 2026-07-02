@@ -140,8 +140,8 @@ class Business extends Model
             'daily_cfo_briefing' => 'Daily CFO Briefing',
             'decision_ranking' => 'Decision Ranking',
             'production_tracking' => 'Production Tracking',
-            'material_ledger' => 'Material Stock',
-            'sku_recipe_bom' => 'Product Recipes',
+            'material_ledger' => 'Raw Material Stock',
+            'sku_recipe_bom' => 'Product Cost Recipes',
             'material_consumption' => 'Material Consumption',
             'inventory_aging' => 'Inventory Aging',
         ];

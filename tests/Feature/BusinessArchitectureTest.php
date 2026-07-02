@@ -312,7 +312,7 @@ class BusinessArchitectureTest extends TestCase
 
         $this->get(MaterialComponentResource::getUrl('index'))
             ->assertOk()
-            ->assertSee('Raw Materials')
+            ->assertSee('Raw Material Components')
             ->assertSee('Upload components')
             ->assertSee('Download sample');
 
@@ -328,9 +328,9 @@ class BusinessArchitectureTest extends TestCase
 
         $this->get(SkuResource::getUrl('create'))
             ->assertOk()
-            ->assertSee('Product')
+            ->assertSee('Product / SKU')
             ->assertSee('Expected sale price')
-            ->assertSee('Fallback costs');
+            ->assertSee('Simple fallback costs');
 
         $this->get(SkuRecipeResource::getUrl('create'))
             ->assertOk()

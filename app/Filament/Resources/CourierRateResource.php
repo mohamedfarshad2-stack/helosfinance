@@ -24,15 +24,15 @@ class CourierRateResource extends Resource
 
     protected static ?string $model = CourierRate::class;
     protected static ?string $navigationGroup = 'Setup';
-    protected static ?string $navigationLabel = 'Courier Rates';
+    protected static ?string $navigationLabel = 'Courier Charges';
     protected static ?string $navigationIcon = 'heroicon-o-truck';
     protected static ?int $navigationSort = 12;
 
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Section::make('Courier rate')
-                ->description('Owner-controlled default rates. Staff selects the courier on COD orders; the order can still be adjusted when a parcel has a special charge.')
+            Section::make('Courier charge setup')
+                ->description('Set the normal delivery, return, and resend charge for each courier. Staff only chooses the courier on COD orders.')
                 ->schema([
                     Select::make('business_id')
                         ->label('Business')
@@ -78,6 +78,8 @@ class CourierRateResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToAccessibleBusinesses($query))
             ->defaultSort('courier_name')
+            ->emptyStateHeading('No courier charges set yet')
+            ->emptyStateDescription('Add each courier once with delivery, return, and resend charges. Staff can then select the courier on COD orders without typing charges every time.')
             ->columns([
                 Tables\Columns\TextColumn::make('business.name')->label('Business')->searchable()->toggleable(),
                 Tables\Columns\TextColumn::make('courier_name')->label('Courier')->searchable(),

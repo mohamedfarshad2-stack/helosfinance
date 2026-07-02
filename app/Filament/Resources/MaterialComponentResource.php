@@ -25,7 +25,7 @@ class MaterialComponentResource extends Resource
 
     protected static ?string $navigationGroup = 'Products & Production';
 
-    protected static ?string $navigationLabel = 'Raw Materials';
+    protected static ?string $navigationLabel = 'Raw Material Components';
 
     protected static ?string $navigationIcon = 'heroicon-o-squares-2x2';
 
@@ -88,6 +88,8 @@ class MaterialComponentResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
             ->defaultSort('name')
+            ->emptyStateHeading('No raw material components yet')
+            ->emptyStateDescription('Add buying units such as DSI sheet, glue, rexine, or thread. HELOS converts each buying unit into cost per used piece including waste.')
             ->columns([
                 Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
                 Tables\Columns\TextColumn::make('name')->searchable(),

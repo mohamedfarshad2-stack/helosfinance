@@ -24,7 +24,7 @@ class QuickExpenseEntry extends Page implements HasForms
 
     protected static ?string $slug = 'quick-expense-entry';
     protected static ?string $navigationGroup = 'Money';
-    protected static ?string $navigationLabel = 'Add Expense';
+    protected static ?string $navigationLabel = 'Quick Expense';
     protected static ?string $navigationIcon = 'heroicon-o-bolt';
     protected static string $view = 'filament.pages.quick-expense-entry';
 

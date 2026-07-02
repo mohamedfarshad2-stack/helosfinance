@@ -22,7 +22,7 @@ class OperationalEventResource extends Resource
 {
     protected static ?string $model = OperationalEvent::class;
     protected static ?string $navigationGroup = 'Sales & Work';
-    protected static ?string $navigationLabel = 'Sales & Order Activity';
+    protected static ?string $navigationLabel = 'Stock App Order Events';
     protected static ?string $navigationIcon = 'heroicon-o-bolt';
 
     public static function form(Form $form): Form

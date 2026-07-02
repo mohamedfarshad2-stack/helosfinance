@@ -182,6 +182,8 @@ class CodOrderResource extends Resource
             ->defaultSort('order_date', 'desc')
             ->paginationPageOptions([25, 50, 100])
             ->defaultPaginationPageOption(100)
+            ->emptyStateHeading('No internal COD orders yet')
+            ->emptyStateDescription('Upload the daily order sheet to start calling work, add tracking after dispatch, then update delivered, returned, pending, or resend status.')
             ->columns([
                 Grid::make([
                     'default' => 2,

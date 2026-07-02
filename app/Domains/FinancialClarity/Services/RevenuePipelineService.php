@@ -46,7 +46,7 @@ class RevenuePipelineService
                 'orders' => [],
                 'actions' => [
                     $serviceExpected > 0 ? 'Follow up service clients with unpaid or part-paid monthly fees.' : 'Capture confirmed and tracking-added orders so the COD pipeline becomes visible.',
-                    $business->supportsBusinessType(Business::TYPE_SERVICE) ? 'Record registration fees and monthly subscription payments in Service Billing.' : 'Tag wholesale orders clearly so collections can be read separately from COD.',
+                    $business->supportsBusinessType(Business::TYPE_SERVICE) ? 'Record registration fees and monthly subscription payments in Service Income.' : 'Tag wholesale orders clearly so collections can be read separately from COD.',
                 ],
             ];
         }

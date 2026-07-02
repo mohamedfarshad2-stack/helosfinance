@@ -27,7 +27,7 @@ class BusinessResource extends Resource
 {
     protected static ?string $model = Business::class;
     protected static ?string $navigationGroup = 'Setup';
-    protected static ?string $navigationLabel = 'Businesses';
+    protected static ?string $navigationLabel = 'Business Setup';
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
 
     public static function form(Form $form): Form
@@ -148,7 +148,7 @@ class BusinessResource extends Resource
                 ->schema([
                     Placeholder::make('setup_guidance')
                         ->hiddenLabel()
-                        ->content(new HtmlString('<strong>Start here.</strong> Choose the business type, maturity, name, industry, currency, and clarity start date. After that, move this client to fixed expense setup.')),
+                        ->content(new HtmlString('<strong>Start here.</strong> Choose what kind of business this is. HELOS uses this to decide whether the owner needs COD orders, service billing, product costing, production, or only money review.')),
                 ]),
             Section::make('Fixed cost setup')
                 ->visible(fn ($get): bool => $get('onboarding_status') === 'fixed_expenses')
@@ -225,7 +225,7 @@ class BusinessResource extends Resource
                 ->schema([
                     Placeholder::make('sku_guidance')
                         ->hiddenLabel()
-                        ->content(new HtmlString('<strong>Next job:</strong> add or upload products with material, packaging, labor, finishing, and expected sale price. Product money left cannot be trusted until this step is done.')),
+                        ->content(new HtmlString('<strong>Next job:</strong> add products, raw materials, labour work types, and product cost recipes. Product profit cannot be trusted until this step is complete.')),
                 ]),
             Section::make('Ready for clarity')
                 ->visible(fn ($get): bool => $get('onboarding_status') === 'ready')

@@ -50,7 +50,7 @@ class ClientHealthReport extends Page implements HasForms
     use InteractsWithForms;
 
     protected static ?string $navigationGroup = 'HELOS';
-    protected static ?string $navigationLabel = 'CFO Dashboard';
+    protected static ?string $navigationLabel = 'Owner Home';
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
     protected static ?int $navigationSort = -1;
     protected static string $view = 'filament.pages.client-health-report';
@@ -428,9 +428,9 @@ class ClientHealthReport extends Page implements HasForms
 
         return [
             'headline' => $next
-                ? 'Start with '.$next['title'].'.'
-                : 'Setup is ready enough for daily owner review.',
-            'subheadline' => $this->business->businessTypeLabel().' setup path for a new owner.',
+                ? 'Start here: '.$next['title'].'.'
+                : 'This business is ready for daily owner review.',
+            'subheadline' => 'Follow these steps in order. HELOS will say what to enter, why it matters, and what number becomes unsafe if it is skipped.',
             'progress' => $progress,
             'completed' => $completed,
             'total' => count($steps),

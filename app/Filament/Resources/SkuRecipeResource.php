@@ -27,7 +27,7 @@ class SkuRecipeResource extends Resource
 
     protected static ?string $model = SkuRecipeItem::class;
     protected static ?string $navigationGroup = 'Products & Production';
-    protected static ?string $navigationLabel = 'Product Recipes';
+    protected static ?string $navigationLabel = 'Product Cost Recipes';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?int $navigationSort = 4;
 
@@ -126,6 +126,8 @@ class SkuRecipeResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
             ->defaultSort('sku_id')
+            ->emptyStateHeading('No product cost recipes yet')
+            ->emptyStateDescription('A recipe explains the true cost of one product. Add one bundle per SKU with every material line and labour work type.')
             ->columns([
                 Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
                 Tables\Columns\TextColumn::make('sku.code')->label('SKU')->searchable(),

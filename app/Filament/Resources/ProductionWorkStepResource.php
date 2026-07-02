@@ -25,7 +25,7 @@ class ProductionWorkStepResource extends Resource
 
     protected static ?string $navigationGroup = 'Products & Production';
 
-    protected static ?string $navigationLabel = 'Production Work Types';
+    protected static ?string $navigationLabel = 'Labour Work Types';
 
     protected static ?string $modelLabel = 'work step';
 
@@ -69,6 +69,8 @@ class ProductionWorkStepResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
             ->defaultSort('name')
+            ->emptyStateHeading('No labour work types yet')
+            ->emptyStateDescription('Create work types such as bottom labour, stitching labour, top making, cutting, finishing, and packing with their rate per unit.')
             ->columns([
                 Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
                 Tables\Columns\TextColumn::make('name')->searchable(),

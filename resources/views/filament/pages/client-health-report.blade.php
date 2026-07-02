@@ -2,7 +2,7 @@
     <div class="grid gap-6">
         <x-filament::section>
             <div class="text-sm text-gray-600 dark:text-gray-300">
-                HELOS is your business picture view. Bank statement uploads feed money movement, while petty cash and day-to-day variable spend stay in Quick Expense.
+                HELOS guides setup first, then reads the business. Start with the setup guide, fix red flags, and use the owner map to see what needs attention.
             </div>
         </x-filament::section>
 
@@ -47,11 +47,11 @@
                         <div class="border-b border-gray-100 bg-gray-50 px-5 py-4 dark:border-gray-800 dark:bg-gray-900">
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <div>
-                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">CFO Cockpit</div>
+                                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Owner Home</div>
                                     <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">Whole business at a glance</div>
                                 </div>
                                 <div class="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
-                                    Click any flag to open the repair path
+                                    Click any flag to see what to fix next
                                 </div>
                             </div>
                         </div>

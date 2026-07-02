@@ -71,7 +71,7 @@ class GoalIntelligenceTest extends TestCase
         $this->actingAs($owner)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('CFO Cockpit')
+            ->assertSee('Owner Home')
             ->assertSee('Control Score')
             ->assertSee('Start Here')
             ->assertSee('Setup Progress')
@@ -141,7 +141,7 @@ class GoalIntelligenceTest extends TestCase
                 'leakage_amount' => 0,
                 'recovery_amount' => 0,
                 'payload' => ['economics' => []],
-                'occurred_at' => now()->subDays(5),
+                'occurred_at' => now()->subHours(6),
             ]);
 
             OperationalEvent::query()->create([
@@ -157,7 +157,7 @@ class GoalIntelligenceTest extends TestCase
                 'leakage_amount' => 0,
                 'recovery_amount' => 0,
                 'payload' => ['economics' => []],
-                'occurred_at' => now()->subDays(4),
+                'occurred_at' => now()->subHours(5),
             ]);
         }
 

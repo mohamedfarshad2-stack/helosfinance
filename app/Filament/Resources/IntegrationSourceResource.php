@@ -19,7 +19,7 @@ class IntegrationSourceResource extends Resource
 {
     protected static ?string $model = IntegrationSource::class;
     protected static ?string $navigationGroup = 'Setup';
-    protected static ?string $navigationLabel = 'Stock-app Connections';
+    protected static ?string $navigationLabel = 'Stock App Link';
     protected static ?string $navigationIcon = 'heroicon-o-link';
 
     public static function form(Form $form): Form
