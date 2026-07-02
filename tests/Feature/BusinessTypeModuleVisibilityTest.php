@@ -66,7 +66,7 @@ class BusinessTypeModuleVisibilityTest extends TestCase
         $this->assertFalse(ServiceBillingResource::canAccess());
     }
 
-    public function test_level_two_manufacturing_business_gets_product_cost_setup_before_full_production_tracking(): void
+    public function test_level_two_manufacturing_business_gets_daily_factory_operations(): void
     {
         $business = $this->business(Business::TYPE_MANUFACTURING, Business::MATURITY_LEVEL_2, 'Early Factory Client');
         $this->actingAs($this->owner($business));
@@ -75,8 +75,8 @@ class BusinessTypeModuleVisibilityTest extends TestCase
         $this->assertTrue(MaterialComponentResource::canAccess());
         $this->assertTrue(ProductionWorkStepResource::canAccess());
         $this->assertTrue(SkuRecipeResource::canAccess());
-        $this->assertFalse(MaterialLedgerResource::canAccess());
-        $this->assertFalse(ProductionEntryResource::canAccess());
+        $this->assertTrue(MaterialLedgerResource::canAccess());
+        $this->assertTrue(ProductionEntryResource::canAccess());
         $this->assertFalse(ServiceBillingResource::canAccess());
     }
 

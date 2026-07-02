@@ -252,7 +252,7 @@ class Business extends Model
 
     public function supportsProductionTracking(): bool
     {
-        return $this->maturityRank() >= 5 && $this->supportsBusinessType(self::TYPE_MANUFACTURING);
+        return $this->supportsManufacturingSetup();
     }
 
     public function supportsExplainability(): bool
