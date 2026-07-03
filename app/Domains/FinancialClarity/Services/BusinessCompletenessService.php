@@ -135,7 +135,7 @@ class BusinessCompletenessService
         $missingAllocations = BankTransaction::query()
             ->where('business_id', $business->id)
             ->whereBetween('transaction_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
-            ->whereIn('transaction_type', ['revenue', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'])
+            ->whereIn('transaction_type', ['revenue', 'cod_settlement', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'])
             ->whereNull('allocated_business_id')
             ->count();
 

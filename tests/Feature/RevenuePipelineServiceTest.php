@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Domains\FinancialClarity\Services\RevenuePipelineService;
+use App\Domains\FinancialClarity\Services\BusinessHealthSnapshotService;
+use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Services\WorkQueueService;
@@ -115,6 +117,8 @@ class RevenuePipelineServiceTest extends TestCase
 
         $this->assertSame(3000.0, (float) $pipeline['cod']['expected_revenue']);
         $this->assertSame(4500.0, (float) $pipeline['cod']['collected_revenue']);
+        $this->assertSame(0.0, (float) $pipeline['cod']['cash_received']);
+        $this->assertSame(4500.0, (float) $pipeline['cod']['settlement_gap']);
         $this->assertSame(0.0, (float) $pipeline['cod']['returned_revenue']);
         $this->assertSame(5000.0, (float) $pipeline['wholesale']['expected_revenue']);
         $this->assertSame(15000.0, (float) $pipeline['wholesale']['collected_revenue']);
@@ -125,5 +129,56 @@ class RevenuePipelineServiceTest extends TestCase
 
         $queue = app(WorkQueueService::class)->forBusiness($business);
         $this->assertTrue(collect($queue['tasks'])->contains(fn (array $task): bool => $task['work_type'] === 'wholesale_collection' && (float) ($task['amount'] ?? 0) === 5000.0));
+    }
+
+    public function test_cod_bank_settlement_confirms_cash_without_double_counting_revenue(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'COD Settlement Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'COD-SETTLED-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 5000,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 5000, 'channel' => 'cod'],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        BankTransaction::query()->create([
+            'business_id' => $business->id,
+            'allocated_business_id' => $business->id,
+            'transaction_date' => now()->toDateString(),
+            'description' => 'Courier weekly COD settlement',
+            'money_container' => 'Current Account',
+            'debit' => 0,
+            'credit' => 4700,
+            'balance' => 4700,
+            'classification' => 'cod_settlement',
+            'transaction_type' => 'cod_settlement',
+            'status' => 'classified',
+            'confidence' => 1,
+            'reviewed_at' => now(),
+        ]);
+
+        $pipeline = app(RevenuePipelineService::class)->forCurrentMonth($business);
+        $snapshot = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business);
+
+        $this->assertSame(5000.0, (float) $pipeline['cod']['collected_revenue']);
+        $this->assertSame(4700.0, (float) $pipeline['cod']['cash_received']);
+        $this->assertSame(300.0, (float) $pipeline['cod']['settlement_gap']);
+        $this->assertSame(4700.0, (float) $pipeline['cod_settlement']['cash_received']);
+        $this->assertSame(5000.0, (float) $snapshot['revenue_total']);
     }
 }

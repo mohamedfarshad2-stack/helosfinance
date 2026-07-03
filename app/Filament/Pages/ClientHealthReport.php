@@ -1005,7 +1005,7 @@ class ClientHealthReport extends Page implements HasForms
                     return true;
                 }
 
-                return blank($transaction->allocated_business_id) && in_array($transaction->transaction_type, ['revenue', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true);
+                return blank($transaction->allocated_business_id) && in_array($transaction->transaction_type, ['revenue', 'cod_settlement', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true);
             })
             ->sortByDesc('transaction_date')
             ->take(5)
@@ -1022,7 +1022,7 @@ class ClientHealthReport extends Page implements HasForms
 
         $reviewCount = $transactions->where('status', 'review')->count();
         $unallocatedCount = $transactions
-            ->filter(fn (BankTransaction $transaction): bool => blank($transaction->allocated_business_id) && in_array($transaction->transaction_type, ['revenue', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true))
+            ->filter(fn (BankTransaction $transaction): bool => blank($transaction->allocated_business_id) && in_array($transaction->transaction_type, ['revenue', 'cod_settlement', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true))
             ->count();
         $transferReviewCount = $transactions
             ->filter(fn (BankTransaction $transaction): bool => $transaction->transaction_type === 'transfer' && blank($transaction->counter_money_container))

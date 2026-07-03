@@ -866,6 +866,7 @@ class WorkQueueService
     {
         return in_array($transaction->transaction_type, [
             'revenue',
+            'cod_settlement',
             'expense',
             'loan',
             'owner_contribution',

@@ -27,7 +27,7 @@ class SharedOverheadValidationService
             ->filter(fn (BankTransaction $transaction): bool => blank($transaction->allocated_business_id) || (string) $transaction->transaction_type === 'transfer' && blank($transaction->counter_money_container));
 
         $unallocatedRows = $transactions
-            ->filter(fn (BankTransaction $transaction): bool => in_array($transaction->transaction_type, ['revenue', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true) && blank($transaction->allocated_business_id));
+            ->filter(fn (BankTransaction $transaction): bool => in_array($transaction->transaction_type, ['revenue', 'cod_settlement', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true) && blank($transaction->allocated_business_id));
 
         $businessBreakdown = $allocatedRows
             ->groupBy('allocated_business_id')

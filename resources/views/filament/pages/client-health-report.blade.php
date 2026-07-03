@@ -956,17 +956,27 @@
                 <div id="helos-revenue" class="grid gap-4 scroll-mt-24 lg:grid-cols-{{ ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE) ?? false) ? '3' : '2' }}">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                         <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">COD money coming in</div>
-                        <div class="text-xs text-gray-500">What is waiting to be delivered, collected, or reversed for parcel sales.</div>
-                        <div class="mt-4 grid gap-3 md:grid-cols-3">
+                        <div class="text-xs text-gray-500">COD sales truth is separate from bank settlement cash, so HELOS does not count the same money twice.</div>
+                        <div class="mt-4 grid gap-3 md:grid-cols-5">
                             <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Expected</div>
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Expected COD</div>
                                 <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['cod']['expected_revenue'] ?? 0), 2) }}</div>
                                 <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod']['pending_orders'] ?? 0) }} pending orders</div>
                             </div>
                             <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Collected</div>
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Delivered revenue</div>
                                 <div class="mt-1 font-semibold text-emerald-600">LKR {{ number_format((float) ($revenuePipeline['cod']['collected_revenue'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod']['delivered_orders'] ?? 0) }} delivered orders</div>
+                                <div class="text-xs text-gray-500">Sales truth from {{ (int) ($revenuePipeline['cod']['delivered_orders'] ?? 0) }} delivered orders</div>
+                            </div>
+                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Bank COD cash</div>
+                                <div class="mt-1 font-semibold text-sky-600">LKR {{ number_format((float) ($revenuePipeline['cod']['cash_received'] ?? 0), 2) }}</div>
+                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod_settlement']['row_count'] ?? 0) }} settlement rows</div>
+                            </div>
+                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Settlement gap</div>
+                                <div class="mt-1 font-semibold {{ ((float) ($revenuePipeline['cod']['settlement_gap'] ?? 0)) > 0 ? 'text-amber-600' : 'text-emerald-600' }}">LKR {{ number_format((float) ($revenuePipeline['cod']['settlement_gap'] ?? 0), 2) }}</div>
+                                <div class="text-xs text-gray-500">Delivered revenue minus bank COD cash</div>
                             </div>
                             <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
                                 <div class="text-xs uppercase tracking-wide text-gray-500">Returned</div>
@@ -1046,7 +1056,8 @@
                     <div class="mt-1 text-sm text-gray-700 dark:text-gray-300">{{ $revenuePipeline['headline'] ?? 'Money coming in not ready yet.' }}</div>
                     <div class="mt-3 text-sm text-gray-500">
                         Total expected: LKR {{ number_format((float) ($revenuePipeline['total_expected_revenue'] ?? 0), 2) }}
-                        | Total collected: LKR {{ number_format((float) ($revenuePipeline['total_collected_revenue'] ?? 0), 2) }}
+                        | Delivered/service revenue: LKR {{ number_format((float) ($revenuePipeline['total_collected_revenue'] ?? 0), 2) }}
+                        | Cash confirmed: LKR {{ number_format((float) ($revenuePipeline['total_cash_confirmed'] ?? 0), 2) }}
                         | Total returned: LKR {{ number_format((float) ($revenuePipeline['total_returned_revenue'] ?? 0), 2) }}
                     </div>
                 </div>

@@ -68,10 +68,11 @@ class BankTransactionResource extends Resource
                 ->searchable()
                 ->nullable()
                 ->placeholder('Shared / Unallocated')
-                ->helperText('Required for revenue, expenses, loans, owner contributions, and owner withdrawals. Transfers stay unallocated.'),
+                ->helperText('Required for revenue, COD settlement, expenses, loans, owner contributions, and owner withdrawals. Transfers stay unallocated.'),
             Select::make('classification')->options([
                 'unknown' => 'Unknown',
                 'revenue' => 'Revenue',
+                'cod_settlement' => 'COD settlement',
                 'expense' => 'Expense',
                 'salary' => 'Salary',
                 'supplier_payment' => 'Supplier payment',
@@ -98,7 +99,7 @@ class BankTransactionResource extends Resource
     {
         return $table->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))->defaultSort('transaction_date', 'desc')
             ->emptyStateHeading('No bank or cash rows to review')
-            ->emptyStateDescription('Import a statement or add a cash transaction. Then choose whether each row is revenue, expense, transfer, owner money, loan, or other.')
+            ->emptyStateDescription('Import a statement or add a cash transaction. Then choose whether each row is revenue, COD settlement, expense, transfer, owner money, loan, or other.')
             ->columns([
             Tables\Columns\TextColumn::make('transaction_date')->date()->sortable(),
             Tables\Columns\TextColumn::make('description')->searchable()->limit(30),
@@ -297,6 +298,7 @@ class BankTransactionResource extends Resource
         return [
             'unknown' => 'Unknown',
             'revenue' => 'Revenue',
+            'cod_settlement' => 'COD settlement',
             'expense' => 'Expense',
             'salary' => 'Salary',
             'supplier_payment' => 'Supplier payment',
@@ -332,6 +334,7 @@ class BankTransactionResource extends Resource
     {
         return [
             'revenue' => 'Revenue',
+            'cod_settlement' => 'COD settlement',
             'expense' => 'Expense',
             'transfer' => 'Transfer',
             'owner_contribution' => 'Owner contribution',
@@ -359,7 +362,7 @@ class BankTransactionResource extends Resource
             return blank($record->counter_money_container) ? 'review' : 'classified';
         }
 
-        if (in_array($transactionType, ['revenue', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true) && blank($allocatedBusinessId)) {
+        if (in_array($transactionType, ['revenue', 'cod_settlement', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true) && blank($allocatedBusinessId)) {
             return 'review';
         }
 

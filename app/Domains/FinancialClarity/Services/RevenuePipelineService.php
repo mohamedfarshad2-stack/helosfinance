@@ -3,6 +3,7 @@
 namespace App\Domains\FinancialClarity\Services;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\Sku;
@@ -13,6 +14,7 @@ class RevenuePipelineService
     public function forCurrentMonth(Business $business): array
     {
         $serviceBilling = $this->serviceBilling($business);
+        $codSettlement = $this->codSettlement($business);
         $events = OperationalEvent::query()
             ->where('business_id', $business->id)
             ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
@@ -40,8 +42,10 @@ class RevenuePipelineService
                 'cod' => $this->emptyChannel('COD'),
                 'wholesale' => $this->emptyChannel('Wholesale'),
                 'service' => $serviceBilling,
+                'cod_settlement' => $codSettlement,
                 'total_expected_revenue' => round($serviceExpected, 2),
                 'total_collected_revenue' => round($serviceCollected, 2),
+                'total_cash_confirmed' => round($serviceCollected + (float) ($codSettlement['cash_received'] ?? 0), 2),
                 'total_returned_revenue' => 0.0,
                 'orders' => [],
                 'actions' => [
@@ -62,6 +66,8 @@ class RevenuePipelineService
         $codPending = $codOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('expected_amount');
         $codCollected = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount');
         $codReturned = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->sum('reversed_amount');
+        $codCashReceived = (float) ($codSettlement['cash_received'] ?? 0);
+        $codSettlementGap = round($codCollected - $codCashReceived, 2);
 
         $wholesalePending = $wholesaleOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('remaining_amount');
         $wholesaleDelivered = $wholesaleOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount')
@@ -91,6 +97,8 @@ class RevenuePipelineService
             'cod' => [
                 'expected_revenue' => round($codPending, 2),
                 'collected_revenue' => round($codCollected, 2),
+                'cash_received' => round($codCashReceived, 2),
+                'settlement_gap' => $codSettlementGap,
                 'returned_revenue' => round($codReturned, 2),
                 'pending_orders' => $codOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->count(),
                 'delivered_orders' => $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->count(),
@@ -106,8 +114,10 @@ class RevenuePipelineService
                 'note' => 'Wholesale collection timing still needs bank or invoice matching to become exact.',
             ],
             'service' => $serviceBilling,
+            'cod_settlement' => $codSettlement,
             'total_expected_revenue' => round($codPending + $wholesalePending + $servicePending, 2),
             'total_collected_revenue' => round($codCollected + $wholesaleDelivered + $serviceCollected, 2),
+            'total_cash_confirmed' => round($codCashReceived + $wholesaleDelivered + $serviceCollected, 2),
             'total_returned_revenue' => round($codReturned + $wholesaleReturned, 2),
             'orders' => $orders->take(8)->values()->all(),
             'actions' => array_values(array_filter([
@@ -115,8 +125,31 @@ class RevenuePipelineService
                 $wholesalePending > 0 ? 'Follow up wholesale customers with unpaid or uncollected orders.' : null,
                 $servicePending > 0 ? 'Follow up service clients with unpaid or part-paid monthly fees.' : null,
                 $returnedCount > 0 ? 'Check which returned parcels can be restocked and which should be treated as scrap.' : null,
-                $deliveredCount > 0 ? 'Match delivered money with bank settlements so money stays clear.' : null,
+                $deliveredCount > 0 && abs($codSettlementGap) > 0.01 ? 'Match delivered COD revenue with bank COD settlement deposits so cash is clear.' : null,
             ])),
+        ];
+    }
+
+    private function codSettlement(Business $business): array
+    {
+        $rows = BankTransaction::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('transaction_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+            ->where(function ($query): void {
+                $query->where('transaction_type', 'cod_settlement')
+                    ->orWhere('classification', 'cod_settlement');
+            })
+            ->get();
+
+        $cashReceived = (float) $rows->sum('credit');
+        $deductions = (float) $rows->sum('debit');
+
+        return [
+            'cash_received' => round($cashReceived, 2),
+            'deductions' => round($deductions, 2),
+            'row_count' => $rows->count(),
+            'label' => 'COD settlement',
+            'note' => 'Bank COD settlement confirms cash received. It does not create sales revenue again.',
         ];
     }
 
