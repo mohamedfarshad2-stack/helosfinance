@@ -6,5 +6,5 @@ use Illuminate\Support\Facades\Route;
 Route::get('/analytics/tracker.js', [WebsiteAnalyticsController::class, 'script']);
 
 Route::get('/', function () {
-    return redirect('/admin/website-insights');
+    return redirect('/admin');
 });

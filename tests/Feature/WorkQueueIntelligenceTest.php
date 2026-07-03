@@ -17,7 +17,6 @@ use App\Filament\Resources\EmployeeResource;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Pages\ManagerWorkQueue;
 use App\Filament\Pages\TodaysWork;
-use App\Filament\Pages\WebsiteInsights;
 use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
@@ -348,7 +347,7 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->actingAs($user)
             ->get('/admin')
-            ->assertRedirect(WebsiteInsights::getUrl());
+            ->assertRedirect(BusinessResource::getUrl('index'));
 
         $this->actingAs($user)
             ->get(ManagerWorkQueue::getUrl())

@@ -67,16 +67,12 @@ class WebsiteInsights extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        $user = Auth::user();
-
-        return $user?->isInternalAdmin() || $user?->isOwner() || false;
+        return false;
     }
 
     public static function canAccess(): bool
     {
-        $user = Auth::user();
-
-        return Auth::check() && ($user?->isInternalAdmin() || $user?->isOwner() || false);
+        return false;
     }
 
     private function loadInsights(): void

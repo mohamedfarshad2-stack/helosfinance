@@ -7,7 +7,6 @@ use App\Domains\Shared\Models\Expense;
 use App\Filament\Pages\BankStatementImport;
 use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Pages\ClientHealthReport;
-use App\Filament\Pages\WebsiteInsights;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MaterialComponentResource;
@@ -164,7 +163,7 @@ class BusinessArchitectureTest extends TestCase
 
         $this->actingAs($user)
             ->get('/admin')
-            ->assertRedirect(WebsiteInsights::getUrl());
+            ->assertRedirect(ClientHealthReport::getUrl());
 
         $this->assertTrue(BusinessResource::canAccess());
         $this->assertTrue(IntegrationSourceResource::canAccess());

@@ -3,7 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Pages\TodaysWork;
-use App\Filament\Pages\WebsiteInsights;
+use App\Filament\Resources\BusinessResource;
 use Filament\Pages\Dashboard as BaseDashboard;
 use Illuminate\Support\Facades\Auth;
 
@@ -20,13 +20,13 @@ class Dashboard extends BaseDashboard
         }
 
         if ($user?->isInternalAdmin()) {
-            $this->redirect(WebsiteInsights::getUrl());
+            $this->redirect(BusinessResource::getUrl('index'));
 
             return;
         }
 
         if ($user?->isOwner()) {
-            $this->redirect(WebsiteInsights::getUrl());
+            $this->redirect(ClientHealthReport::getUrl());
 
             return;
         }
