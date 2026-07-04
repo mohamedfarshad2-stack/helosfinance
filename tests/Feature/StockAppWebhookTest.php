@@ -170,6 +170,29 @@ class StockAppWebhookTest extends TestCase
             ->assertJsonPath('impact.leakage_amount', 0);
     }
 
+    public function test_delivered_order_understands_customer_total_includes_delivery_charge(): void
+    {
+        $business = Business::query()->create(['name' => 'Test Business']);
+
+        $this->postJson('/api/v1/stock-app/webhook', [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'ORDER-GROSS-1',
+            'product_sale_amount' => 1390,
+            'customer_delivery_charge' => 350,
+            'customer_total_amount' => 1740,
+            'delivery_amount' => 425,
+            'quantity' => 1,
+        ])->assertCreated()
+            ->assertJsonPath('impact.revenue_amount', 1740)
+            ->assertJsonPath('impact.direct_cost_amount', 425)
+            ->assertJsonPath('impact.economics.gross_customer_amount', 1740)
+            ->assertJsonPath('impact.economics.product_selling_amount', 1390)
+            ->assertJsonPath('impact.economics.customer_delivery_charge_amount', 350)
+            ->assertJsonPath('impact.economics.actual_courier_cost_amount', 425)
+            ->assertJsonPath('impact.economics.delivery_charge_margin_amount', -75);
+    }
+
     public function test_resent_order_has_retry_cost_without_new_cogs(): void
     {
         $business = Business::query()->create(['name' => 'Test Business']);

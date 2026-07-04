@@ -17,7 +17,8 @@ class OperationalImpactCalculator
         $eventType = $payload['event_type'] ?? OperationalEvent::ORDER_CREATED;
         $quantity = max((int) ($payload['quantity'] ?? 1), 1);
         $sku = $this->findSku($business, $payload);
-        $saleAmount = (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? 0);
+        $selling = $this->sellingBreakdown($payload);
+        $saleAmount = $selling['gross_customer_amount'];
         $skipProductCost = $this->bool($payload['skip_product_cost'] ?? $payload['resend_from_stock'] ?? false);
         $productCost = $skipProductCost ? 0.0 : ($sku ? $sku->productionCostPerUnit() * $quantity : (float) ($payload['cogs_amount'] ?? 0));
 
@@ -52,8 +53,10 @@ class OperationalImpactCalculator
                     'product_cost_amount' => $productCost,
                     'product_cost_skipped' => $skipProductCost,
                     'courier_amount' => 0.0,
+                    'actual_courier_cost_amount' => 0.0,
                     'delivery_charge_pending' => $delivery,
-                    'sale_amount' => $saleAmount,
+                    ...$selling,
+                    'delivery_charge_margin_amount' => round($selling['customer_delivery_charge_amount'] - $delivery, 2),
                 ],
             ],
             OperationalEvent::WHOLESALE_PARCEL_SENT => [
@@ -66,7 +69,9 @@ class OperationalImpactCalculator
                     'product_cost_amount' => $productCost,
                     'product_cost_skipped' => $skipProductCost,
                     'courier_amount' => $delivery,
-                    'sale_amount' => $saleAmount,
+                    'actual_courier_cost_amount' => $delivery,
+                    ...$selling,
+                    'delivery_charge_margin_amount' => round($selling['customer_delivery_charge_amount'] - $delivery, 2),
                 ],
             ],
             OperationalEvent::ORDER_DELIVERED => [
@@ -76,8 +81,10 @@ class OperationalImpactCalculator
                 'leakage_amount' => 0,
                 'recovery_amount' => 0,
                 'economics' => [
-                    'sale_amount' => $saleAmount,
                     'courier_amount' => $delivery,
+                    'actual_courier_cost_amount' => $delivery,
+                    ...$selling,
+                    'delivery_charge_margin_amount' => round($selling['customer_delivery_charge_amount'] - $delivery, 2),
                 ],
             ],
             OperationalEvent::ORDER_RETURNED => [
@@ -91,6 +98,7 @@ class OperationalImpactCalculator
                     'return_packaging_amount' => $returnPackaging,
                     'damage_amount' => (float) ($payload['damage_cost'] ?? 0),
                     'recovery_amount' => (float) ($payload['recovery_amount'] ?? $restockRecovery),
+                    ...$selling,
                 ],
             ],
             OperationalEvent::ORDER_RESENT => [
@@ -124,7 +132,7 @@ class OperationalImpactCalculator
                 'direct_cost_amount' => (float) ($payload['direct_cost_amount'] ?? 0),
                 'leakage_amount' => (float) ($payload['leakage_amount'] ?? 0),
                 'recovery_amount' => (float) ($payload['recovery_amount'] ?? 0),
-                'economics' => [],
+                'economics' => $selling,
             ],
         };
     }
@@ -174,5 +182,59 @@ class OperationalImpactCalculator
     private function bool(mixed $value): bool
     {
         return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'restockable', 'stock'], true);
+    }
+
+    /**
+     * @return array{gross_customer_amount:float,product_selling_amount:float,customer_delivery_charge_amount:float,sale_amount:float}
+     */
+    private function sellingBreakdown(array $payload): array
+    {
+        $grossCustomerAmount = (float) (
+            $payload['customer_total_amount']
+            ?? $payload['total_customer_amount']
+            ?? $payload['total_amount']
+            ?? $payload['sale_amount']
+            ?? $payload['amount']
+            ?? $payload['revenue_amount']
+            ?? 0
+        );
+
+        $productSellingAmount = (float) (
+            $payload['product_sale_amount']
+            ?? $payload['product_selling_amount']
+            ?? $payload['marked_price']
+            ?? $payload['item_amount']
+            ?? 0
+        );
+
+        $customerDeliveryCharge = (float) (
+            $payload['customer_delivery_charge']
+            ?? $payload['customer_delivery_amount']
+            ?? $payload['delivery_charge_collected']
+            ?? 0
+        );
+
+        if ($grossCustomerAmount <= 0 && ($productSellingAmount > 0 || $customerDeliveryCharge > 0)) {
+            $grossCustomerAmount = $productSellingAmount + $customerDeliveryCharge;
+        }
+
+        if ($productSellingAmount <= 0 && $grossCustomerAmount > 0 && $customerDeliveryCharge > 0) {
+            $productSellingAmount = max($grossCustomerAmount - $customerDeliveryCharge, 0);
+        }
+
+        if ($customerDeliveryCharge <= 0 && $grossCustomerAmount > 0 && $productSellingAmount > 0) {
+            $customerDeliveryCharge = max($grossCustomerAmount - $productSellingAmount, 0);
+        }
+
+        if ($productSellingAmount <= 0) {
+            $productSellingAmount = $grossCustomerAmount;
+        }
+
+        return [
+            'gross_customer_amount' => round($grossCustomerAmount, 2),
+            'product_selling_amount' => round($productSellingAmount, 2),
+            'customer_delivery_charge_amount' => round($customerDeliveryCharge, 2),
+            'sale_amount' => round($grossCustomerAmount, 2),
+        ];
     }
 }

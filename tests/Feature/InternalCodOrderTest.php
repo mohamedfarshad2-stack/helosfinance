@@ -92,9 +92,12 @@ class InternalCodOrderTest extends TestCase
             ->where('event_type', OperationalEvent::ORDER_DELIVERED)
             ->firstOrFail();
 
-        $this->assertSame(2500.0, (float) $deliveredEvent->revenue_amount);
+        $this->assertSame(2875.0, (float) $deliveredEvent->revenue_amount);
         $this->assertSame(375.0, (float) $deliveredEvent->direct_cost_amount);
         $this->assertSame(375.0, (float) $deliveredEvent->payload['economics']['courier_amount']);
+        $this->assertSame(2500.0, (float) $deliveredEvent->payload['economics']['product_selling_amount']);
+        $this->assertSame(375.0, (float) $deliveredEvent->payload['economics']['customer_delivery_charge_amount']);
+        $this->assertSame(0.0, (float) $deliveredEvent->payload['economics']['delivery_charge_margin_amount']);
 
         $order->update([
             'status' => CodOrder::STATUS_RETURNED,
