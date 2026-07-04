@@ -190,7 +190,8 @@ class MissingSkuMappingTest extends TestCase
         Livewire::test(MissingSkuMapping::class)
             ->assertSee('Blue slipper from stock app')
             ->set('bulkSkuSelections.blue-slipper-from-stock-app', $sku->id)
-            ->call('assignGroup', 'blue-slipper-from-stock-app', $sku->id);
+            ->call('assignGroup', 'blue-slipper-from-stock-app', null)
+            ->assertDontSee('Blue slipper from stock app');
 
         $this->assertSame(0, OperationalEvent::query()->where('business_id', $business->id)->whereNull('sku_id')->count());
         $this->assertSame(2, SkuStockMovement::query()->where('sku_id', $sku->id)->count());

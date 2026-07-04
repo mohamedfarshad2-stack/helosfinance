@@ -17,17 +17,17 @@ class CostAssumptionResource extends Resource
 {
     protected static ?string $model = CostAssumption::class;
     protected static ?string $navigationGroup = 'Setup';
-    protected static ?string $navigationLabel = 'Cost Rules';
+    protected static ?string $navigationLabel = 'Other Cost Rules';
     protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
     public static function getPluralModelLabel(): string
     {
-        return 'Operational Rules';
+        return 'Other Cost Rules';
     }
 
     public static function getModelLabel(): string
     {
-        return 'Operational Rule';
+        return 'Other Cost Rule';
     }
 
     public static function form(Form $form): Form
@@ -38,19 +38,22 @@ class CostAssumptionResource extends Resource
                 ->options(Business::query()->orderBy('name')->pluck('name', 'id'))
                 ->searchable()
                 ->required()
-                ->helperText('Choose which client this rule belongs to. Stock-app event sync reads rules per business.'),
+                ->helperText('Choose which client this rule belongs to. Use Courier Charges for delivery, return, and resend rates.'),
             TextInput::make('key')
                 ->label('Rule key')
                 ->required()
-                ->helperText('A short internal key like delivery_fee, return_courier_fee, or resend_packaging_fee.'),
+                ->placeholder('verification_cost')
+                ->helperText('Use this only for non-courier rules. Delivery, return, and resend charges now belong in Courier Charges.'),
             TextInput::make('label')
                 ->label('Rule name')
-                ->required(),
+                ->required()
+                ->helperText('Use a plain name the owner can understand, like Verification cost.'),
             TextInput::make('amount')
                 ->label('Amount per rule')
                 ->numeric()
                 ->required()
-                ->prefix('LKR'),
+                ->prefix('LKR')
+                ->helperText('Set the normal amount for this one non-courier rule.'),
             Select::make('behavior')
                 ->options([
                     'per_event' => 'Per event',
@@ -107,7 +110,7 @@ class CostAssumptionResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && (Auth::user()?->isInternalAdmin() ?? false);
+        return false;
     }
 
     public static function canAccess(): bool

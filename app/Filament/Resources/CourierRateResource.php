@@ -32,7 +32,7 @@ class CourierRateResource extends Resource
     {
         return $form->schema([
             Section::make('Courier charge setup')
-                ->description('Set the normal delivery, return, and resend charge for each courier. Staff only chooses the courier on COD orders.')
+                ->description('Set the normal delivery, return, and resend charge for each courier once. Staff only chooses the courier on COD orders, so they do not type charges order by order.')
                 ->schema([
                     Select::make('business_id')
                         ->label('Business')
@@ -44,28 +44,34 @@ class CourierRateResource extends Resource
                     TextInput::make('courier_name')
                         ->label('Courier')
                         ->required()
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->helperText('Example: Domex, Prompt Xpress, or your transport partner name.'),
                     TextInput::make('delivery_charge')
                         ->label('Delivery charge')
                         ->numeric()
                         ->prefix('LKR')
                         ->default(0)
-                        ->required(),
+                        ->required()
+                        ->helperText('Charge when the parcel gets delivered.'),
                     TextInput::make('return_charge')
                         ->label('Return charge')
                         ->numeric()
                         ->prefix('LKR')
                         ->default(0)
-                        ->required(),
+                        ->required()
+                        ->helperText('Charge when the parcel comes back returned.'),
                     TextInput::make('resend_charge')
                         ->label('Resend charge')
                         ->numeric()
                         ->prefix('LKR')
                         ->default(0)
-                        ->required(),
+                        ->required()
+                        ->helperText('Charge when you send a replacement or resend parcel.'),
                     Toggle::make('active')
-                        ->default(true),
+                        ->default(true)
+                        ->helperText('Keep only the courier rates you still use as active.'),
                     Textarea::make('note')
+                        ->helperText('Optional note for special situations. No need to repeat these numbers in Other Cost Rules.')
                         ->rows(3)
                         ->columnSpanFull(),
                 ])
