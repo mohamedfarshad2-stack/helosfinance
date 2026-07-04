@@ -138,4 +138,61 @@ class MissingSkuMappingTest extends TestCase
         $this->assertSame(MissingSkuMapping::getUrl(), $warning['action_url']);
         $this->assertStringContainsString('choose the correct product', $warning['fix_guidance']);
     }
+
+    public function test_repeated_product_hint_can_be_repaired_in_bulk(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Bulk Repair Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'bulk-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'PS-BLUE',
+            'name' => 'Blue Slipper',
+            'material_cost' => 300,
+            'packaging_cost' => 40,
+            'labor_rate' => 60,
+            'finishing_cost' => 20,
+            'active' => true,
+        ]);
+
+        foreach ([1, 2] as $number) {
+            OperationalEvent::query()->create([
+                'business_id' => $business->id,
+                'sku_id' => null,
+                'source' => 'stock_app_sync',
+                'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+                'external_id' => 'bulk-order-'.$number,
+                'channel' => 'cod',
+                'quantity' => 1,
+                'payload' => [
+                    'sku_name' => 'Blue slipper from stock app',
+                    'sale_amount' => 1900,
+                ],
+                'occurred_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($owner);
+
+        Livewire::test(MissingSkuMapping::class)
+            ->assertSee('Blue slipper from stock app')
+            ->set('bulkSkuSelections.blue-slipper-from-stock-app', $sku->id)
+            ->call('assignGroup', 'blue-slipper-from-stock-app');
+
+        $this->assertSame(0, OperationalEvent::query()->where('business_id', $business->id)->whereNull('sku_id')->count());
+        $this->assertSame(2, SkuStockMovement::query()->where('sku_id', $sku->id)->count());
+    }
 }

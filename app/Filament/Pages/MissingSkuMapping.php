@@ -29,6 +29,9 @@ class MissingSkuMapping extends Page
     /** @var array<int, int|string|null> */
     public array $skuSelections = [];
 
+    /** @var array<string, int|string|null> */
+    public array $bulkSkuSelections = [];
+
     public function mount(): void
     {
         abort_unless(static::canAccess(), 403);
@@ -45,6 +48,7 @@ class MissingSkuMapping extends Page
             'businesses' => $businesses,
             'business' => $business,
             'skuOptions' => $this->skuOptions(),
+            'groups' => $business ? $this->groups($business) : collect(),
             'rows' => $business ? $this->rows($business) : collect(),
             'missingCount' => $business ? $this->missingQuery($business)->count() : 0,
         ];
@@ -67,6 +71,7 @@ class MissingSkuMapping extends Page
     public function updatedBusinessId(): void
     {
         $this->skuSelections = [];
+        $this->bulkSkuSelections = [];
     }
 
     public function assignSku(int $eventId, OperationalImpactCalculator $calculator, SkuStockMovementService $stockMovements): void
@@ -93,27 +98,51 @@ class MissingSkuMapping extends Page
             ->whereKey($skuId)
             ->firstOrFail();
 
-        $business = $event->business ?: Business::query()->findOrFail($event->business_id);
-        $payload = $this->payloadForRepair($event, $sku);
-        $impact = $calculator->calculate($business, $payload);
-
-        $event->update([
-            'sku_id' => $impact['sku_id'] ?: $sku->id,
-            'payload' => array_merge($payload, ['economics' => $impact['economics'] ?? []]),
-            'revenue_amount' => $impact['revenue_amount'] ?? 0,
-            'direct_cost_amount' => $impact['direct_cost_amount'] ?? 0,
-            'leakage_amount' => $impact['leakage_amount'] ?? 0,
-            'recovery_amount' => $impact['recovery_amount'] ?? 0,
-        ]);
-
-        $event->refresh();
-        $stockMovements->record($business, $event, $event->payload ?? []);
+        $this->repairEvent($event, $sku, $calculator, $stockMovements);
 
         unset($this->skuSelections[$eventId]);
 
         Notification::make()
             ->title('Product link fixed')
             ->body('HELOS recalculated this row and updated the stock movement where it applies.')
+            ->success()
+            ->send();
+    }
+
+    public function assignGroup(string $groupKey, OperationalImpactCalculator $calculator, SkuStockMovementService $stockMovements): void
+    {
+        $skuId = (int) ($this->bulkSkuSelections[$groupKey] ?? 0);
+        $business = $this->selectedBusiness();
+
+        if (! $business || $skuId <= 0) {
+            Notification::make()
+                ->title('Choose a product first')
+                ->body('Select the correct SKU for this repeated Stock App hint, then bulk repair.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $sku = Sku::query()
+            ->where('business_id', $business->id)
+            ->whereKey($skuId)
+            ->firstOrFail();
+
+        $events = $this->missingQuery($business)
+            ->get()
+            ->filter(fn (OperationalEvent $event): bool => $this->groupKeyForEvent($event) === $groupKey)
+            ->take(500);
+
+        foreach ($events as $event) {
+            $this->repairEvent($event, $sku, $calculator, $stockMovements);
+        }
+
+        unset($this->bulkSkuSelections[$groupKey]);
+
+        Notification::make()
+            ->title('Repeated product hint repaired')
+            ->body($events->count().' row(s) were linked to '.$sku->code.' and recalculated.')
             ->success()
             ->send();
     }
@@ -183,6 +212,28 @@ class MissingSkuMapping extends Page
             ->map(fn (OperationalEvent $event): array => $this->row($event));
     }
 
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function groups(Business $business): Collection
+    {
+        return $this->missingQuery($business)
+            ->limit(2000)
+            ->get()
+            ->groupBy(fn (OperationalEvent $event): string => $this->groupKeyForEvent($event))
+            ->reject(fn (Collection $events, string $key): bool => $key === 'missing-product-hint' || $events->count() < 2)
+            ->map(fn (Collection $events, string $key): array => [
+                'key' => $key,
+                'hint' => $this->productHint($events->first()),
+                'count' => $events->count(),
+                'latest_at' => $events->max(fn (OperationalEvent $event): string => (string) $event->occurred_at),
+                'example' => $events->first()?->external_id,
+            ])
+            ->sortByDesc('count')
+            ->take(12)
+            ->values();
+    }
+
     private function missingQuery(Business $business): Builder
     {
         $search = trim($this->search);
@@ -242,7 +293,7 @@ class MissingSkuMapping extends Page
             'customer' => $payload['customer_name'] ?? $payload['customer'] ?? 'Customer not sent',
             'phone' => $payload['phone'] ?? $payload['customer_phone'] ?? '',
             'tracking_number' => $payload['tracking_number'] ?? 'No tracking yet',
-            'product_hint' => $payload['sku_code'] ?? $payload['sku_name'] ?? $payload['product_name'] ?? 'Product not sent',
+            'product_hint' => $this->productHint($event),
             'quantity' => (int) ($event->quantity ?: ($payload['quantity'] ?? 1)),
             'sale_amount' => (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? $event->revenue_amount ?? 0),
             'channel' => $event->channel ?: ($payload['channel'] ?? 'cod'),
@@ -264,6 +315,45 @@ class MissingSkuMapping extends Page
             'quantity' => (int) ($event->quantity ?: ($payload['quantity'] ?? 1)),
             'channel' => $event->channel ?: ($payload['channel'] ?? 'cod'),
         ]);
+    }
+
+    private function repairEvent(OperationalEvent $event, Sku $sku, OperationalImpactCalculator $calculator, SkuStockMovementService $stockMovements): void
+    {
+        $business = $event->business ?: Business::query()->findOrFail($event->business_id);
+        $payload = $this->payloadForRepair($event, $sku);
+        $impact = $calculator->calculate($business, $payload);
+
+        $event->update([
+            'sku_id' => $impact['sku_id'] ?: $sku->id,
+            'payload' => array_merge($payload, ['economics' => $impact['economics'] ?? []]),
+            'revenue_amount' => $impact['revenue_amount'] ?? 0,
+            'direct_cost_amount' => $impact['direct_cost_amount'] ?? 0,
+            'leakage_amount' => $impact['leakage_amount'] ?? 0,
+            'recovery_amount' => $impact['recovery_amount'] ?? 0,
+        ]);
+
+        $event->refresh();
+        $stockMovements->record($business, $event, $event->payload ?? []);
+    }
+
+    private function productHint(OperationalEvent $event): string
+    {
+        $payload = $event->payload ?? [];
+
+        $hint = $payload['sku_code'] ?? $payload['sku_name'] ?? $payload['product_name'] ?? $payload['item_name'] ?? null;
+
+        return filled($hint) ? trim((string) $hint) : 'Product not sent';
+    }
+
+    private function groupKeyForEvent(OperationalEvent $event): string
+    {
+        $hint = $this->productHint($event);
+
+        if ($hint === 'Product not sent') {
+            return 'missing-product-hint';
+        }
+
+        return str($hint)->lower()->replaceMatches('/[^a-z0-9]+/', '-')->trim('-')->value() ?: 'missing-product-hint';
     }
 
     /**
