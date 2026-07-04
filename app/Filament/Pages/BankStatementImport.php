@@ -50,7 +50,7 @@ class BankStatementImport extends Page implements HasForms
             ->schema([
                 Placeholder::make('tip')
                     ->hiddenLabel()
-                    ->content('Upload a CSV or Excel bank statement. This is the cash flow source for HELOS. Petty cash and everyday variable spend still go through Quick Expense, while imported bank rows feed the cash timeline and review queue.'),
+                    ->content('Upload a CSV or Excel bank statement. This is the bank-money source for HELOS. If the bank row is only moving money into Petty Cash or Store Cash, classify it later as Transfer. Record the actual fuel, meals, or petty-cash spend separately when the cash is used.'),
                 Select::make('money_container')
                     ->label('Bank account / cash container')
                     ->placeholder('Current Account, Savings Account, Petty Cash...')

@@ -84,6 +84,30 @@ class GoalIntelligenceTest extends TestCase
             ->assertSee('Fastest Path Forward');
     }
 
+    public function test_completed_setup_steps_drop_out_of_live_checklist_and_progress_moves_up(): void
+    {
+        $business = $this->seedGoalBusiness();
+
+        $owner = User::query()->create([
+            'name' => 'Checklist Owner',
+            'email' => 'checklist-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(ClientHealthReport::getUrl())
+            ->assertOk()
+            ->assertSee('Setup Progress')
+            ->assertSee('Completed setup work')
+            ->assertSee('% ready')
+            ->assertDontSee('Add monthly fixed costs')
+            ->assertDontSee('Add staff and salary truth')
+            ->assertDontSee('Add products or SKUs');
+    }
+
     private function seedGoalBusiness(): Business
     {
         $business = Business::query()->create([

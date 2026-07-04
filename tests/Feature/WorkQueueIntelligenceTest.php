@@ -578,7 +578,8 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('Transaction type')
             ->assertSee('Business assignment')
             ->assertSee('Bank account / cash container')
-            ->assertSee('Transfer destination account');
+            ->assertSee('Transfer destination account')
+            ->assertSee('Use Transfer when bank money is only being moved into Savings, Petty Cash, Store Cash, or another internal money container.');
     }
 
     public function test_client_owner_dashboard_keeps_the_existing_business_picture_and_operational_summary(): void

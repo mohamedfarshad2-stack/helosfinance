@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\OperationalEvent;
 use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Builder;
@@ -109,7 +110,6 @@ class SalesInsights extends Page
             ->where('business_id', $business->id)
             ->whereBetween('occurred_at', [$start, $end])
             ->whereIn('event_type', [
-                OperationalEvent::ORDER_CONFIRMED,
                 OperationalEvent::TRACKING_NUMBER_ADDED,
                 OperationalEvent::WHOLESALE_PARCEL_SENT,
                 OperationalEvent::ORDER_DELIVERED,
@@ -121,10 +121,11 @@ class SalesInsights extends Page
         $delivered = $events->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $dispatched = $events->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT]);
         $returned = $events->where('event_type', OperationalEvent::ORDER_RETURNED);
-        $confirmed = $events->where('event_type', OperationalEvent::ORDER_CONFIRMED);
 
         $dispatchValue = $dispatched->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
-        $pendingValue = $confirmed->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)) + $dispatchValue;
+        $pendingValue = $dispatchValue;
+        $marketingSpend = $this->marketingSpend($business, $start, $end);
+        $profitAfterDirectCosts = (float) ($delivered->sum('revenue_amount') - $events->sum('direct_cost_amount') - $events->sum('leakage_amount') + $events->sum('recovery_amount'));
 
         return [
             'delivered_revenue' => round((float) $delivered->sum('revenue_amount'), 2),
@@ -132,10 +133,13 @@ class SalesInsights extends Page
             'dispatch_value' => round((float) $dispatchValue, 2),
             'dispatch_count' => $dispatched->count(),
             'pending_value' => round((float) $pendingValue, 2),
-            'pending_count' => $confirmed->count() + $dispatched->count(),
+            'pending_count' => $dispatched->count(),
             'returned_count' => $returned->count(),
             'return_cost' => round((float) $returned->sum('leakage_amount'), 2),
-            'profit_after_direct_costs' => round((float) ($delivered->sum('revenue_amount') - $events->sum('direct_cost_amount') - $events->sum('leakage_amount') + $events->sum('recovery_amount')), 2),
+            'marketing_spend' => round($marketingSpend, 2),
+            'marketing_per_delivered_order' => $delivered->count() > 0 ? round($marketingSpend / $delivered->count(), 2) : 0.0,
+            'profit_after_direct_costs' => round($profitAfterDirectCosts, 2),
+            'profit_after_marketing' => round($profitAfterDirectCosts - $marketingSpend, 2),
         ];
     }
 
@@ -185,6 +189,19 @@ class SalesInsights extends Page
         return (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? $event->revenue_amount ?? 0);
     }
 
+    private function marketingSpend(Business $business, Carbon $start, Carbon $end): float
+    {
+        return (float) Expense::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('spent_on', [$start->toDateString(), $end->toDateString()])
+            ->where('expense_type', 'variable')
+            ->where(function (Builder $query): void {
+                $query->whereRaw('LOWER(COALESCE(category, "")) = ?', ['marketing'])
+                    ->orWhereRaw('LOWER(COALESCE(suggested_key, "")) = ?', ['marketing']);
+            })
+            ->sum('amount');
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -199,7 +216,10 @@ class SalesInsights extends Page
             'pending_count' => 0,
             'returned_count' => 0,
             'return_cost' => 0.0,
+            'marketing_spend' => 0.0,
+            'marketing_per_delivered_order' => 0.0,
             'profit_after_direct_costs' => 0.0,
+            'profit_after_marketing' => 0.0,
         ];
     }
 

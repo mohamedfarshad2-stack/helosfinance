@@ -181,4 +181,51 @@ class RevenuePipelineServiceTest extends TestCase
         $this->assertSame(4700.0, (float) $pipeline['cod_settlement']['cash_received']);
         $this->assertSame(5000.0, (float) $snapshot['revenue_total']);
     }
+
+    public function test_cod_orders_without_tracking_do_not_appear_in_finance_pipeline(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Pre Tracking Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_CREATED,
+            'external_id' => 'COD-CREATED-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 2500, 'channel' => 'cod'],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'COD-CONFIRMED-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 3200, 'channel' => 'cod'],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        $pipeline = app(RevenuePipelineService::class)->forCurrentMonth($business);
+
+        $this->assertSame(0.0, (float) $pipeline['cod']['expected_revenue']);
+        $this->assertSame(0, (int) $pipeline['cod']['pending_orders']);
+        $this->assertEmpty($pipeline['orders']);
+    }
 }

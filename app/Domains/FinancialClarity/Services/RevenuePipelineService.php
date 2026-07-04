@@ -19,8 +19,6 @@ class RevenuePipelineService
             ->where('business_id', $business->id)
             ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
             ->whereIn('event_type', [
-                OperationalEvent::ORDER_CREATED,
-                OperationalEvent::ORDER_CONFIRMED,
                 OperationalEvent::TRACKING_NUMBER_ADDED,
                 OperationalEvent::WHOLESALE_PARCEL_SENT,
                 OperationalEvent::ORDER_DELIVERED,
@@ -58,6 +56,7 @@ class RevenuePipelineService
         $orders = $events
             ->groupBy(fn (OperationalEvent $event): string => (string) ($event->external_id ?: $event->id))
             ->map(fn (Collection $group): array => $this->summarizeOrder($business, $group->sortBy(fn (OperationalEvent $event): string => (string) $event->occurred_at?->timestamp.'-'.$event->id)))
+            ->filter(fn (array $order): bool => $this->isFinanceVisibleOrder($order))
             ->values();
 
         $codOrders = $orders->filter(fn (array $order): bool => $this->isCodChannel($order['channel']));
@@ -251,12 +250,36 @@ class RevenuePipelineService
     private function isPendingStatus(string $status): bool
     {
         return in_array($status, [
-            OperationalEvent::ORDER_CREATED,
-            OperationalEvent::ORDER_CONFIRMED,
             OperationalEvent::TRACKING_NUMBER_ADDED,
             OperationalEvent::WHOLESALE_PARCEL_SENT,
             OperationalEvent::ORDER_RESENT,
         ], true);
+    }
+
+    private function isFinanceVisibleOrder(array $order): bool
+    {
+        $status = (string) ($order['status'] ?? '');
+        $channel = strtolower((string) ($order['channel'] ?? 'cod'));
+
+        if ($this->isCodChannel($channel)) {
+            return in_array($status, [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+            ], true);
+        }
+
+        if ($this->isWholesaleChannel($channel)) {
+            return in_array($status, [
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+            ], true);
+        }
+
+        return true;
     }
 
     private function isCodChannel(string $channel): bool

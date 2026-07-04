@@ -24,7 +24,7 @@ class QuickExpenseEntry extends Page implements HasForms
 
     protected static ?string $slug = 'quick-expense-entry';
     protected static ?string $navigationGroup = 'Money';
-    protected static ?string $navigationLabel = 'Quick Expense';
+    protected static ?string $navigationLabel = 'Petty Cash Spend';
     protected static ?string $navigationIcon = 'heroicon-o-bolt';
     protected static string $view = 'filament.pages.quick-expense-entry';
 
@@ -50,7 +50,7 @@ class QuickExpenseEntry extends Page implements HasForms
             ->schema([
                 Placeholder::make('tip')
                     ->hiddenLabel()
-                    ->content('Use this for day-to-day spend like fuel, packing, courier support, small repairs, meals, petty cash, and other variable costs. It stays fast on purpose.'),
+                    ->content('Use this only after money is already sitting in Petty Cash, Store Cash, or the Cash Drawer. Record the real spend here for fuel, packing, meals, and small day-to-day cash costs. Do not use this screen for bank withdrawals into petty cash.'),
                 Select::make('business_id')
                     ->label('Business')
                     ->options(fn () => $this->businessOptions())
@@ -84,14 +84,13 @@ class QuickExpenseEntry extends Page implements HasForms
                     ->label('How it was paid')
                     ->options([
                         'cash' => 'Cash',
-                        'bank' => 'Bank transfer',
                         'cheque' => 'Cheque',
-                        'card' => 'Card',
                         'credit' => 'Credit',
                         'other' => 'Other',
                     ])
                     ->live()
                     ->default('cash')
+                    ->helperText('If money left the bank directly, use Bank Review instead of this screen.')
                     ->required(),
                 Select::make('payment_status')
                     ->label('Money status')

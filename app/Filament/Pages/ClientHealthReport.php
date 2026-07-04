@@ -466,6 +466,7 @@ class ClientHealthReport extends Page implements HasForms
 
         $completed = collect($steps)->where('done', true)->count();
         $next = collect($steps)->firstWhere('done', false);
+        $pendingSteps = collect($steps)->where('done', false)->values()->all();
         $progress = count($steps) > 0 ? (int) round(($completed / count($steps)) * 100) : 0;
 
         return [
@@ -477,7 +478,7 @@ class ClientHealthReport extends Page implements HasForms
             'completed' => $completed,
             'total' => count($steps),
             'next_step' => $next,
-            'steps' => $steps,
+            'steps' => $pendingSteps,
         ];
     }
 

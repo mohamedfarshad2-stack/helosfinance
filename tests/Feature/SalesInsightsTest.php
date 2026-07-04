@@ -3,9 +3,8 @@
 namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\OperationalEvent;
-use App\Domains\Shared\Models\Sku;
-use App\Filament\Pages\SalesInsights;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -15,76 +14,59 @@ class SalesInsightsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_owner_can_see_today_and_yesterday_sales_insights(): void
+    public function test_sales_insights_shows_marketing_spend_and_profit_after_marketing(): void
     {
         $business = Business::query()->create([
-            'name' => 'Sales Business',
+            'name' => 'Insight Business',
             'currency' => 'LKR',
             'business_type' => Business::TYPE_MANUFACTURING,
-            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
         ]);
 
         $owner = User::query()->create([
-            'name' => 'Owner',
-            'email' => 'sales-owner@example.com',
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner@example.com',
             'password' => Hash::make('password'),
             'business_id' => $business->id,
             'is_platform_admin' => false,
             'is_employee' => false,
         ]);
 
-        $sku = Sku::query()->create([
-            'business_id' => $business->id,
-            'code' => 'PS364',
-            'name' => 'Slipper PS364',
-            'active' => true,
-        ]);
-
         OperationalEvent::query()->create([
             'business_id' => $business->id,
-            'sku_id' => $sku->id,
-            'source' => 'stock_app_sync',
+            'source' => 'stock_app',
             'event_type' => OperationalEvent::ORDER_DELIVERED,
-            'external_id' => 'today-delivered',
+            'external_id' => 'DELIVERED-1',
             'channel' => 'cod',
             'quantity' => 1,
-            'revenue_amount' => 2500,
-            'direct_cost_amount' => 700,
-            'occurred_at' => now(),
+            'revenue_amount' => 3000,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 3000],
+            'occurred_at' => now()->subHour(),
         ]);
 
-        OperationalEvent::query()->create([
+        Expense::query()->create([
             'business_id' => $business->id,
-            'sku_id' => $sku->id,
-            'source' => 'stock_app_sync',
-            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
-            'external_id' => 'today-dispatched',
-            'channel' => 'cod',
-            'quantity' => 1,
-            'payload' => ['sale_amount' => 1800],
-            'occurred_at' => now(),
-        ]);
-
-        OperationalEvent::query()->create([
-            'business_id' => $business->id,
-            'sku_id' => $sku->id,
-            'source' => 'stock_app_sync',
-            'event_type' => OperationalEvent::ORDER_DELIVERED,
-            'external_id' => 'yesterday-delivered',
-            'channel' => 'cod',
-            'quantity' => 1,
-            'revenue_amount' => 1400,
-            'occurred_at' => now()->subDay(),
+            'department' => 'Marketing',
+            'category' => 'Marketing',
+            'expense_type' => 'variable',
+            'suggested_key' => 'marketing',
+            'description' => 'Boosting spend',
+            'amount' => 500,
+            'payment_status' => 'paid',
+            'spent_on' => today()->toDateString(),
+            'recurring' => false,
         ]);
 
         $this->actingAs($owner)
-            ->get(SalesInsights::getUrl())
+            ->get(\App\Filament\Pages\SalesInsights::getUrl())
             ->assertOk()
-            ->assertSee('Today delivered sales')
-            ->assertSee('LKR 2,500.00')
-            ->assertSee('LKR 1,400.00')
-            ->assertSee('LKR 1,800.00')
-            ->assertSee('Top delivered products today')
-            ->assertSee('PS364');
+            ->assertSee('Marketing spend')
+            ->assertSee('Profit after direct + marketing')
+            ->assertSee('LKR 500.00')
+            ->assertSee('LKR 2,075.00');
     }
 }

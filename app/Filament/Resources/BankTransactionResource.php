@@ -53,6 +53,7 @@ class BankTransactionResource extends Resource
             Select::make('transaction_type')
                 ->label('Transaction type')
                 ->options(static::transactionTypeOptions())
+                ->helperText('Use Transfer when bank money is only being moved into Savings, Petty Cash, Store Cash, or another internal money container. Use Expense only when the business really spent the money.')
                 ->required(),
             Select::make('counter_money_container')
                 ->label('Transfer destination account')
@@ -68,7 +69,7 @@ class BankTransactionResource extends Resource
                 ->searchable()
                 ->nullable()
                 ->placeholder('Shared / Unallocated')
-                ->helperText('Required for revenue, COD settlement, expenses, loans, owner contributions, and owner withdrawals. Transfers stay unallocated.'),
+                ->helperText('Required for revenue, COD settlement, expenses, loans, owner contributions, and owner withdrawals. Leave this blank for pure internal transfers.'),
             Select::make('classification')->options([
                 'unknown' => 'Unknown',
                 'revenue' => 'Revenue',
@@ -87,7 +88,7 @@ class BankTransactionResource extends Resource
                 'transfer' => 'Transfer',
                 'petty_cash' => 'Petty cash',
                 'maintenance' => 'Maintenance',
-            ])->required(),
+            ])->helperText('If this row only funded petty cash, classify it as Transfer, not Expense.')->required(),
             Select::make('status')->options([
                 'review' => 'Needs review',
                 'classified' => 'Reviewed / classified',
@@ -99,7 +100,7 @@ class BankTransactionResource extends Resource
     {
         return $table->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))->defaultSort('transaction_date', 'desc')
             ->emptyStateHeading('No bank or cash rows to review')
-            ->emptyStateDescription('Import a statement or add a cash transaction. Then choose whether each row is revenue, COD settlement, expense, transfer, owner money, loan, or other.')
+            ->emptyStateDescription('Import a statement or add a cash transaction. Use Transfer for money moved into Petty Cash or another internal account. Use Expense only for real business spending.')
             ->columns([
             Tables\Columns\TextColumn::make('transaction_date')->date()->sortable(),
             Tables\Columns\TextColumn::make('description')->searchable()->limit(30),

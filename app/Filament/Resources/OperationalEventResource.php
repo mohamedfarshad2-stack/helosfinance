@@ -125,7 +125,12 @@ class OperationalEventResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->defaultSort('occurred_at', 'desc')->columns([
+        return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->whereNotIn('event_type', [
+                OperationalEvent::ORDER_CREATED,
+                OperationalEvent::ORDER_CONFIRMED,
+            ]))
+            ->defaultSort('occurred_at', 'desc')->columns([
             Tables\Columns\TextColumn::make('occurred_at')->dateTime()->sortable(),
             Tables\Columns\TextColumn::make('event_type')->badge()->searchable(),
             Tables\Columns\TextColumn::make('business.name')->label('Client / Business')->searchable(),

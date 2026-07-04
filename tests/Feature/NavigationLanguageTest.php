@@ -45,7 +45,7 @@ class NavigationLanguageTest extends TestCase
         $this->assertContains('Staff & Salary Setup', $labels);
         $this->assertContains('Expenses & Payables', $labels);
         $this->assertContains('Bank Review', $labels);
-        $this->assertContains('Quick Expense', $labels);
+        $this->assertContains('Petty Cash Spend', $labels);
         $this->assertContains('Import Bank Statement', $labels);
         $this->assertContains('Fix Missing Product Links', $labels);
         $this->assertContains('Sales Insights', $labels);
@@ -64,5 +64,6 @@ class NavigationLanguageTest extends TestCase
         $this->assertNotContains('Staff & Pay', $labels);
         $this->assertNotContains('Bank & Cash Review', $labels);
         $this->assertNotContains('Product Recipes', $labels);
+        $this->assertNotContains('Quick Expense', $labels);
     }
 }

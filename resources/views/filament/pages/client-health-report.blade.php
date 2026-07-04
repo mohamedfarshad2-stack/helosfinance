@@ -37,6 +37,8 @@
                 $ownerMap = $ownerBusinessMap ?? ['headline' => '', 'default_key' => 'trust', 'nodes' => [], 'top_actions' => []];
                 $setupGuide = $ownerSetupGuide ?? ['steps' => [], 'progress' => 0, 'completed' => 0, 'total' => 0];
                 $coach = $ownerCoach ?? ['coach_cards' => [], 'next_action' => null, 'do_first' => []];
+                $setupSteps = collect($setupGuide['steps'] ?? []);
+                $pendingSetupSteps = $setupSteps->reject(fn (array $step): bool => (bool) ($step['done'] ?? false))->values();
             @endphp
 
             <x-filament::section>
@@ -310,7 +312,9 @@
                     <div class="flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Start Here</div>
-                            <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">{{ $setupGuide['headline'] ?? 'Setup path is being prepared.' }}</div>
+                            <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">
+                                {{ $pendingSetupSteps->isNotEmpty() ? ($setupGuide['headline'] ?? 'Setup path is being prepared.') : 'Setup basics are complete.' }}
+                            </div>
                             <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $setupGuide['subheadline'] ?? 'HELOS will guide the owner through the first safe setup steps.' }}</div>
                         </div>
                         <div class="min-w-[180px] rounded-xl border border-gray-200 bg-gray-50 p-3 text-right dark:border-gray-800 dark:bg-gray-900">
@@ -320,7 +324,7 @@
                         </div>
                     </div>
 
-                    @if (! empty($setupGuide['next_step'] ?? null))
+                    @if ($pendingSetupSteps->isNotEmpty() && ! empty($setupGuide['next_step'] ?? null))
                         @php
                             $next = $setupGuide['next_step'];
                         @endphp
@@ -338,8 +342,25 @@
                         </div>
                     @endif
 
-                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                        @foreach (($setupGuide['steps'] ?? []) as $step)
+                    @if ((int) ($setupGuide['completed'] ?? 0) > 0)
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div class="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">Completed setup work</div>
+                                    <div class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                                        {{ (int) ($setupGuide['completed'] ?? 0) }} setup item(s) are already done, so HELOS has removed them from the live checklist and increased your setup readiness.
+                                    </div>
+                                </div>
+                                <div class="rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700 shadow-sm dark:bg-gray-950 dark:text-emerald-200">
+                                    {{ (int) ($setupGuide['progress'] ?? 0) }}% ready
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($pendingSetupSteps->isNotEmpty())
+                        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        @foreach ($pendingSetupSteps as $step)
                             @php
                                 $done = (bool) ($step['done'] ?? false);
                                 $stepClasses = $done
@@ -371,7 +392,15 @@
                                 </a>
                             </div>
                         @endforeach
-                    </div>
+                        </div>
+                    @else
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/30">
+                            <div class="text-lg font-black text-gray-950 dark:text-white">No setup tasks left in this checklist.</div>
+                            <div class="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                                The foundation steps on this page are complete. HELOS can now focus on trust warnings, daily work, profitability, and owner guidance instead of basic setup.
+                            </div>
+                        </div>
+                    @endif
                 </div>
             </x-filament::section>
 

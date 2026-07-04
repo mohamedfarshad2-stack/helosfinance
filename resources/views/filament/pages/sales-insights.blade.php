@@ -6,7 +6,7 @@
                     <div class="text-xs uppercase tracking-wide text-gray-500">Sales command view</div>
                     <h2 class="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">Today, yesterday, and what needs attention</h2>
                     <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
-                        Delivered orders count as sales. Dispatched and confirmed orders are pipeline until the customer receives the parcel.
+                        Delivered orders count as sales. Finance starts once a COD parcel gets a tracking number or a wholesale parcel is sent. Marketing only shows here after you record it in Expenses or Bank Review with the Marketing category.
                     </p>
                 </div>
 
@@ -49,8 +49,8 @@
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {!! $card('Today delivered sales', $money($today['delivered_revenue']), (int) $today['delivered_count'].' delivered parcel(s)', 'green') !!}
             {!! $card('Today dispatched value', $money($today['dispatch_value']), (int) $today['dispatch_count'].' parcel(s) still waiting result', 'blue') !!}
-            {!! $card('Today returns', (int) $today['returned_count'].' parcel(s)', 'Return cost '.$money($today['return_cost']), ((int) $today['returned_count'] > 0 ? 'red' : 'gray')) !!}
-            {!! $card('Needs product link', number_format((int) $missingProductLinks), 'Fix this before trusting SKU profit', ((int) $missingProductLinks > 0 ? 'amber' : 'green')) !!}
+            {!! $card('Today marketing spend', $money($today['marketing_spend']), ((int) $today['delivered_count'] > 0 ? 'About '.$money($today['marketing_per_delivered_order']).' per delivered parcel' : 'No delivered parcel yet to spread this over'), ((float) $today['marketing_spend'] > 0 ? 'amber' : 'gray')) !!}
+            {!! $card('Today profit after direct + marketing', $money($today['profit_after_marketing']), 'After courier, returns, resend impact, and marketing rows already recorded today', ((float) $today['profit_after_marketing'] >= 0 ? 'green' : 'red')) !!}
         </div>
 
         <div class="grid gap-6 xl:grid-cols-[1fr_0.75fr]">
@@ -92,6 +92,16 @@
                             <div class="p-3">{{ (int) $today['returned_count'] }}</div>
                             <div class="p-3">{{ (int) $yesterday['returned_count'] }}</div>
                         </div>
+                        <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
+                            <div class="p-3 font-medium">Marketing spend</div>
+                            <div class="p-3">{{ $money($today['marketing_spend']) }}</div>
+                            <div class="p-3">{{ $money($yesterday['marketing_spend']) }}</div>
+                        </div>
+                        <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
+                            <div class="p-3 font-medium">Profit after direct + marketing</div>
+                            <div class="p-3">{{ $money($today['profit_after_marketing']) }}</div>
+                            <div class="p-3">{{ $money($yesterday['profit_after_marketing']) }}</div>
+                        </div>
                     </div>
                 </div>
             </x-filament::section>
@@ -117,8 +127,41 @@
                             <span class="font-semibold text-gray-950 dark:text-white">{{ (int) $week['returned_count'] }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+                            <span class="text-sm text-gray-500">Marketing spend</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['marketing_spend']) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Profit after direct costs</span>
                             <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['profit_after_direct_costs']) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+                            <span class="text-sm text-gray-500">Profit after direct + marketing</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['profit_after_marketing']) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </x-filament::section>
+        </div>
+
+        <div class="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
+            <x-filament::section>
+                <div class="grid gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Trust check</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Two things usually distort daily sales profit the fastest: missing SKU links and missing marketing rows.</p>
+                    </div>
+
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <a href="{{ \App\Filament\Pages\MissingSkuMapping::getUrl() }}" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left text-amber-950 transition hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                            <div class="text-xs uppercase tracking-wide opacity-70">Missing SKU links</div>
+                            <div class="mt-2 text-2xl font-semibold">{{ number_format((int) $missingProductLinks) }}</div>
+                            <div class="mt-1 text-sm opacity-80">Fix this before trusting product-level profit.</div>
+                        </a>
+
+                        <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+                            <div class="text-xs uppercase tracking-wide opacity-70">Marketing entered today</div>
+                            <div class="mt-2 text-2xl font-semibold">{{ $money($today['marketing_spend']) }}</div>
+                            <div class="mt-1 text-sm opacity-80">If boosting was spent but this stays zero, today’s parcel profit still looks too high.</div>
                         </div>
                     </div>
                 </div>
