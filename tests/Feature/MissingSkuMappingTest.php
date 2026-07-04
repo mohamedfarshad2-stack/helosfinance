@@ -250,4 +250,56 @@ class MissingSkuMappingTest extends TestCase
 
         $this->assertSame(1, SkuStockMovement::query()->where('operational_event_id', $event->id)->count());
     }
+
+    public function test_bulk_repair_form_post_repairs_group_and_flashes_result(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Post Repair Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'post-repair-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'BROWN-43',
+            'name' => 'Brown Geta Size 43',
+            'active' => true,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'cod-order-form-post',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => [
+                'sku_name' => 'brown geta 1390 + 350 delivery Size 43',
+                'sale_amount' => 1740,
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('admin.missing-product-links.repair-group'), [
+                'business_id' => $business->id,
+                'group_key' => 'brown-geta-1390-350-delivery-size-43',
+                'sku_id' => $sku->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('missing_product_repair_success');
+
+        $this->assertSame(0, OperationalEvent::query()->where('business_id', $business->id)->whereNull('sku_id')->count());
+    }
 }

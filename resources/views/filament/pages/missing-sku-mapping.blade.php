@@ -47,6 +47,18 @@
 
         <x-filament::section>
             <div class="grid gap-4">
+                @if (session('missing_product_repair_success'))
+                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+                        {{ session('missing_product_repair_success') }}
+                    </div>
+                @endif
+
+                @if (session('missing_product_repair_warning'))
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                        {{ session('missing_product_repair_warning') }}
+                    </div>
+                @endif
+
                 <div>
                     <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Fix repeated product hints first</h2>
                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose one SKU for a repeated Stock App product hint. HELOS repairs up to 500 matching rows and recalculates them.</p>
@@ -55,7 +67,11 @@
                 <div class="grid gap-3">
                     @forelse ($groups as $group)
                         <div class="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
-                            <div class="grid gap-4 lg:grid-cols-[1fr_0.45fr_0.3fr] lg:items-end">
+                            <form method="POST" action="{{ route('admin.missing-product-links.repair-group') }}" class="grid gap-4 lg:grid-cols-[1fr_0.45fr_0.3fr] lg:items-end">
+                                @csrf
+                                <input type="hidden" name="business_id" value="{{ $business?->id }}">
+                                <input type="hidden" name="group_key" value="{{ $group['key'] }}">
+
                                 <div>
                                     <div class="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Repeated Stock App hint</div>
                                     <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ $group['hint'] }}</div>
@@ -66,7 +82,7 @@
 
                                 <label class="grid gap-1 text-sm">
                                     <span class="font-medium text-gray-950 dark:text-white">Correct product</span>
-                                    <select wire:model.live="bulkSkuSelections.{{ $group['key'] }}" class="fi-input block w-full rounded-lg border-gray-300 bg-white py-2 text-sm text-gray-950 shadow-sm outline-none transition duration-75 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-gray-700 dark:bg-white/5 dark:text-white">
+                                    <select name="sku_id" required class="fi-input block w-full rounded-lg border-gray-300 bg-white py-2 text-sm text-gray-950 shadow-sm outline-none transition duration-75 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-gray-700 dark:bg-white/5 dark:text-white">
                                         <option value="">Choose product / SKU</option>
                                         @foreach ($skuOptions as $id => $label)
                                             <option value="{{ $id }}">{{ $label }}</option>
@@ -74,10 +90,10 @@
                                     </select>
                                 </label>
 
-                                <x-filament::button wire:click="assignGroup(@js($group['key']), null)" icon="heroicon-o-check-circle">
+                                <x-filament::button type="submit" icon="heroicon-o-check-circle">
                                     Repair group
                                 </x-filament::button>
-                            </div>
+                            </form>
                         </div>
                     @empty
                         <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
