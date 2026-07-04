@@ -66,7 +66,7 @@
 
                                 <label class="grid gap-1 text-sm">
                                     <span class="font-medium text-gray-950 dark:text-white">Correct product</span>
-                                    <select wire:model="bulkSkuSelections.{{ $group['key'] }}" class="fi-input block w-full rounded-lg border-gray-300 bg-white py-2 text-sm text-gray-950 shadow-sm outline-none transition duration-75 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-gray-700 dark:bg-white/5 dark:text-white">
+                                    <select wire:model.live="bulkSkuSelections.{{ $group['key'] }}" class="fi-input block w-full rounded-lg border-gray-300 bg-white py-2 text-sm text-gray-950 shadow-sm outline-none transition duration-75 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-gray-700 dark:bg-white/5 dark:text-white">
                                         <option value="">Choose product / SKU</option>
                                         @foreach ($skuOptions as $id => $label)
                                             <option value="{{ $id }}">{{ $label }}</option>
@@ -74,7 +74,7 @@
                                     </select>
                                 </label>
 
-                                <x-filament::button wire:click="assignGroup('{{ $group['key'] }}')" icon="heroicon-o-check-circle">
+                                <x-filament::button wire:click="assignGroup(@js($group['key']), null)" icon="heroicon-o-check-circle">
                                     Repair group
                                 </x-filament::button>
                             </div>

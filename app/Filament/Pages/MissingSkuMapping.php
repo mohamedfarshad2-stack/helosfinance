@@ -20,6 +20,7 @@ class MissingSkuMapping extends Page
     protected static ?string $navigationLabel = 'Fix Missing Product Links';
     protected static ?string $navigationIcon = 'heroicon-o-link';
     protected static ?int $navigationSort = 4;
+    protected static ?string $title = 'Fix Missing Product Links';
     protected static string $view = 'filament.pages.missing-sku-mapping';
 
     public ?int $businessId = null;
@@ -109,9 +110,9 @@ class MissingSkuMapping extends Page
             ->send();
     }
 
-    public function assignGroup(string $groupKey, OperationalImpactCalculator $calculator, SkuStockMovementService $stockMovements): void
+    public function assignGroup(string $groupKey, int|string|null $selectedSkuId, OperationalImpactCalculator $calculator, SkuStockMovementService $stockMovements): void
     {
-        $skuId = (int) ($this->bulkSkuSelections[$groupKey] ?? 0);
+        $skuId = (int) ($selectedSkuId ?: ($this->bulkSkuSelections[$groupKey] ?? 0));
         $business = $this->selectedBusiness();
 
         if (! $business || $skuId <= 0) {
@@ -134,11 +135,22 @@ class MissingSkuMapping extends Page
             ->filter(fn (OperationalEvent $event): bool => $this->groupKeyForEvent($event) === $groupKey)
             ->take(500);
 
+        if ($events->isEmpty()) {
+            Notification::make()
+                ->title('Nothing changed')
+                ->body('This repeated hint may already be fixed. Refresh the page and check the remaining count.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         foreach ($events as $event) {
             $this->repairEvent($event, $sku, $calculator, $stockMovements);
         }
 
         unset($this->bulkSkuSelections[$groupKey]);
+        $this->skuSelections = [];
 
         Notification::make()
             ->title('Repeated product hint repaired')

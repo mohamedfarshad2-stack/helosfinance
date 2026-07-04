@@ -190,9 +190,64 @@ class MissingSkuMappingTest extends TestCase
         Livewire::test(MissingSkuMapping::class)
             ->assertSee('Blue slipper from stock app')
             ->set('bulkSkuSelections.blue-slipper-from-stock-app', $sku->id)
-            ->call('assignGroup', 'blue-slipper-from-stock-app');
+            ->call('assignGroup', 'blue-slipper-from-stock-app', $sku->id);
 
         $this->assertSame(0, OperationalEvent::query()->where('business_id', $business->id)->whereNull('sku_id')->count());
         $this->assertSame(2, SkuStockMovement::query()->where('sku_id', $sku->id)->count());
+    }
+
+    public function test_repairing_the_same_event_again_does_not_duplicate_stock_movement(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Duplicate Safety Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'duplicate-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'PS-DUP',
+            'name' => 'Duplicate Safe Slipper',
+            'active' => true,
+        ]);
+
+        $event = OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'duplicate-safe-order',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => [
+                'sku_name' => 'Duplicate Safe Slipper',
+                'sale_amount' => 1900,
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $this->actingAs($owner);
+
+        Livewire::test(MissingSkuMapping::class)
+            ->set("skuSelections.{$event->id}", $sku->id)
+            ->call('assignSku', $event->id);
+
+        $event->update(['sku_id' => null]);
+
+        Livewire::test(MissingSkuMapping::class)
+            ->set("skuSelections.{$event->id}", $sku->id)
+            ->call('assignSku', $event->id);
+
+        $this->assertSame(1, SkuStockMovement::query()->where('operational_event_id', $event->id)->count());
     }
 }
