@@ -8,7 +8,12 @@
                         {{ $workQueue['headline'] ?? 'Today\'s work is ready.' }}
                     </div>
                     <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                        This screen is for action, not reports. Start with the task that blocks the next step.
+                        This screen is for action, not reports. Start with the first task, open the record, do the work, then come back here for the next item.
+                    </div>
+                    <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300 sm:grid-cols-3">
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900">1. Open the task</div>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900">2. Finish the next real step</div>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900">3. Come back here for what is next</div>
                     </div>
                 </div>
 

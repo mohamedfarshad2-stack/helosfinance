@@ -28,10 +28,12 @@ class ListProductionEntries extends ListRecords
                 ->modalHeading('How Production Pay works')
                 ->modalContent(new HtmlString(<<<HTML
 <div class="grid gap-3 text-sm">
-    <div><strong>Fixed salaries</strong> belong in <strong>Setup > Staff & Salary Setup</strong> and are for month-end pressure.</div>
-    <div><strong>Weekly production pay</strong> belongs here and is filtered by production date so you can review one week or one month at a time.</div>
-    <div><strong>Gross payout</strong> is the amount before advances and deductions. <strong>Net payable</strong> is what HELOS will settle.</div>
-    <div class="pt-2 text-gray-500">Recommended flow: record production during the week, review the date range, then mark selected payouts as paid when you settle them.</div>
+    <div><strong>Use this page for daily production work and weekly piece pay.</strong></div>
+    <div><strong>Step 1:</strong> choose product, part, work step, worker, and quantity.</div>
+    <div><strong>Step 2:</strong> HELOS calculates the gross payout from the selected recipe labor line.</div>
+    <div><strong>Step 3:</strong> if there was an advance or deduction, enter it and HELOS shows the net payable.</div>
+    <div><strong>Fixed salaries</strong> still belong in <strong>Setup > Staff & Salary Setup</strong>. This page is for production-based pay.</div>
+    <div class="pt-2 text-gray-500">Recommended flow: record work during the week, filter the date range, review payouts, then mark them paid when cash is settled.</div>
 </div>
 HTML))
                 ->modalSubmitAction(false),

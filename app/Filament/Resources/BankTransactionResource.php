@@ -53,7 +53,7 @@ class BankTransactionResource extends Resource
             Select::make('transaction_type')
                 ->label('Transaction type')
                 ->options(static::transactionTypeOptions())
-                ->helperText('Use Transfer when bank money is only being moved into Savings, Petty Cash, Store Cash, or another internal money container. Use Expense only when the business really spent the money.')
+                ->helperText('Use Transfer when money only moved between your own places like Current Account, Savings, Petty Cash, or Store Cash. Use Expense only when the business really spent the money outside.')
                 ->required(),
             Select::make('counter_money_container')
                 ->label('Transfer destination account')
@@ -69,7 +69,7 @@ class BankTransactionResource extends Resource
                 ->searchable()
                 ->nullable()
                 ->placeholder('Shared / Unallocated')
-                ->helperText('Required for revenue, COD settlement, expenses, loans, owner contributions, and owner withdrawals. Leave this blank for pure internal transfers.'),
+                ->helperText('Choose the business this money belongs to. Leave blank only for pure internal transfers between your own money containers.'),
             Select::make('classification')->options([
                 'unknown' => 'Unknown',
                 'revenue' => 'Revenue',
@@ -88,7 +88,7 @@ class BankTransactionResource extends Resource
                 'transfer' => 'Transfer',
                 'petty_cash' => 'Petty cash',
                 'maintenance' => 'Maintenance',
-            ])->helperText('If this row only funded petty cash, classify it as Transfer, not Expense.')->required(),
+            ])->helperText('If this row only moved money into petty cash or store cash, classify it as Transfer, not Expense.')->required(),
             Select::make('status')->options([
                 'review' => 'Needs review',
                 'classified' => 'Reviewed / classified',
@@ -100,7 +100,7 @@ class BankTransactionResource extends Resource
     {
         return $table->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))->defaultSort('transaction_date', 'desc')
             ->emptyStateHeading('No bank or cash rows to review')
-            ->emptyStateDescription('Import a statement or add a cash transaction. Use Transfer for money moved into Petty Cash or another internal account. Use Expense only for real business spending.')
+            ->emptyStateDescription('Import a statement or add a cash row here. First decide what happened: money came in, money went out, or money only moved between your own accounts.')
             ->columns([
             Tables\Columns\TextColumn::make('transaction_date')->date()->sortable(),
             Tables\Columns\TextColumn::make('description')->searchable()->limit(30),

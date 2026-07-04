@@ -213,6 +213,22 @@
 
     <div class="cod-workbench">
         <x-filament::section>
+            <div class="grid gap-3 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-gray-500">COD daily work</div>
+                    <div class="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">Work order by order without opening extra pages</div>
+                    <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                        Simple flow: fill customer details, call and update status, add tracking when dispatched, then update delivered or returned later.
+                    </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                    <div class="font-semibold text-gray-950 dark:text-white">When to use this screen</div>
+                    <div class="mt-2">Use this for real daily COD work. One row should move from calling to dispatched to delivered or returned over time.</div>
+                </div>
+            </div>
+        </x-filament::section>
+
+        <x-filament::section>
             <div class="cod-toolbar">
                 @if (count($businessOptions) > 1)
                     <div class="cod-cell">
@@ -226,7 +242,7 @@
                 @endif
 
                 <div class="cod-cell">
-                    <label>Status</label>
+                    <label>Show</label>
                     <select wire:model.live="statusFilter">
                         <option value="">All statuses</option>
                         @foreach ($statusOptions as $value => $label)

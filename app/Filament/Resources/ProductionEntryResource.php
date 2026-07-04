@@ -45,11 +45,13 @@ class ProductionEntryResource extends Resource
                 ->dehydrated()
                 ->required(),
             Select::make('sku_id')
+                ->label('Product / SKU')
                 ->placeholder('Select SKU')
                 ->live()
                 ->options(fn (Get $get) => static::skuOptions((int) ($get('business_id') ?? 0)))
                 ->searchable()
                 ->preload()
+                ->helperText('Choose the finished product this work belongs to.')
                 ->afterStateUpdated(function (Get $get, Set $set): void {
                     $set('sku_recipe_item_id', null);
                     $set('production_step', null);
@@ -66,6 +68,7 @@ class ProductionEntryResource extends Resource
                 ])
                 ->default('part_production')
                 ->live()
+                ->helperText('Choose Part production for strap, sole, upper, cutting, stitching, or other separate work. Choose Finished product only when the full item was completed.')
                 ->required()
                 ->afterStateUpdated(function (Set $set): void {
                     $set('part_name', null);
@@ -80,6 +83,7 @@ class ProductionEntryResource extends Resource
                 ->searchable()
                 ->preload()
                 ->live()
+                ->helperText('Example: strap, sole, upper, bottom, packing.')
                 ->visible(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
                 ->required(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
                 ->afterStateUpdated(function (Get $get, Set $set): void {
@@ -126,8 +130,10 @@ class ProductionEntryResource extends Resource
                 ->searchable()
                 ->placeholder('Select worker')
                 ->options(fn (Get $get) => static::employeeOptions((int) ($get('business_id') ?? 0)))
+                ->helperText('Choose the person who did this work.')
                 ->required(),
             TextInput::make('quantity_produced')
+                ->label('How many were completed?')
                 ->numeric()
                 ->live(onBlur: true)
                 ->afterStateUpdated(function (Get $get, Set $set): void {
@@ -135,8 +141,13 @@ class ProductionEntryResource extends Resource
                     $set('net_payable', static::calculateNetPayable($get));
                 })
                 ->required()
-                ->minValue(1),
-            TextInput::make('waste_quantity')->numeric()->default(0),
+                ->minValue(1)
+                ->helperText('Enter the real finished quantity for this work step.'),
+            TextInput::make('waste_quantity')
+                ->label('Waste / damaged quantity')
+                ->numeric()
+                ->default(0)
+                ->helperText('Optional. Enter only the damaged or wasted quantity from this batch.'),
             TextInput::make('employee_payout')
                 ->label('Gross payout')
                 ->helperText('HELOS calculates this from the selected SKU recipe and quantity. You can still adjust it if the client pays differently.')
@@ -146,12 +157,14 @@ class ProductionEntryResource extends Resource
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
             TextInput::make('advance_amount')
+                ->label('Advance already given')
                 ->numeric()
                 ->prefix('LKR')
                 ->default(0)
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
             TextInput::make('deduction_amount')
+                ->label('Deduction')
                 ->numeric()
                 ->prefix('LKR')
                 ->default(0)
@@ -167,6 +180,7 @@ class ProductionEntryResource extends Resource
             TextInput::make('note')
                 ->label('Note')
                 ->placeholder('Optional')
+                ->helperText('Use this only for unusual situations, not for normal daily work.')
                 ->columnSpanFull(),
             Select::make('payment_status')
                 ->options([

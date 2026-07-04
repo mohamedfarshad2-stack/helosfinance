@@ -37,6 +37,7 @@ class MaterialLedgerResource extends Resource
                 ->options(fn () => static::businessOptions())
                 ->default(fn () => Auth::user()?->defaultBusinessId())
                 ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                ->helperText('Choose the manufacturing business this stock move belongs to.')
                 ->required(),
             Select::make('sku_id')
                 ->label('SKU')
@@ -60,6 +61,7 @@ class MaterialLedgerResource extends Resource
                         $set('sku_id', null);
                     }
                 })
+                ->helperText('Start with Bought material when new raw material came in. Use Used in production when stock was consumed.')
                 ->required(),
             Select::make('component_name')
                 ->label('Component')
@@ -83,6 +85,7 @@ class MaterialLedgerResource extends Resource
                         $set('unit_cost', (float) $component->latest_purchase_unit_cost);
                     }
                 })
+                ->helperText('Choose the raw material or packing item that moved.')
                 ->required(),
             TextInput::make('material_component_id')
                 ->hidden()
@@ -115,7 +118,8 @@ class MaterialLedgerResource extends Resource
                 ->live(onBlur: true)
                 ->afterStateUpdated(fn (Get $get, Set $set): mixed => $set('total_cost', round((float) ($get('quantity') ?? 0) * (float) ($get('unit_cost') ?? 0), 2)))
                 ->required()
-                ->prefix('LKR'),
+                ->prefix('LKR')
+                ->helperText('HELOS multiplies quantity and unit cost to get the total value.'),
             TextInput::make('total_cost')
                 ->label(fn (Get $get): string => match ($get('entry_type')) {
                     'purchase' => 'Total purchase cost',
@@ -136,6 +140,8 @@ class MaterialLedgerResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))
             ->defaultSort('occurred_on', 'desc')
+            ->emptyStateHeading('No raw material stock rows yet')
+            ->emptyStateDescription('Record what came in, what was used, and what was wasted. Start with Bought material when you purchase raw materials.')
             ->columns([
                 Tables\Columns\TextColumn::make('occurred_on')->date()->sortable(),
                 Tables\Columns\TextColumn::make('entry_type')->badge(),

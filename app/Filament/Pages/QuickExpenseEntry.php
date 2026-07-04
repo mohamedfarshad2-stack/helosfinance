@@ -50,7 +50,7 @@ class QuickExpenseEntry extends Page implements HasForms
             ->schema([
                 Placeholder::make('tip')
                     ->hiddenLabel()
-                    ->content('Use this only after money is already sitting in Petty Cash, Store Cash, or the Cash Drawer. Record the real spend here for fuel, packing, meals, and small day-to-day cash costs. Do not use this screen for bank withdrawals into petty cash.'),
+                    ->content('Use this only when cash is already in your hand, petty cash, store cash, or the cash drawer. Example: fuel, lunch, packing, repair, or a small supplier payment. If money left the bank directly, do not use this page. Use Bank Review instead.'),
                 Select::make('business_id')
                     ->label('Business')
                     ->options(fn () => $this->businessOptions())
@@ -69,13 +69,15 @@ class QuickExpenseEntry extends Page implements HasForms
                     ->searchable()
                     ->options(fn () => $this->expenseCategoryOptions())
                     ->preload()
+                    ->helperText('Choose the closest repeated reason so names stay consistent.')
                     ->required(),
                 Select::make('payee')
                     ->label('Paid to')
                     ->placeholder('Search supplier / payee')
                     ->searchable()
                     ->options(fn () => $this->payeeOptions())
-                    ->preload(),
+                    ->preload()
+                    ->helperText('Choose who received the money. Leave blank only if you truly do not know.'),
                 DatePicker::make('spent_on')
                     ->label('Date')
                     ->default(now())
@@ -101,6 +103,7 @@ class QuickExpenseEntry extends Page implements HasForms
                         'credit_due' => 'Pay later',
                     ])
                     ->default('paid')
+                    ->helperText('Use Pay later when cash did not fully leave today.')
                     ->required(),
                 TextInput::make('cheque_number')
                     ->label('Cheque number')
@@ -122,7 +125,8 @@ class QuickExpenseEntry extends Page implements HasForms
                             $component->state(0);
                         }
                     })
-                    ->dehydrateStateUsing(fn (mixed $state): float => filled($state) ? (float) $state : 0),
+                    ->dehydrateStateUsing(fn (mixed $state): float => filled($state) ? (float) $state : 0)
+                    ->helperText('Enter how much cash actually left today.'),
                 Placeholder::make('balance_due')
                     ->hiddenLabel()
                     ->content(function (Get $get): string {
@@ -137,6 +141,7 @@ class QuickExpenseEntry extends Page implements HasForms
                     ->options(fn () => $this->employeeOptions())
                     ->searchable()
                     ->placeholder('Select employee')
+                    ->helperText('Choose the person who made or reported the spend.')
                     ->nullable(),
                 TextInput::make('description')
                     ->label('Short note')
@@ -172,8 +177,8 @@ class QuickExpenseEntry extends Page implements HasForms
         ]);
 
         Notification::make()
-            ->title('Spend recorded')
-            ->body('This variable spend is now included in the business picture.')
+            ->title('Cash spend recorded')
+            ->body('This spend is now saved and will appear in the business numbers.')
             ->success()
             ->send();
 
