@@ -85,7 +85,7 @@ class ServiceBusinessBillingIntegrationTest extends TestCase
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
             ->assertSee('Start Here')
-            ->assertSee('Add service clients and monthly fees')
+            ->assertSee('Completed setup work')
             ->assertSee('Service billing money')
             ->assertSee('Service money overdue')
             ->assertSee('COD Returns Client');
