@@ -3,10 +3,10 @@
 namespace App\Domains\FinancialClarity\Services;
 
 use App\Domains\Shared\Models\Business;
+use App\Filament\Pages\MissingSkuMapping;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\EmployeeResource;
 use App\Filament\Resources\ExpenseResource;
-use App\Filament\Resources\IntegrationSourceResource;
 use App\Filament\Resources\MaterialLedgerResource;
 use App\Filament\Resources\SkuRecipeResource;
 use App\Filament\Resources\SkuResource;
@@ -130,9 +130,9 @@ class TrustValidationService
                 'fix_guidance' => 'Open Products / SKUs or Product Cost Recipes and enter the missing material cost truth.',
             ],
             'Missing stock mapping', 'Missing lifecycle stages' => [
-                'action_label' => 'Review sales activity',
-                'action_url' => IntegrationSourceResource::getUrl('index'),
-                'fix_guidance' => 'Check the stock-app connection or review order activity so HELOS can match rows to the right product and lifecycle stage.',
+                'action_label' => 'Fix missing product links',
+                'action_url' => MissingSkuMapping::getUrl(),
+                'fix_guidance' => 'Open Missing Product Links, choose the correct product for each order row, and save. HELOS will recalculate the affected costs.',
             ],
             'Missing supplier name', 'Missing due date' => [
                 'action_label' => 'Fix expenses',

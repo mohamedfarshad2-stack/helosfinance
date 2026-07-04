@@ -11,6 +11,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\SkuStockMovement;
+use App\Filament\Pages\MissingSkuMapping;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MaterialLedgerResource;
@@ -588,7 +589,7 @@ class WorkQueueService
 
     private function inventoryTasks(Business $business): array
     {
-        return MaterialLedgerEntry::query()
+        $materialTasks = MaterialLedgerEntry::query()
             ->where('business_id', $business->id)
             ->whereNull('sku_id')
             ->orderBy('occurred_on')
@@ -611,6 +612,40 @@ class WorkQueueService
                 'work_type' => 'missing_material_sku',
             ]))
             ->all();
+
+        $missingProductLinks = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
+            ->whereNull('sku_id')
+            ->whereIn('event_type', [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->count();
+
+        if ($missingProductLinks > 0) {
+            $materialTasks[] = $this->makeTask([
+                'id' => 'missing-product-links-'.$business->id,
+                'queue' => 'missing_data',
+                'state' => 'open',
+                'priority' => 'high',
+                'title' => 'Orders need product links',
+                'why_it_matters' => $missingProductLinks.' order row(s) cannot calculate product profit until the correct SKU is selected.',
+                'recommended_action' => 'Open Missing Product Links, choose the product for each row, then save and recalculate.',
+                'related_record' => $this->relatedRecord('missing_product_links', $business->id, 'Missing product links', MissingSkuMapping::getUrl()),
+                'assigned_team' => 'Operations',
+                'assigned_user' => $this->assignedUserLabel($business, ['operations', 'dispatch', 'sales', 'inventory', 'stock']),
+                'created_at' => now()->toDateString(),
+                'due_on' => now()->toDateString(),
+                'status_label' => 'Blocks profit truth',
+                'work_type' => 'missing_product_links',
+            ]);
+        }
+
+        return $materialTasks;
     }
 
     private function exceptionTasks(Business $business): array

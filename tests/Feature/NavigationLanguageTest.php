@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\BankStatementImport;
+use App\Filament\Pages\MissingSkuMapping;
 use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
@@ -28,6 +29,7 @@ class NavigationLanguageTest extends TestCase
             BankTransactionResource::getNavigationLabel(),
             QuickExpenseEntry::getNavigationLabel(),
             BankStatementImport::getNavigationLabel(),
+            MissingSkuMapping::getNavigationLabel(),
             OperationalEventResource::getNavigationLabel(),
             SkuResource::getNavigationLabel(),
             SkuRecipeResource::getNavigationLabel(),
@@ -43,6 +45,7 @@ class NavigationLanguageTest extends TestCase
         $this->assertContains('Bank Review', $labels);
         $this->assertContains('Quick Expense', $labels);
         $this->assertContains('Import Bank Statement', $labels);
+        $this->assertContains('Fix Missing Product Links', $labels);
         $this->assertContains('Stock App Order Events', $labels);
         $this->assertContains('Products / SKUs', $labels);
         $this->assertContains('Product Cost Recipes', $labels);
