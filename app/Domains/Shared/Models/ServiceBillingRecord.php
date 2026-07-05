@@ -14,6 +14,7 @@ class ServiceBillingRecord extends Model
 
     protected $fillable = [
         'business_id',
+        'service_client_id',
         'client_name',
         'billing_type',
         'period_start',
@@ -63,6 +64,11 @@ class ServiceBillingRecord extends Model
     public function business(): BelongsTo
     {
         return $this->belongsTo(Business::class);
+    }
+
+    public function serviceClient(): BelongsTo
+    {
+        return $this->belongsTo(ServiceClient::class);
     }
 
     public function balanceDue(): float

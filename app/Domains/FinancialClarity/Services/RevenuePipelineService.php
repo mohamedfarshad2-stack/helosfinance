@@ -4,8 +4,11 @@ namespace App\Domains\FinancialClarity\Services;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\BankTransaction;
+use App\Domains\Shared\Models\Employee;
+use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ServiceBillingRecord;
+use App\Domains\Shared\Models\ServiceClient;
 use App\Domains\Shared\Models\Sku;
 use Illuminate\Support\Collection;
 
@@ -158,6 +161,10 @@ class RevenuePipelineService
             return $this->emptyChannel('Service');
         }
 
+        $clients = ServiceClient::query()
+            ->where('business_id', $business->id)
+            ->get();
+
         $records = ServiceBillingRecord::query()
             ->where('business_id', $business->id)
             ->where(function ($query): void {
@@ -169,20 +176,41 @@ class RevenuePipelineService
                             ->whereDate('period_end', '>=', now()->startOfMonth()->toDateString());
                     });
             })
+            ->with('serviceClient')
             ->get();
 
         $pending = $records->filter(fn (ServiceBillingRecord $record): bool => $record->balanceDue() > 0);
+        $overdue = $pending->filter(fn (ServiceBillingRecord $record): bool => filled($record->due_on) && $record->due_on->isBefore(now()->startOfDay()));
+        $activeClients = $clients->filter(fn (ServiceClient $client): bool => $client->status === ServiceClient::STATUS_ACTIVE);
+        $fixedClients = $activeClients->filter(fn (ServiceClient $client): bool => $client->billing_style === ServiceClient::BILLING_FIXED_MONTHLY);
+        $variableClients = $activeClients->filter(fn (ServiceClient $client): bool => $client->billing_style === ServiceClient::BILLING_VARIABLE_MONTHLY);
+        $expectedRecurring = (float) $fixedClients->sum('default_monthly_amount');
+        $fixedCosts = $this->fixedMonthlyCostForServiceBusiness($business);
+        $collected = (float) $records->sum('paid_amount');
+        $billedThisMonth = (float) $records->sum('amount_due');
+        $outstanding = (float) $pending->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue());
 
         return [
-            'expected_revenue' => round((float) $pending->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue()), 2),
-            'collected_revenue' => round((float) $records->sum('paid_amount'), 2),
+            'expected_revenue' => round($outstanding, 2),
+            'collected_revenue' => round($collected, 2),
             'returned_revenue' => 0.0,
             'pending_orders' => $pending->count(),
             'delivered_orders' => $records->where('payment_status', 'paid')->count(),
             'returned_orders' => 0,
             'label' => 'Service',
+            'active_clients' => $activeClients->count(),
+            'paused_clients' => $clients->where('status', ServiceClient::STATUS_PAUSED)->count(),
+            'fixed_clients' => $fixedClients->count(),
+            'variable_clients' => $variableClients->count(),
+            'expected_monthly_revenue' => round($expectedRecurring, 2),
+            'billed_this_month' => round($billedThisMonth, 2),
+            'overdue_amount' => round((float) $overdue->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue()), 2),
+            'fixed_monthly_costs' => round($fixedCosts, 2),
+            'coverage_gap_expected' => round(max($fixedCosts - $expectedRecurring, 0), 2),
+            'coverage_gap_collected' => round(max($fixedCosts - $collected, 0), 2),
+            'coverage_surplus_collected' => round(max($collected - $fixedCosts, 0), 2),
             'records' => $records->sortBy('due_on')->take(8)->map(fn (ServiceBillingRecord $record): array => [
-                'client_name' => $record->client_name,
+                'client_name' => $record->serviceClient?->name ?? $record->client_name,
                 'billing_type' => $record->billing_type,
                 'amount_due' => (float) $record->amount_due,
                 'paid_amount' => (float) $record->paid_amount,
@@ -191,6 +219,28 @@ class RevenuePipelineService
                 'due_on' => optional($record->due_on)->toDateString(),
             ])->values()->all(),
         ];
+    }
+
+    private function fixedMonthlyCostForServiceBusiness(Business $business): float
+    {
+        $expenseTotal = (float) Expense::query()
+            ->where('business_id', $business->id)
+            ->where('expense_type', 'fixed')
+            ->where(function ($query): void {
+                $query->whereBetween('spent_on', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+                    ->orWhere(function ($query): void {
+                        $query->where('recurring', true)
+                            ->whereDate('spent_on', '<=', now()->endOfMonth()->toDateString());
+                    });
+            })
+            ->sum('amount');
+
+        $salaryTotal = (float) Employee::query()
+            ->where('business_id', $business->id)
+            ->where('active', true)
+            ->sum('monthly_salary');
+
+        return round($expenseTotal + $salaryTotal, 2);
     }
 
     private function summarizeOrder(Business $business, Collection $group): array

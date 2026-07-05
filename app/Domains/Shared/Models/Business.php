@@ -426,6 +426,11 @@ class Business extends Model
         return $this->hasMany(ServiceBillingRecord::class);
     }
 
+    public function serviceClients(): HasMany
+    {
+        return $this->hasMany(ServiceClient::class);
+    }
+
     public function codOrders(): HasMany
     {
         return $this->hasMany(CodOrder::class);

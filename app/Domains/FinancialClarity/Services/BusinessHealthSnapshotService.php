@@ -8,6 +8,7 @@ use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ServiceBillingRecord;
+use App\Domains\Shared\Models\ServiceClient;
 use Illuminate\Support\Carbon;
 
 class BusinessHealthSnapshotService
@@ -103,6 +104,9 @@ class BusinessHealthSnapshotService
         $serviceRevenue = (float) $serviceBilling->sum('paid_amount');
         $serviceExpected = (float) $serviceBilling->sum('amount_due');
         $serviceOutstanding = (float) $serviceBilling->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue());
+        $serviceOverdue = (float) $serviceBilling
+            ->filter(fn (ServiceBillingRecord $record): bool => $record->balanceDue() > 0 && filled($record->due_on) && $record->due_on->isBefore(now()->startOfDay()))
+            ->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue());
 
         $revenue = (clone $events)->sum('revenue_amount') + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
@@ -128,6 +132,14 @@ class BusinessHealthSnapshotService
             ->where('business_id', $business->id)
             ->where('active', true)
             ->sum('monthly_salary');
+        $serviceClients = ServiceClient::query()
+            ->where('business_id', $business->id)
+            ->get();
+        $serviceActiveClients = $serviceClients->where('status', ServiceClient::STATUS_ACTIVE)->count();
+        $serviceRecurringExpected = (float) $serviceClients
+            ->where('status', ServiceClient::STATUS_ACTIVE)
+            ->where('billing_style', ServiceClient::BILLING_FIXED_MONTHLY)
+            ->sum('default_monthly_amount');
 
         $returnImpact = (clone $events)->where('event_type', OperationalEvent::ORDER_RETURNED)->sum('leakage_amount');
         $resendImpact = (clone $events)->where('event_type', OperationalEvent::ORDER_RESENT)->sum('leakage_amount');
@@ -198,6 +210,11 @@ class BusinessHealthSnapshotService
                 'service_billing_collected' => $serviceRevenue,
                 'service_billing_outstanding' => $serviceOutstanding,
                 'service_billing_count' => $serviceBilling->count(),
+                'service_billing_overdue' => $serviceOverdue,
+                'service_active_clients' => $serviceActiveClients,
+                'service_client_count' => $serviceClients->count(),
+                'service_recurring_expected' => $serviceRecurringExpected,
+                'service_fixed_cost_coverage_gap' => max(($fixedExpenses + $salaryPressure) - $serviceRecurringExpected, 0),
                 'pressure_note' => $leakage > 0 ? 'Leakage is creating margin pressure.' : 'No leakage recorded in this period.',
             ],
         ];

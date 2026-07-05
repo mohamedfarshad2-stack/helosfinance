@@ -1017,23 +1017,43 @@
 
                     @if ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE))
                         <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                            <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Service billing money</div>
-                            <div class="text-xs text-gray-500">Monthly subscriptions, registration fees, and service payments are visible here.</div>
-                            <div class="mt-4 grid gap-3 md:grid-cols-3">
+                            <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Service business truth</div>
+                            <div class="text-xs text-gray-500">Read this as: who is active, how much this service business should bring this month, what was collected, and whether it is covering its own monthly load.</div>
+                            <div class="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                                 <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                    <div class="text-xs uppercase tracking-wide text-gray-500">To collect</div>
-                                    <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['service']['expected_revenue'] ?? 0), 2) }}</div>
-                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['pending_orders'] ?? 0) }} unpaid clients</div>
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Active clients</div>
+                                    <div class="mt-1 font-semibold text-sky-600">{{ (int) ($revenuePipeline['service']['active_clients'] ?? 0) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['paused_clients'] ?? 0) }} paused</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Should come this month</div>
+                                    <div class="mt-1 font-semibold text-sky-600">LKR {{ number_format((float) ($revenuePipeline['service']['expected_monthly_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['fixed_clients'] ?? 0) }} fixed monthly clients</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Billed this month</div>
+                                    <div class="mt-1 font-semibold text-gray-900 dark:text-white">LKR {{ number_format((float) ($revenuePipeline['service']['billed_this_month'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['variable_clients'] ?? 0) }} variable clients</div>
                                 </div>
                                 <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
                                     <div class="text-xs uppercase tracking-wide text-gray-500">Collected</div>
                                     <div class="mt-1 font-semibold text-emerald-600">LKR {{ number_format((float) ($revenuePipeline['service']['collected_revenue'] ?? 0), 2) }}</div>
-                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['delivered_orders'] ?? 0) }} paid records</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['service']['delivered_orders'] ?? 0) }} fully paid rows</div>
                                 </div>
                                 <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                    <div class="text-xs uppercase tracking-wide text-gray-500">Returned</div>
-                                    <div class="mt-1 font-semibold text-gray-600">LKR {{ number_format((float) ($revenuePipeline['service']['returned_revenue'] ?? 0), 2) }}</div>
-                                    <div class="text-xs text-gray-500">Not used for service</div>
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Still to collect</div>
+                                    <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['service']['expected_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">Overdue LKR {{ number_format((float) ($revenuePipeline['service']['overdue_amount'] ?? 0), 2) }}</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Monthly self-cover</div>
+                                    @if ((float) ($revenuePipeline['service']['coverage_gap_collected'] ?? 0) > 0)
+                                        <div class="mt-1 font-semibold text-red-600">Short by LKR {{ number_format((float) ($revenuePipeline['service']['coverage_gap_collected'] ?? 0), 2) }}</div>
+                                        <div class="text-xs text-gray-500">Fixed monthly load LKR {{ number_format((float) ($revenuePipeline['service']['fixed_monthly_costs'] ?? 0), 2) }}</div>
+                                    @else
+                                        <div class="mt-1 font-semibold text-emerald-600">Covered</div>
+                                        <div class="text-xs text-gray-500">Surplus LKR {{ number_format((float) ($revenuePipeline['service']['coverage_surplus_collected'] ?? 0), 2) }}</div>
+                                    @endif
                                 </div>
                             </div>
                             <div class="mt-3 grid gap-2 text-sm">
@@ -1041,14 +1061,16 @@
                                     <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900">
                                         <div class="font-medium text-gray-950 dark:text-white">{{ $record['client_name'] ?? 'Service client' }}</div>
                                         <div class="text-xs text-gray-500">
-                                            Due LKR {{ number_format((float) ($record['amount_due'] ?? 0), 2) }}
+                                            {{ \App\Domains\Shared\Models\ServiceBillingRecord::billingTypeOptions()[$record['billing_type'] ?? ''] ?? 'Service fee' }}
+                                            | Due LKR {{ number_format((float) ($record['amount_due'] ?? 0), 2) }}
                                             | Paid LKR {{ number_format((float) ($record['paid_amount'] ?? 0), 2) }}
                                             | Still LKR {{ number_format((float) ($record['remaining_amount'] ?? 0), 2) }}
+                                            @if (! empty($record['due_on'])) | Due {{ $record['due_on'] }} @endif
                                         </div>
                                     </div>
                                 @empty
                                     <div class="rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-500 dark:border-gray-700">
-                                        No service billing records for this month yet.
+                                        No service billing rows for this month yet.
                                     </div>
                                 @endforelse
                             </div>

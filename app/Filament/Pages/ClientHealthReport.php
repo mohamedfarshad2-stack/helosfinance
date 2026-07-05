@@ -20,6 +20,7 @@ use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\ServiceBillingRecord;
+use App\Domains\Shared\Models\ServiceClient;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Filament\Pages\BankStatementImport;
@@ -351,6 +352,9 @@ class ClientHealthReport extends Page implements HasForms
         );
 
         if ($this->business->supportsBusinessType(Business::TYPE_SERVICE)) {
+            $serviceClients = ServiceClient::query()
+                ->where('business_id', $this->business->id)
+                ->count();
             $serviceRecords = ServiceBillingRecord::query()
                 ->where('business_id', $this->business->id)
                 ->count();
@@ -359,11 +363,11 @@ class ClientHealthReport extends Page implements HasForms
                 'service_billing',
                 'Add service clients and monthly fees',
                 'Registration fees, monthly subscriptions, paid, part-paid, and overdue service money should be recorded here.',
-                $serviceRecords > 0,
+                $serviceClients > 0 && $serviceRecords > 0,
                 ServiceBillingResource::getUrl('index'),
                 'Open service billing',
-                'Add each service client, monthly fee, registration fee, due date, paid amount, and balance.',
-                'HELOS can show who paid, who still owes, and what service money is due this month.',
+                'Add each service client once, then record the monthly fee, due date, paid amount, and balance for the month.',
+                'HELOS can show who is active, who paid, who still owes, and whether this service business is covering its own fixed monthly load.',
                 'Service revenue, collections, overdue money, cash pressure.'
             );
         }
