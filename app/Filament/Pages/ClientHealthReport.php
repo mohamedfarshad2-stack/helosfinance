@@ -516,6 +516,15 @@ class ClientHealthReport extends Page implements HasForms
         $importantWarnings = count($this->trustStatus['warnings']['important'] ?? []);
         $trustLabel = $this->trustStatus['status_label'] ?? 'Estimated';
         $openTasks = (int) ($this->operationalSummary['Tasks due today'] ?? 0) + (int) ($this->operationalSummary['High priority'] ?? 0);
+        $dueSoon = collect($this->cashIntelligence['due_soon_obligations'] ?? []);
+        $overdue = collect($this->cashIntelligence['overdue_obligations'] ?? []);
+        $weeklyPressureAmount = (float) ($dueSoon->sum('amount') + $overdue->sum('amount'));
+        $breakEvenProgress = (float) ($this->breakEvenStory['progress']['coverage_percent'] ?? 0);
+        $breakEvenRemainingDeliveries = $this->breakEvenStory['progress']['remaining_deliveries'] ?? null;
+        $goalConfigured = (bool) ($this->goalStory['configured'] ?? false);
+        $goalProgress = (float) ($this->goalStory['goal']['progress_percent'] ?? 0);
+        $profit = (float) ($this->snapshot?->estimated_profit ?? 0);
+        $businessLens = $this->businessLens();
 
         $mode = match (true) {
             $progress < 50 => 'Setup mode',
@@ -560,7 +569,50 @@ class ClientHealthReport extends Page implements HasForms
             'setup_progress' => $progress,
             'next_action' => $nextAction,
             'can_client_handle_alone' => $newUserVerdict === 'Can operate normally',
+            'business_lens' => $businessLens,
+            'focus_cards' => [
+                [
+                    'title' => 'Today',
+                    'value' => $nextAction['title'] ?? 'Review Owner Home',
+                    'note' => $nextAction['why'] ?? 'Open the next guided step.',
+                    'tone' => $mode === 'Repair mode' ? 'red' : ($mode === 'Validation mode' ? 'amber' : 'green'),
+                ],
+                [
+                    'title' => 'This week',
+                    'value' => $overdue->isNotEmpty()
+                        ? $overdue->count().' overdue item(s)'
+                        : ($dueSoon->isNotEmpty() ? $dueSoon->count().' item(s) due soon' : 'No urgent commitments'),
+                    'note' => $weeklyPressureAmount > 0
+                        ? 'LKR '.number_format($weeklyPressureAmount, 2).' still needs handling across salaries, suppliers, cheques, or collections.'
+                        : 'No immediate weekly cash pressure is showing from the current records.',
+                    'tone' => $overdue->isNotEmpty() ? 'red' : ($dueSoon->isNotEmpty() ? 'amber' : 'green'),
+                ],
+                [
+                    'title' => 'This month',
+                    'value' => $businessLens === 'Service'
+                        ? ($goalConfigured ? number_format($goalProgress, 0).'% toward the service goal' : 'Track collections and monthly self-cover')
+                        : ($breakEvenRemainingDeliveries === null
+                            ? 'Break-even path still building'
+                            : ($breakEvenRemainingDeliveries <= 0
+                                ? 'Month covered at the current mix'
+                                : $breakEvenRemainingDeliveries.' deliveries still needed')),
+                    'note' => $businessLens === 'Service'
+                        ? ('Current service profit signal: LKR '.number_format($profit, 2).'.')
+                        : ('Current break-even coverage: '.number_format($breakEvenProgress, 0).'%. Profit signal: LKR '.number_format($profit, 2).'.'),
+                    'tone' => $profit < 0 ? 'red' : (($businessLens !== 'Service' && $breakEvenRemainingDeliveries !== null && $breakEvenRemainingDeliveries > 0) ? 'amber' : 'green'),
+                ],
+            ],
             'coach_cards' => [
+                [
+                    'title' => 'What kind of business view is this?',
+                    'value' => $businessLens,
+                    'note' => match ($businessLens) {
+                        'Manufacturing' => 'HELOS will focus more on production, SKU cost, stock pressure, and delivery truth.',
+                        'Trading' => 'HELOS will focus more on sales, margin, collections, and stock movement.',
+                        'Service' => 'HELOS will focus more on monthly fees, overdue collections, and whether service income covers fixed costs.',
+                        default => 'HELOS will combine production, sales, service, and treasury signals for this business.',
+                    },
+                ],
                 [
                     'title' => 'Can a new person use this today?',
                     'value' => $newUserVerdict,
@@ -585,6 +637,23 @@ class ClientHealthReport extends Page implements HasForms
                 ->values()
                 ->all(),
         ];
+    }
+
+    private function businessLens(): string
+    {
+        if (! $this->business instanceof Business) {
+            return 'Business';
+        }
+
+        $types = $this->business->activeBusinessTypes();
+
+        return match (true) {
+            count($types) > 1 => 'Hybrid',
+            in_array(Business::TYPE_MANUFACTURING, $types, true) => 'Manufacturing',
+            in_array(Business::TYPE_TRADING, $types, true) => 'Trading',
+            in_array(Business::TYPE_SERVICE, $types, true) => 'Service',
+            default => 'Business',
+        };
     }
 
     private function businessOptions(): array

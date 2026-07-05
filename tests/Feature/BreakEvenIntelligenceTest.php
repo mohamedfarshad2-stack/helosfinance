@@ -232,4 +232,36 @@ class BreakEvenIntelligenceTest extends TestCase
             ->assertSee('What Is Making It Harder')
             ->assertSee('What helps most');
     }
+
+    public function test_break_even_read_does_not_create_missing_cost_assumptions(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'No Silent Assumptions Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'SILENT-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 1000,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['economics' => []],
+            'occurred_at' => now(),
+        ]);
+
+        $this->assertSame(0, CostAssumption::query()->where('business_id', $business->id)->count());
+
+        app(BreakEvenIntelligenceService::class)->forCurrentMonth($business);
+
+        $this->assertSame(0, CostAssumption::query()->where('business_id', $business->id)->count());
+    }
 }

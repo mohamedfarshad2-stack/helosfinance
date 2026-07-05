@@ -671,15 +671,8 @@ class BreakEvenIntelligenceService
                 return (float) $assumption->amount;
             }
         }
-
-        $primaryKey = $keys[0];
-
-        $assumption = CostAssumption::query()->firstOrCreate(
-            ['business_id' => $business->id, 'key' => $primaryKey],
-            ['label' => $label, 'amount' => $fallback, 'behavior' => 'per_event']
-        );
-
-        return (float) $assumption->amount;
+        
+        return $fallback;
     }
 
     private function restockRecovery(?Sku $sku, array $payload, int $quantity): float

@@ -39,6 +39,11 @@
                 $coach = $ownerCoach ?? ['coach_cards' => [], 'next_action' => null, 'do_first' => []];
                 $setupSteps = collect($setupGuide['steps'] ?? []);
                 $pendingSetupSteps = $setupSteps->reject(fn (array $step): bool => (bool) ($step['done'] ?? false))->values();
+                $supportsService = $business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE) ?? false;
+                $supportsTradeOrManufacturing = ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_TRADING) ?? false)
+                    || ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_MANUFACTURING) ?? false);
+                $supportsCapital = $business?->supportsCapitalIntelligence() ?? false;
+                $supportsInventory = $business?->supportsInventoryIntelligence() ?? false;
             @endphp
 
             <x-filament::section>
@@ -291,6 +296,26 @@
                                         {{ $coachNext['action'] ?? 'Open next step' }}
                                     </a>
                                 </div>
+                            </div>
+                        @endif
+
+                        @if (! empty($coach['focus_cards'] ?? []))
+                            <div class="mt-4 grid gap-3 md:grid-cols-3">
+                                @foreach (($coach['focus_cards'] ?? []) as $card)
+                                    @php
+                                        $focusTone = $card['tone'] ?? 'amber';
+                                        $focusClasses = match ($focusTone) {
+                                            'red' => 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100',
+                                            'green' => 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
+                                            default => 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+                                        };
+                                    @endphp
+                                    <div class="rounded-xl border p-4 {{ $focusClasses }}">
+                                        <div class="text-[11px] font-bold uppercase tracking-wide opacity-75">{{ $card['title'] ?? 'Focus' }}</div>
+                                        <div class="mt-2 text-lg font-black">{{ $card['value'] ?? '-' }}</div>
+                                        <div class="mt-2 text-sm leading-6 opacity-85">{{ $card['note'] ?? '' }}</div>
+                                    </div>
+                                @endforeach
                             </div>
                         @endif
                     </div>
@@ -982,40 +1007,42 @@
             </x-filament::section>
 
             <x-filament::section>
-                <div id="helos-revenue" class="grid gap-4 scroll-mt-24 lg:grid-cols-{{ ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE) ?? false) ? '3' : '2' }}">
-                    <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                        <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">COD money coming in</div>
-                        <div class="text-xs text-gray-500">COD sales truth is separate from bank settlement cash, so HELOS does not count the same money twice.</div>
-                        <div class="mt-4 grid gap-3 md:grid-cols-5">
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Expected COD</div>
-                                <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['cod']['expected_revenue'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod']['pending_orders'] ?? 0) }} pending orders</div>
-                            </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Delivered revenue</div>
-                                <div class="mt-1 font-semibold text-emerald-600">LKR {{ number_format((float) ($revenuePipeline['cod']['collected_revenue'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">Sales truth from {{ (int) ($revenuePipeline['cod']['delivered_orders'] ?? 0) }} delivered orders</div>
-                            </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Bank COD cash</div>
-                                <div class="mt-1 font-semibold text-sky-600">LKR {{ number_format((float) ($revenuePipeline['cod']['cash_received'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod_settlement']['row_count'] ?? 0) }} settlement rows</div>
-                            </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Settlement gap</div>
-                                <div class="mt-1 font-semibold {{ ((float) ($revenuePipeline['cod']['settlement_gap'] ?? 0)) > 0 ? 'text-amber-600' : 'text-emerald-600' }}">LKR {{ number_format((float) ($revenuePipeline['cod']['settlement_gap'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">Delivered revenue minus bank COD cash</div>
-                            </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Returned</div>
-                                <div class="mt-1 font-semibold text-red-600">LKR {{ number_format((float) ($revenuePipeline['cod']['returned_revenue'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod']['returned_orders'] ?? 0) }} returned orders</div>
+                <div id="helos-revenue" class="grid gap-4 scroll-mt-24 lg:grid-cols-{{ $supportsTradeOrManufacturing && $supportsService ? '3' : (($supportsTradeOrManufacturing || $supportsService) ? '2' : '1') }}">
+                    @if ($supportsTradeOrManufacturing)
+                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                            <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">COD money coming in</div>
+                            <div class="text-xs text-gray-500">COD sales truth is separate from bank settlement cash, so HELOS does not count the same money twice.</div>
+                            <div class="mt-4 grid gap-3 md:grid-cols-5">
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Expected COD</div>
+                                    <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['cod']['expected_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod']['pending_orders'] ?? 0) }} pending orders</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Delivered revenue</div>
+                                    <div class="mt-1 font-semibold text-emerald-600">LKR {{ number_format((float) ($revenuePipeline['cod']['collected_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">Sales truth from {{ (int) ($revenuePipeline['cod']['delivered_orders'] ?? 0) }} delivered orders</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Bank COD cash</div>
+                                    <div class="mt-1 font-semibold text-sky-600">LKR {{ number_format((float) ($revenuePipeline['cod']['cash_received'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod_settlement']['row_count'] ?? 0) }} settlement rows</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Settlement gap</div>
+                                    <div class="mt-1 font-semibold {{ ((float) ($revenuePipeline['cod']['settlement_gap'] ?? 0)) > 0 ? 'text-amber-600' : 'text-emerald-600' }}">LKR {{ number_format((float) ($revenuePipeline['cod']['settlement_gap'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">Delivered revenue minus bank COD cash</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Returned</div>
+                                    <div class="mt-1 font-semibold text-red-600">LKR {{ number_format((float) ($revenuePipeline['cod']['returned_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['cod']['returned_orders'] ?? 0) }} returned orders</div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    @endif
 
-                    @if ($business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE))
+                    @if ($supportsService)
                         <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                             <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Service business truth</div>
                             <div class="text-xs text-gray-500">Read this as: who is active, how much this service business should bring this month, what was collected, and whether it is covering its own monthly load.</div>
@@ -1077,30 +1104,32 @@
                         </div>
                     @endif
 
-                    <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                        <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Wholesale money coming in</div>
-                        <div class="text-xs text-gray-500">Wholesale sales are visible here, but exact cheque or credit clearing still needs bank matching.</div>
-                        <div class="mt-4 grid gap-3 md:grid-cols-3">
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Pending</div>
-                                <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['wholesale']['expected_revenue'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['wholesale']['pending_orders'] ?? 0) }} pending orders</div>
+                    @if ($supportsTradeOrManufacturing)
+                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                            <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Wholesale money coming in</div>
+                            <div class="text-xs text-gray-500">Wholesale sales are visible here, but exact cheque or credit clearing still needs bank matching.</div>
+                            <div class="mt-4 grid gap-3 md:grid-cols-3">
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Pending</div>
+                                    <div class="mt-1 font-semibold text-amber-600">LKR {{ number_format((float) ($revenuePipeline['wholesale']['expected_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['wholesale']['pending_orders'] ?? 0) }} pending orders</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Delivered sales</div>
+                                    <div class="mt-1 font-semibold text-sky-600">LKR {{ number_format((float) ($revenuePipeline['wholesale']['collected_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['wholesale']['delivered_orders'] ?? 0) }} delivered orders</div>
+                                </div>
+                                <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Returned</div>
+                                    <div class="mt-1 font-semibold text-red-600">LKR {{ number_format((float) ($revenuePipeline['wholesale']['returned_revenue'] ?? 0), 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['wholesale']['returned_orders'] ?? 0) }} returned orders</div>
+                                </div>
                             </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Delivered sales</div>
-                                <div class="mt-1 font-semibold text-sky-600">LKR {{ number_format((float) ($revenuePipeline['wholesale']['collected_revenue'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['wholesale']['delivered_orders'] ?? 0) }} delivered orders</div>
-                            </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Returned</div>
-                                <div class="mt-1 font-semibold text-red-600">LKR {{ number_format((float) ($revenuePipeline['wholesale']['returned_revenue'] ?? 0), 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ (int) ($revenuePipeline['wholesale']['returned_orders'] ?? 0) }} returned orders</div>
+                            <div class="mt-3 rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
+                                {{ $revenuePipeline['wholesale']['note'] ?? 'Wholesale money will be matched from bank and collection records.' }}
                             </div>
                         </div>
-                        <div class="mt-3 rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
-                            {{ $revenuePipeline['wholesale']['note'] ?? 'Wholesale money will be matched from bank and collection records.' }}
-                        </div>
-                    </div>
+                    @endif
                 </div>
                 <div class="mt-4 rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                     <div class="text-xs uppercase tracking-wide text-gray-500">Money coming in headline</div>
@@ -1242,58 +1271,64 @@
                     </div>
                 </div>
 
-                <div class="mt-6 grid gap-4 lg:grid-cols-2">
-                    <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                        <div class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Money tied up</div>
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                        <div class="text-xs uppercase tracking-wide text-gray-500">Money tied up</div>
-                                <div class="mt-1 font-semibold text-violet-600">LKR {{ number_format((float) ($capitalIntelligence['capital_committed'] ?? 0), 2) }}</div>
-                            </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Value signal</div>
-                                <div class="mt-1 font-semibold {{ (float) ($capitalIntelligence['value_signal'] ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
-                                    LKR {{ number_format((float) ($capitalIntelligence['value_signal'] ?? 0), 2) }}
+                @if ($supportsCapital || $supportsInventory)
+                    <div class="mt-6 grid gap-4 lg:grid-cols-2">
+                        @if ($supportsCapital)
+                            <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                                <div class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Money tied up</div>
+                                <div class="grid gap-3 md:grid-cols-2">
+                                    <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                        <div class="text-xs uppercase tracking-wide text-gray-500">Money tied up</div>
+                                        <div class="mt-1 font-semibold text-violet-600">LKR {{ number_format((float) ($capitalIntelligence['capital_committed'] ?? 0), 2) }}</div>
+                                    </div>
+                                    <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                        <div class="text-xs uppercase tracking-wide text-gray-500">Value signal</div>
+                                        <div class="mt-1 font-semibold {{ (float) ($capitalIntelligence['value_signal'] ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                                            LKR {{ number_format((float) ($capitalIntelligence['value_signal'] ?? 0), 2) }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-800">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Headline</div>
+                                    <div class="mt-1 text-gray-700 dark:text-gray-300">{{ $capitalIntelligence['headline'] ?? 'Money tied up signal not ready yet.' }}</div>
+                                </div>
+                                <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <div>Money after commitments proxy: LKR {{ number_format((float) ($capitalIntelligence['cash_after_obligations_proxy'] ?? 0), 2) }}</div>
+                                    <div>Material spend: LKR {{ number_format((float) ($capitalIntelligence['material_spend'] ?? 0), 2) }}</div>
+                                    <div>Production commitment: LKR {{ number_format((float) ($capitalIntelligence['production_commitment'] ?? 0), 2) }}</div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="mt-3 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-800">
-                            <div class="text-xs uppercase tracking-wide text-gray-500">Headline</div>
-                            <div class="mt-1 text-gray-700 dark:text-gray-300">{{ $capitalIntelligence['headline'] ?? 'Money tied up signal not ready yet.' }}</div>
-                        </div>
-                        <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
-                            <div>Money after commitments proxy: LKR {{ number_format((float) ($capitalIntelligence['cash_after_obligations_proxy'] ?? 0), 2) }}</div>
-                            <div>Material spend: LKR {{ number_format((float) ($capitalIntelligence['material_spend'] ?? 0), 2) }}</div>
-                            <div>Production commitment: LKR {{ number_format((float) ($capitalIntelligence['production_commitment'] ?? 0), 2) }}</div>
-                        </div>
-                    </div>
+                        @endif
 
-                    <div id="helos-stock" class="rounded-lg border border-gray-200 p-4 scroll-mt-24 dark:border-gray-800">
-                        <div class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Stock holding cash</div>
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Recipe coverage</div>
-                                <div class="mt-1 font-semibold text-sky-600">{{ (int) ($inventoryIntelligence['recipe_coverage'] ?? 0) }}%</div>
+                        @if ($supportsInventory)
+                            <div id="helos-stock" class="rounded-lg border border-gray-200 p-4 scroll-mt-24 dark:border-gray-800">
+                                <div class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Stock holding cash</div>
+                                <div class="grid gap-3 md:grid-cols-2">
+                                    <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                        <div class="text-xs uppercase tracking-wide text-gray-500">Recipe coverage</div>
+                                        <div class="mt-1 font-semibold text-sky-600">{{ (int) ($inventoryIntelligence['recipe_coverage'] ?? 0) }}%</div>
+                                    </div>
+                                    <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                        <div class="text-xs uppercase tracking-wide text-gray-500">Waste ratio</div>
+                                        <div class="mt-1 font-semibold text-red-600">{{ number_format((float) ($inventoryIntelligence['waste_ratio'] ?? 0), 2) }}%</div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-800">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">Headline</div>
+                                    <div class="mt-1 text-gray-700 dark:text-gray-300">{{ $inventoryIntelligence['headline'] ?? 'Inventory signal not ready yet.' }}</div>
+                                </div>
+                                <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <div>Material purchases: LKR {{ number_format((float) ($inventoryIntelligence['material_purchase_total'] ?? 0), 2) }}</div>
+                                    <div>Material consumption: LKR {{ number_format((float) ($inventoryIntelligence['material_consumption_total'] ?? 0), 2) }}</div>
+                                    <div>Flow gap: LKR {{ number_format((float) ($inventoryIntelligence['flow_gap'] ?? 0), 2) }}</div>
+                                    <div>Finished goods dispatched: {{ (int) ($inventoryIntelligence['finished_goods_dispatches'] ?? 0) }}</div>
+                                    <div>Returned and restocked: {{ (int) ($inventoryIntelligence['finished_goods_return_restocked'] ?? 0) }}</div>
+                                    <div>Returned and damaged: {{ (int) ($inventoryIntelligence['finished_goods_return_damaged'] ?? 0) }}</div>
+                                </div>
                             </div>
-                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Waste ratio</div>
-                                <div class="mt-1 font-semibold text-red-600">{{ number_format((float) ($inventoryIntelligence['waste_ratio'] ?? 0), 2) }}%</div>
-                            </div>
-                        </div>
-                        <div class="mt-3 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-800">
-                            <div class="text-xs uppercase tracking-wide text-gray-500">Headline</div>
-                            <div class="mt-1 text-gray-700 dark:text-gray-300">{{ $inventoryIntelligence['headline'] ?? 'Inventory signal not ready yet.' }}</div>
-                        </div>
-                        <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
-                            <div>Material purchases: LKR {{ number_format((float) ($inventoryIntelligence['material_purchase_total'] ?? 0), 2) }}</div>
-                            <div>Material consumption: LKR {{ number_format((float) ($inventoryIntelligence['material_consumption_total'] ?? 0), 2) }}</div>
-                            <div>Flow gap: LKR {{ number_format((float) ($inventoryIntelligence['flow_gap'] ?? 0), 2) }}</div>
-                            <div>Finished goods dispatched: {{ (int) ($inventoryIntelligence['finished_goods_dispatches'] ?? 0) }}</div>
-                            <div>Returned and restocked: {{ (int) ($inventoryIntelligence['finished_goods_return_restocked'] ?? 0) }}</div>
-                            <div>Returned and damaged: {{ (int) ($inventoryIntelligence['finished_goods_return_damaged'] ?? 0) }}</div>
-                        </div>
+                        @endif
                     </div>
-                </div>
+                @endif
 
                 <div class="mt-6 grid gap-4 lg:grid-cols-2">
                     <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">

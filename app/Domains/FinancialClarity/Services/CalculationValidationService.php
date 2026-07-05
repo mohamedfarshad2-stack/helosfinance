@@ -51,7 +51,11 @@ class CalculationValidationService
     {
         $deliveredRevenue = (float) ($pipeline['total_collected_revenue'] ?? 0);
         $recognizedRevenue = (float) ($snapshot['revenue_total'] ?? 0);
-        $orders = (int) ($pipeline['completed_orders'] ?? 0);
+        $orders = (int) (
+            (int) ($pipeline['cod']['delivered_orders'] ?? 0)
+            + (int) ($pipeline['wholesale']['delivered_orders'] ?? 0)
+            + (int) ($pipeline['service']['delivered_orders'] ?? 0)
+        );
 
         if ($orders > 0 && $recognizedRevenue <= 0) {
             return $this->result(
@@ -84,7 +88,7 @@ class CalculationValidationService
         $revenue = (float) ($snapshot['revenue_total'] ?? 0);
         $cost = (float) ($snapshot['cost_total'] ?? 0);
         $profit = (float) ($snapshot['estimated_profit'] ?? 0);
-        $expected = $revenue - $cost - (float) ($snapshot['leakage_total'] ?? 0);
+        $expected = $revenue - $cost;
 
         if ($revenue > 0 && $cost <= 0) {
             return $this->result(
@@ -99,7 +103,7 @@ class CalculationValidationService
             return $this->result(
                 'WARNING',
                 'The month profit is not matching the expected formula exactly.',
-                'Profit should stay close to revenue minus cost minus leakage.',
+                'Profit should stay close to revenue minus total month cost.',
                 ['Expected profit' => $expected, 'Snapshot profit' => $profit]
             );
         }
