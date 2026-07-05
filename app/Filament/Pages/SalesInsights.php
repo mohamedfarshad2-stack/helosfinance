@@ -73,13 +73,28 @@ class SalesInsights extends Page
     private function selectedBusiness(): ?Business
     {
         if (! $this->businessId) {
-            return null;
+            $this->businessId = $this->defaultBusinessId();
         }
 
-        return Business::query()
+        $business = Business::query()
             ->whereIn('id', $this->accessibleBusinessIds())
             ->whereKey($this->businessId)
             ->first();
+
+        if ($business) {
+            return $business;
+        }
+
+        $fallback = Business::query()
+            ->whereIn('id', $this->accessibleBusinessIds())
+            ->orderBy('name')
+            ->first();
+
+        if ($fallback) {
+            $this->businessId = $fallback->id;
+        }
+
+        return $fallback;
     }
 
     /**

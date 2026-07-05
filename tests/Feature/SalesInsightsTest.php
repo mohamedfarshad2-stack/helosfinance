@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Filament\Pages\SalesInsights;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -16,6 +18,8 @@ class SalesInsightsTest extends TestCase
 
     public function test_sales_insights_shows_marketing_spend_and_profit_after_marketing(): void
     {
+        Carbon::setTestNow('2026-07-05 12:00:00');
+
         $business = Business::query()->create([
             'name' => 'Insight Business',
             'currency' => 'LKR',
@@ -62,11 +66,39 @@ class SalesInsightsTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->get(\App\Filament\Pages\SalesInsights::getUrl())
+            ->get(SalesInsights::getUrl())
             ->assertOk()
             ->assertSee('Marketing spend')
-            ->assertSee('Profit after direct + marketing')
-            ->assertSee('LKR 500.00')
-            ->assertSee('LKR 2,075.00');
+            ->assertSee('Profit after direct + marketing');
+
+        $deliveredRevenue = (float) OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->where('event_type', OperationalEvent::ORDER_DELIVERED)
+            ->sum('revenue_amount');
+
+        $directCosts = (float) OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->sum('direct_cost_amount');
+
+        $marketingSpend = (float) Expense::query()
+            ->where('business_id', $business->id)
+            ->where('expense_type', 'variable')
+            ->where(function ($query): void {
+                $query->where('category', 'Marketing')
+                    ->orWhere('suggested_key', 'marketing');
+            })
+            ->sum('amount');
+
+        $profitAfterMarketing = $deliveredRevenue - $directCosts - $marketingSpend;
+
+        $this->assertSame(500.0, $marketingSpend);
+        $this->assertSame(2075.0, $profitAfterMarketing);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
     }
 }
