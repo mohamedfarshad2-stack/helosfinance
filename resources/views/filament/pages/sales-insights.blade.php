@@ -28,29 +28,40 @@
         </x-filament::section>
 
         @php
-            $money = fn (float|int $amount): string => 'LKR '.number_format((float) $amount, 2);
-            $card = function (string $label, string $value, string $note, string $tone): string {
-                $classes = match ($tone) {
-                    'green' => 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
-                    'blue' => 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100',
-                    'amber' => 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100',
-                    'red' => 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100',
-                    default => 'border-gray-200 bg-white text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-white',
-                };
-
-                return '<div class="rounded-lg border p-4 '.$classes.'">'
-                    .'<div class="text-xs uppercase tracking-wide opacity-70">'.$label.'</div>'
-                    .'<div class="mt-2 text-2xl font-semibold">'.$value.'</div>'
-                    .'<div class="mt-1 text-sm opacity-80">'.$note.'</div>'
-                    .'</div>';
-            };
+            $todayMarketingTone = (float) $today['marketing_spend'] > 0 ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100' : 'border-gray-200 bg-white text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-white';
+            $todayProfitTone = (float) $today['profit_after_marketing'] >= 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100';
         @endphp
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {!! $card('Today delivered sales', $money($today['delivered_revenue']), (int) $today['delivered_count'].' delivered parcel(s)', 'green') !!}
-            {!! $card('Today dispatched value', $money($today['dispatch_value']), (int) $today['dispatch_count'].' parcel(s) still waiting result', 'blue') !!}
-            {!! $card('Today marketing spend', $money($today['marketing_spend']), ((int) $today['delivered_count'] > 0 ? 'About '.$money($today['marketing_per_delivered_order']).' per delivered parcel' : 'No delivered parcel yet to spread this over'), ((float) $today['marketing_spend'] > 0 ? 'amber' : 'gray')) !!}
-            {!! $card('Today profit after direct + marketing', $money($today['profit_after_marketing']), 'After courier, returns, resend impact, and marketing rows already recorded today', ((float) $today['profit_after_marketing'] >= 0 ? 'green' : 'red')) !!}
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+                <div class="text-xs uppercase tracking-wide opacity-70">Today delivered sales</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['delivered_revenue'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['delivered_count'] }} delivered parcel(s)</div>
+            </div>
+
+            <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+                <div class="text-xs uppercase tracking-wide opacity-70">Today dispatched value</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_value'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_count'] }} parcel(s) still waiting result</div>
+            </div>
+
+            <div class="rounded-lg border p-4 {{ $todayMarketingTone }}">
+                <div class="text-xs uppercase tracking-wide opacity-70">Today marketing spend</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['marketing_spend'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">
+                    @if ((int) $today['delivered_count'] > 0)
+                        About LKR {{ number_format((float) $today['marketing_per_delivered_order'], 2) }} per delivered parcel
+                    @else
+                        No delivered parcel yet to spread this over
+                    @endif
+                </div>
+            </div>
+
+            <div class="rounded-lg border p-4 {{ $todayProfitTone }}">
+                <div class="text-xs uppercase tracking-wide opacity-70">Today profit after direct + marketing</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">After courier, returns, resend impact, and marketing rows already recorded today</div>
+            </div>
         </div>
 
         <div class="grid gap-6 xl:grid-cols-[1fr_0.75fr]">
@@ -74,8 +85,8 @@
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Delivered sales</div>
-                            <div class="p-3">{{ $money($today['delivered_revenue']) }}</div>
-                            <div class="p-3">{{ $money($yesterday['delivered_revenue']) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $today['delivered_revenue'], 2) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $yesterday['delivered_revenue'], 2) }}</div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Delivered parcels</div>
@@ -84,8 +95,8 @@
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Dispatched value</div>
-                            <div class="p-3">{{ $money($today['dispatch_value']) }}</div>
-                            <div class="p-3">{{ $money($yesterday['dispatch_value']) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $today['dispatch_value'], 2) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $yesterday['dispatch_value'], 2) }}</div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Returns</div>
@@ -94,13 +105,13 @@
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Marketing spend</div>
-                            <div class="p-3">{{ $money($today['marketing_spend']) }}</div>
-                            <div class="p-3">{{ $money($yesterday['marketing_spend']) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $today['marketing_spend'], 2) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $yesterday['marketing_spend'], 2) }}</div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Profit after direct + marketing</div>
-                            <div class="p-3">{{ $money($today['profit_after_marketing']) }}</div>
-                            <div class="p-3">{{ $money($yesterday['profit_after_marketing']) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}</div>
+                            <div class="p-3">LKR {{ number_format((float) $yesterday['profit_after_marketing'], 2) }}</div>
                         </div>
                     </div>
                 </div>
@@ -116,11 +127,11 @@
                     <div class="grid gap-3">
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Delivered sales</span>
-                            <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['delivered_revenue']) }}</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['delivered_revenue'], 2) }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Pipeline value</span>
-                            <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['pending_value']) }}</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['pending_value'], 2) }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Returns</span>
@@ -128,15 +139,15 @@
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Marketing spend</span>
-                            <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['marketing_spend']) }}</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['marketing_spend'], 2) }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Profit after direct costs</span>
-                            <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['profit_after_direct_costs']) }}</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['profit_after_direct_costs'], 2) }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Profit after direct + marketing</span>
-                            <span class="font-semibold text-gray-950 dark:text-white">{{ $money($week['profit_after_marketing']) }}</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['profit_after_marketing'], 2) }}</span>
                         </div>
                     </div>
                 </div>
@@ -160,7 +171,7 @@
 
                         <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
                             <div class="text-xs uppercase tracking-wide opacity-70">Marketing entered today</div>
-                            <div class="mt-2 text-2xl font-semibold">{{ $money($today['marketing_spend']) }}</div>
+                            <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['marketing_spend'], 2) }}</div>
                             <div class="mt-1 text-sm opacity-80">If boosting was spent but this stays zero, today’s parcel profit still looks too high.</div>
                         </div>
                     </div>
@@ -180,7 +191,7 @@
                         <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                             <div class="text-sm font-semibold text-gray-950 dark:text-white">{{ $product['sku'] }}</div>
                             <div class="mt-1 truncate text-xs text-gray-500">{{ $product['name'] }}</div>
-                            <div class="mt-3 text-lg font-semibold text-gray-950 dark:text-white">{{ $money($product['revenue']) }}</div>
+                            <div class="mt-3 text-lg font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $product['revenue'], 2) }}</div>
                             <div class="text-sm text-gray-500">{{ (int) $product['count'] }} delivered</div>
                         </div>
                     @empty
