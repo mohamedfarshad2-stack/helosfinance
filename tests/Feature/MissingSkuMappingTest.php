@@ -303,4 +303,44 @@ class MissingSkuMappingTest extends TestCase
 
         $this->assertSame(0, OperationalEvent::query()->where('business_id', $business->id)->whereNull('sku_id')->count());
     }
+
+    public function test_confirmed_rows_without_tracking_do_not_show_in_missing_product_links_page(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Confirmed Queue Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'confirmed-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'cod-order-confirmed-only',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => [
+                'customer_name' => 'Waiting Customer',
+                'sale_amount' => 1990,
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $this->actingAs($owner);
+
+        Livewire::test(MissingSkuMapping::class)
+            ->assertDontSee('cod-order-confirmed-only')
+            ->assertSet('businessId', $business->id);
+    }
 }

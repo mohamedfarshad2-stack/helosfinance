@@ -61,8 +61,6 @@ class MissingProductLinkRepairController extends Controller
     private function skuRequiredEventTypes(): array
     {
         return [
-            OperationalEvent::ORDER_CREATED,
-            OperationalEvent::ORDER_CONFIRMED,
             OperationalEvent::TRACKING_NUMBER_ADDED,
             OperationalEvent::WHOLESALE_PARCEL_SENT,
             OperationalEvent::ORDER_DELIVERED,
