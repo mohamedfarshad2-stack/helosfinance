@@ -39,7 +39,7 @@ class ServiceClientResource extends Resource
                         ->label('Business')
                         ->options(fn () => static::serviceBusinessOptions())
                         ->default(fn () => static::defaultServiceBusinessId())
-                        ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->disabled(fn (): bool => ! static::canChooseServiceBusiness())
                         ->dehydrated()
                         ->required(),
                     TextInput::make('name')
@@ -170,6 +170,17 @@ class ServiceClientResource extends Resource
     private static function hasAccessibleServiceBusiness(): bool
     {
         return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsBusinessType(Business::TYPE_SERVICE));
+    }
+
+    private static function canChooseServiceBusiness(): bool
+    {
+        $user = Auth::user();
+
+        if ($user?->isInternalAdmin() ?? false) {
+            return true;
+        }
+
+        return count(static::serviceBusinessOptions()) > 1;
     }
 
     private static function scopeToServiceBusinesses(Builder $query): Builder

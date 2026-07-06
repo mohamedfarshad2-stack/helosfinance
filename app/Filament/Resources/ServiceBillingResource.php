@@ -50,7 +50,7 @@ class ServiceBillingResource extends Resource
                             $set('service_client_id', null);
                             $set('client_name', null);
                         })
-                        ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->disabled(fn (): bool => ! static::canChooseServiceBusiness())
                         ->dehydrated()
                         ->required(),
                     Select::make('service_client_id')
@@ -290,6 +290,17 @@ class ServiceBillingResource extends Resource
     private static function hasAccessibleServiceBusiness(): bool
     {
         return static::hasAccessibleBusinessMatching(fn (Business $business): bool => $business->supportsBusinessType(Business::TYPE_SERVICE));
+    }
+
+    private static function canChooseServiceBusiness(): bool
+    {
+        $user = Auth::user();
+
+        if ($user?->isInternalAdmin() ?? false) {
+            return true;
+        }
+
+        return count(static::serviceBusinessOptions()) > 1;
     }
 
     private static function serviceClientOptions(int $businessId): array

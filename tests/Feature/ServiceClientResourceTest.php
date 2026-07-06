@@ -112,4 +112,57 @@ class ServiceClientResourceTest extends TestCase
             ->call('create')
             ->assertHasFormErrors(['name' => 'unique']);
     }
+
+    public function test_owner_can_create_service_client_for_another_service_business_in_the_same_group(): void
+    {
+        $group = \App\Domains\Shared\Models\ClientGroup::query()->create([
+            'name' => 'Service Owner Group',
+        ]);
+
+        $primaryBusiness = Business::query()->create([
+            'name' => 'COD Returns Lanka',
+            'client_group_id' => $group->id,
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $secondaryBusiness = Business::query()->create([
+            'name' => 'Second Service Business',
+            'client_group_id' => $group->id,
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Multi Service Owner',
+            'email' => 'multi-service-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $primaryBusiness->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        Livewire::actingAs($owner)
+            ->test(CreateServiceClient::class)
+            ->fillForm([
+                'business_id' => $secondaryBusiness->id,
+                'name' => 'Cross Business Client',
+                'status' => ServiceClient::STATUS_ACTIVE,
+                'billing_style' => ServiceClient::BILLING_FIXED_MONTHLY,
+                'default_monthly_amount' => 9000,
+                'default_registration_fee' => 1000,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('service_clients', [
+            'business_id' => $secondaryBusiness->id,
+            'name' => 'Cross Business Client',
+        ]);
+    }
 }
