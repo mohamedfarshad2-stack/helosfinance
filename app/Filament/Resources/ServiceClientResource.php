@@ -16,6 +16,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\Rules\Unique;
 use Illuminate\Support\Facades\Auth;
 
 class ServiceClientResource extends Resource
@@ -39,11 +40,16 @@ class ServiceClientResource extends Resource
                         ->options(fn () => static::serviceBusinessOptions())
                         ->default(fn () => static::defaultServiceBusinessId())
                         ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->dehydrated()
                         ->required(),
                     TextInput::make('name')
                         ->label('Client name')
                         ->placeholder('Client or company name')
                         ->required()
+                        ->unique(
+                            ignoreRecord: true,
+                            modifyRuleUsing: fn (Unique $rule, callable $get) => $rule->where('business_id', (int) ($get('business_id') ?: 0))
+                        )
                         ->maxLength(255),
                     Select::make('status')
                         ->label('Client status')
