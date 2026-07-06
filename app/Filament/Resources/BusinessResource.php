@@ -52,6 +52,7 @@ class BusinessResource extends Resource
                         ])
                         ->createOptionUsing(fn (array $data): int => ClientGroup::query()->create($data)->getKey())
                         ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->dehydrated()
                         ->helperText('Use this when one owner has multiple businesses under the same portal.'),
                     TextInput::make('name')->label('Business name')->required(),
                     TextInput::make('currency')->default('LKR')->required()->maxLength(8),
