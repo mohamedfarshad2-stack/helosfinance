@@ -211,8 +211,8 @@ class SalesInsights extends Page
             ->whereBetween('spent_on', [$start->toDateString(), $end->toDateString()])
             ->where('expense_type', 'variable')
             ->where(function (Builder $query): void {
-                $query->whereRaw('LOWER(COALESCE(category, "")) = ?', ['marketing'])
-                    ->orWhereRaw('LOWER(COALESCE(suggested_key, "")) = ?', ['marketing']);
+                $query->whereRaw("LOWER(COALESCE(category, '')) = ?", ['marketing'])
+                    ->orWhereRaw("LOWER(COALESCE(suggested_key, '')) = ?", ['marketing']);
             })
             ->sum('amount');
     }
