@@ -17,6 +17,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class OperationalEventResource extends Resource
 {
@@ -130,18 +131,43 @@ class OperationalEventResource extends Resource
                 OperationalEvent::ORDER_CREATED,
                 OperationalEvent::ORDER_CONFIRMED,
             ]))
-            ->defaultSort('occurred_at', 'desc')->columns([
-            Tables\Columns\TextColumn::make('occurred_at')->dateTime()->sortable(),
-            Tables\Columns\TextColumn::make('event_type')->badge()->searchable(),
-            Tables\Columns\TextColumn::make('business.name')->label('Client / Business')->searchable(),
-            Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
-            Tables\Columns\TextColumn::make('external_id')->label('Stock-app ID')->toggleable(),
-            Tables\Columns\TextColumn::make('sku.code')->label('SKU'),
-            Tables\Columns\TextColumn::make('channel'),
-            Tables\Columns\TextColumn::make('revenue_amount')->money('LKR'),
-            Tables\Columns\TextColumn::make('direct_cost_amount')->money('LKR'),
-            Tables\Columns\TextColumn::make('leakage_amount')->money('LKR')->color('danger'),
-        ])->actions([Tables\Actions\EditAction::make()]);
+            ->defaultSort('occurred_at', 'desc')
+            ->columns([
+                Tables\Columns\TextColumn::make('occurred_at')
+                    ->label('When')
+                    ->dateTime('M j, Y g:i A')
+                    ->sortable()
+                    ->description(fn (OperationalEvent $record): string => $record->business?->name ?? ''),
+                Tables\Columns\TextColumn::make('event_type')
+                    ->label('Stage')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => static::eventTypeLabel($state))
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('tracking_reference')
+                    ->label('Tracking / order')
+                    ->state(fn (OperationalEvent $record): string => static::trackingReference($record))
+                    ->description(fn (OperationalEvent $record): string => static::orderReferenceLine($record))
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $inner) use ($search): void {
+                            $inner
+                                ->where('external_id', 'like', "%{$search}%")
+                                ->orWhere('payload->tracking_number', 'like', "%{$search}%")
+                                ->orWhere('payload->order_number', 'like', "%{$search}%");
+                        });
+                    })
+                    ->wrap(),
+                Tables\Columns\TextColumn::make('sku_summary')
+                    ->label('Product')
+                    ->state(fn (OperationalEvent $record): string => $record->sku?->code ?: 'No SKU linked')
+                    ->description(fn (OperationalEvent $record): string => static::productDetails($record))
+                    ->wrap(),
+                Tables\Columns\TextColumn::make('money_effect')
+                    ->label('Money effect')
+                    ->state(fn (OperationalEvent $record): string => static::moneyHeadline($record))
+                    ->description(fn (OperationalEvent $record): string => static::moneyBreakdown($record))
+                    ->wrap(),
+            ])
+            ->actions([Tables\Actions\EditAction::make()]);
     }
 
     public static function getPages(): array
@@ -172,5 +198,114 @@ class OperationalEventResource extends Resource
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
+    }
+
+    private static function eventTypeLabel(string $state): string
+    {
+        return match ($state) {
+            OperationalEvent::TRACKING_NUMBER_ADDED => 'Tracking added',
+            OperationalEvent::WHOLESALE_PARCEL_SENT => 'Wholesale sent',
+            OperationalEvent::ORDER_DELIVERED => 'Delivered',
+            OperationalEvent::ORDER_RETURNED => 'Returned',
+            OperationalEvent::ORDER_RESENT => 'Resent',
+            OperationalEvent::FAKE_ORDER_DETECTED => 'Fake order',
+            OperationalEvent::SKU_PRODUCED => 'Produced',
+            OperationalEvent::PRODUCTION_WASTE => 'Waste',
+            OperationalEvent::PAYOUT_GENERATED => 'Payout',
+            OperationalEvent::EXPENSE_ADDED => 'Expense',
+            default => Str::headline(str_replace('_', ' ', $state)),
+        };
+    }
+
+    private static function trackingReference(OperationalEvent $record): string
+    {
+        $payload = $record->payload ?? [];
+
+        if (filled($payload['tracking_number'] ?? null)) {
+            return (string) $payload['tracking_number'];
+        }
+
+        if (filled($payload['order_number'] ?? null)) {
+            return 'Order '.(string) $payload['order_number'];
+        }
+
+        if (filled($record->external_id)) {
+            return static::shortExternalId((string) $record->external_id);
+        }
+
+        return 'No tracking yet';
+    }
+
+    private static function orderReferenceLine(OperationalEvent $record): string
+    {
+        $payload = $record->payload ?? [];
+        $parts = [];
+
+        if (filled($payload['customer_name'] ?? null)) {
+            $parts[] = (string) $payload['customer_name'];
+        }
+
+        if (filled($payload['customer_phone'] ?? null)) {
+            $parts[] = (string) $payload['customer_phone'];
+        }
+
+        if (filled($record->external_id)) {
+            $parts[] = 'Ref: '.static::shortExternalId((string) $record->external_id);
+        }
+
+        return implode(' | ', $parts);
+    }
+
+    private static function productDetails(OperationalEvent $record): string
+    {
+        $payload = $record->payload ?? [];
+        $parts = [];
+
+        if (filled($payload['product_name'] ?? null)) {
+            $parts[] = (string) $payload['product_name'];
+        }
+
+        $quantity = max((int) ($record->quantity ?? 0), 0);
+        if ($quantity > 0) {
+            $parts[] = 'Qty '.$quantity;
+        }
+
+        if (filled($record->channel)) {
+            $parts[] = Str::headline((string) $record->channel);
+        }
+
+        return implode(' | ', $parts);
+    }
+
+    private static function moneyHeadline(OperationalEvent $record): string
+    {
+        $revenue = (float) ($record->revenue_amount ?? 0);
+        $directCost = (float) ($record->direct_cost_amount ?? 0);
+        $leakage = (float) ($record->leakage_amount ?? 0);
+
+        if ($revenue > 0) {
+            return 'Revenue LKR '.number_format($revenue, 2);
+        }
+
+        if ($directCost > 0 || $leakage > 0) {
+            return 'Cost / leakage event';
+        }
+
+        return 'No money impact yet';
+    }
+
+    private static function moneyBreakdown(OperationalEvent $record): string
+    {
+        return 'Cost LKR '.number_format((float) ($record->direct_cost_amount ?? 0), 2)
+            .' | Leakage LKR '.number_format((float) ($record->leakage_amount ?? 0), 2);
+    }
+
+    private static function shortExternalId(string $externalId): string
+    {
+        if (preg_match('/cod-order-(\d+)/', $externalId, $matches) === 1) {
+            return 'COD-'.$matches[1];
+        }
+
+        return Str::limit($externalId, 36);
     }
 }
