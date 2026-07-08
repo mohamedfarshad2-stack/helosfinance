@@ -12,6 +12,7 @@ use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class MissingSkuMapping extends Page
 {
@@ -156,6 +157,58 @@ class MissingSkuMapping extends Page
             ->title('Repeated product hint repaired')
             ->body($events->count().' row(s) were linked to '.$sku->code.' and recalculated.')
             ->success()
+            ->send();
+    }
+
+    public function autoFixObviousMatches(OperationalImpactCalculator $calculator, SkuStockMovementService $stockMovements): void
+    {
+        $business = $this->selectedBusiness();
+
+        if (! $business) {
+            Notification::make()
+                ->title('Choose a business first')
+                ->body('Select the business you want HELOS to clean before auto-fixing obvious product matches.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $skuDirectory = $this->skuDirectory($business);
+        $fixed = 0;
+        $checked = 0;
+
+        $events = $this->missingQuery($business)->limit(5000)->get();
+
+        foreach ($events as $event) {
+            $checked++;
+            $sku = $this->obviousSkuMatch($event, $skuDirectory);
+
+            if (! $sku) {
+                continue;
+            }
+
+            $this->repairEvent($event, $sku, $calculator, $stockMovements);
+            $fixed++;
+        }
+
+        $this->skuSelections = [];
+        $this->bulkSkuSelections = [];
+
+        if ($fixed > 0) {
+            Notification::make()
+                ->title('Obvious product links cleaned')
+                ->body($fixed.' row(s) were auto-linked using exact SKU code or exact product-name matches. '.$checked.' row(s) checked.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('No safe auto-matches found')
+            ->body('HELOS checked '.$checked.' row(s) and did not find any high-confidence exact matches. The remaining rows still need manual or grouped repair.')
+            ->warning()
             ->send();
     }
 
@@ -364,6 +417,130 @@ class MissingSkuMapping extends Page
         }
 
         return str($hint)->lower()->replaceMatches('/[^a-z0-9]+/', '-')->trim('-')->value() ?: 'missing-product-hint';
+    }
+
+    /**
+     * @return array{
+     *     by_code: array<string, \App\Domains\Shared\Models\Sku>,
+     *     by_name: array<string, \App\Domains\Shared\Models\Sku>,
+     *     all: \Illuminate\Support\Collection<int, \App\Domains\Shared\Models\Sku>
+     * }
+     */
+    private function skuDirectory(Business $business): array
+    {
+        $skus = Sku::query()
+            ->where('business_id', $business->id)
+            ->where('active', true)
+            ->orderBy('code')
+            ->get();
+
+        $byCode = [];
+        $byName = [];
+        $duplicateCodes = [];
+        $duplicateNames = [];
+
+        foreach ($skus as $sku) {
+            $codeKey = $this->normalizeForMatch($sku->code);
+            $nameKey = $this->normalizeForMatch($sku->name);
+
+            if ($codeKey !== '') {
+                if (isset($byCode[$codeKey])) {
+                    $duplicateCodes[$codeKey] = true;
+                } else {
+                    $byCode[$codeKey] = $sku;
+                }
+            }
+
+            if ($nameKey !== '') {
+                if (isset($byName[$nameKey])) {
+                    $duplicateNames[$nameKey] = true;
+                } else {
+                    $byName[$nameKey] = $sku;
+                }
+            }
+        }
+
+        foreach (array_keys($duplicateCodes) as $duplicateCode) {
+            unset($byCode[$duplicateCode]);
+        }
+
+        foreach (array_keys($duplicateNames) as $duplicateName) {
+            unset($byName[$duplicateName]);
+        }
+
+        return [
+            'by_code' => $byCode,
+            'by_name' => $byName,
+            'all' => $skus,
+        ];
+    }
+
+    private function obviousSkuMatch(OperationalEvent $event, array $skuDirectory): ?Sku
+    {
+        $payload = $event->payload ?? [];
+        $candidates = [];
+
+        foreach ([
+            $payload['sku_code'] ?? null,
+            $payload['product_code'] ?? null,
+            $payload['item_code'] ?? null,
+        ] as $rawCode) {
+            $codeKey = $this->normalizeForMatch($rawCode);
+
+            if ($codeKey !== '' && isset($skuDirectory['by_code'][$codeKey])) {
+                $candidates[$skuDirectory['by_code'][$codeKey]->id] = $skuDirectory['by_code'][$codeKey];
+            }
+        }
+
+        foreach ([
+            $payload['sku_name'] ?? null,
+            $payload['product_name'] ?? null,
+            $payload['item_name'] ?? null,
+            $this->productHint($event),
+        ] as $rawName) {
+            $nameKey = $this->normalizeForMatch($rawName);
+
+            if ($nameKey !== '' && isset($skuDirectory['by_name'][$nameKey])) {
+                $candidates[$skuDirectory['by_name'][$nameKey]->id] = $skuDirectory['by_name'][$nameKey];
+            }
+        }
+
+        $hint = Str::lower(implode(' ', array_filter([
+            $payload['sku_code'] ?? null,
+            $payload['sku_name'] ?? null,
+            $payload['product_name'] ?? null,
+            $payload['item_name'] ?? null,
+            $payload['reference'] ?? null,
+            $this->productHint($event),
+        ], fn ($value): bool => filled($value))));
+
+        if ($hint !== '') {
+            foreach ($skuDirectory['all'] as $sku) {
+                $code = Str::lower((string) $sku->code);
+
+                if ($code === '') {
+                    continue;
+                }
+
+                if (preg_match('/(^|[^a-z0-9])'.preg_quote($code, '/').'([^a-z0-9]|$)/', $hint) === 1) {
+                    $candidates[$sku->id] = $sku;
+                }
+            }
+        }
+
+        return count($candidates) === 1 ? array_values($candidates)[0] : null;
+    }
+
+    private function normalizeForMatch(mixed $value): string
+    {
+        if (! filled($value)) {
+            return '';
+        }
+
+        return (string) str((string) $value)
+            ->lower()
+            ->replaceMatches('/[^a-z0-9]+/', '')
+            ->trim();
     }
 
     /**

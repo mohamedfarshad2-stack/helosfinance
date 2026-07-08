@@ -64,6 +64,22 @@
                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose one SKU for a repeated Stock App product hint. HELOS repairs up to 500 matching rows, recalculates them, and removes the group from this page once the rows are fixed.</p>
                 </div>
 
+                <div class="rounded-lg border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900 dark:bg-sky-950/20">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-sky-700 dark:text-sky-300">Quick clean-up</div>
+                            <div class="mt-1 font-semibold text-gray-950 dark:text-white">Auto-fix only the obvious rows</div>
+                            <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                                This checks for exact SKU code matches and exact normalized product-name matches only. It skips anything doubtful.
+                            </div>
+                        </div>
+
+                        <x-filament::button wire:click="autoFixObviousMatches" icon="heroicon-o-sparkles" color="info">
+                            Auto-fix obvious matches
+                        </x-filament::button>
+                    </div>
+                </div>
+
                 <div class="grid gap-3">
                     @forelse ($groups as $group)
                         <div wire:key="group-{{ $group['key'] }}" class="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">

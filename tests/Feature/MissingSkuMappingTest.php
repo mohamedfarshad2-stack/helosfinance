@@ -343,4 +343,88 @@ class MissingSkuMappingTest extends TestCase
             ->assertDontSee('cod-order-confirmed-only')
             ->assertSet('businessId', $business->id);
     }
+
+    public function test_auto_fix_obvious_matches_repairs_exact_code_and_name_rows(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Auto Fix Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'autofix-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'PS487',
+            'name' => 'Brown Geta Size 10',
+            'material_cost' => 400,
+            'packaging_cost' => 40,
+            'labor_rate' => 50,
+            'finishing_cost' => 10,
+            'active' => true,
+        ]);
+
+        $exactCode = OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'auto-code',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => [
+                'sku_code' => 'PS487',
+                'sale_amount' => 2500,
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $exactName = OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'auto-name',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => [
+                'sku_name' => 'Brown Geta Size 10',
+                'sale_amount' => 2500,
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $unclear = OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'auto-unclear',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => [
+                'sku_name' => 'brown geta 1390 + 350 delivery size 10',
+                'sale_amount' => 2500,
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $this->actingAs($owner);
+
+        Livewire::test(MissingSkuMapping::class)
+            ->call('autoFixObviousMatches');
+
+        $this->assertSame($sku->id, $exactCode->fresh()->sku_id);
+        $this->assertSame($sku->id, $exactName->fresh()->sku_id);
+        $this->assertNull($unclear->fresh()->sku_id);
+    }
 }
