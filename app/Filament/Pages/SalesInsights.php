@@ -187,6 +187,8 @@ class SalesInsights extends Page
             'dispatch_count' => (int) ($dispatchSnapshot['verified_count'] ?? 0),
             'dispatch_hidden_count' => (int) ($dispatchSnapshot['unverified_count'] ?? 0),
             'dispatch_hidden_value' => round((float) ($dispatchSnapshot['unverified_value'] ?? 0), 2),
+            'order_day_dispatch_value' => round((float) ($dispatchSnapshot['order_day_value'] ?? 0), 2),
+            'order_day_dispatch_count' => (int) ($dispatchSnapshot['order_day_count'] ?? 0),
             'pending_value' => round((float) ($dispatchSnapshot['signal_value'] ?? 0), 2),
             'pending_count' => (int) ($dispatchSnapshot['signal_count'] ?? 0),
             'returned_count' => $returned->count(),
@@ -230,7 +232,7 @@ class SalesInsights extends Page
     }
 
     /**
-     * @return array{signal_value: float, signal_count: int, verified_value: float, verified_count: int, unverified_value: float, unverified_count: int}
+     * @return array{signal_value: float, signal_count: int, verified_value: float, verified_count: int, unverified_value: float, unverified_count: int, order_day_value: float, order_day_count: int}
      */
     private function dispatchSnapshot(Business $business, Carbon $asOf): array
     {
@@ -258,6 +260,59 @@ class SalesInsights extends Page
             OperationalEvent::ORDER_RESENT,
         ], true));
 
+        $orderDayEvents = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->whereIn('event_type', [
+                OperationalEvent::ORDER_CREATED,
+                OperationalEvent::ORDER_CONFIRMED,
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->get();
+
+        $orderDayDispatchStatuses = $orderDayEvents
+            ->groupBy(fn (OperationalEvent $event): string => $this->parcelKey($event))
+            ->map(function (Collection $group): array {
+                $ordered = $group
+                    ->sortBy(fn (OperationalEvent $event): string => sprintf(
+                        '%s-%010d',
+                        $event->occurred_at?->format('Y-m-d H:i:s.u') ?? '',
+                        $event->id
+                    ))
+                    ->values();
+
+                return [
+                    'first' => $ordered->first(),
+                    'latest' => $ordered->last(),
+                ];
+            })
+            ->filter(function (array $parcel): bool {
+                /** @var OperationalEvent|null $first */
+                $first = $parcel['first'] ?? null;
+                /** @var OperationalEvent|null $latest */
+                $latest = $parcel['latest'] ?? null;
+
+                if (! $first || ! $latest) {
+                    return false;
+                }
+
+                if (! $first->occurred_at?->isSameDay($this->selectedDateObject())) {
+                    return false;
+                }
+
+                return in_array($latest->event_type, [
+                    OperationalEvent::TRACKING_NUMBER_ADDED,
+                    OperationalEvent::WHOLESALE_PARCEL_SENT,
+                    OperationalEvent::ORDER_RESENT,
+                ], true);
+            })
+            ->map(fn (array $parcel): OperationalEvent => $parcel['latest']);
+
         $verified = $dispatchStatuses->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
         $unverified = $dispatchStatuses->reject(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
 
@@ -268,6 +323,8 @@ class SalesInsights extends Page
             'verified_count' => $verified->count(),
             'unverified_value' => (float) $unverified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
             'unverified_count' => $unverified->count(),
+            'order_day_value' => (float) $orderDayDispatchStatuses->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'order_day_count' => $orderDayDispatchStatuses->count(),
         ];
     }
 
@@ -419,6 +476,8 @@ class SalesInsights extends Page
             'dispatch_count' => 0,
             'dispatch_hidden_count' => 0,
             'dispatch_hidden_value' => 0.0,
+            'order_day_dispatch_value' => 0.0,
+            'order_day_dispatch_count' => 0,
             'pending_value' => 0.0,
             'pending_count' => 0,
             'returned_count' => 0,

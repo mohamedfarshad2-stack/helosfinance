@@ -57,12 +57,19 @@
             $todayProfitTone = (float) $today['profit_after_marketing'] >= 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100';
         @endphp
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
                 <div class="text-xs uppercase tracking-wide opacity-70">Today delivered sales</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['delivered_revenue'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">{{ (int) $today['delivered_count'] }} delivered parcel(s)</div>
+            </div>
+
+            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100">
+                <div class="text-xs uppercase tracking-wide opacity-70">Orders dated this day now in dispatch</div>
+                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['order_day_dispatch_value'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['order_day_dispatch_count'] }} order(s) from this date are currently still in dispatch / resend</div>
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
@@ -145,6 +152,15 @@
                             <div class="p-3 font-medium">Delivered parcels</div>
                             <div class="p-3">{{ (int) $today['delivered_count'] }}</div>
                             <div class="p-3">{{ (int) $yesterday['delivered_count'] }}</div>
+                        </div>
+                        <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
+                            <div class="p-3 font-medium">Orders dated this day now in dispatch</div>
+                            <div class="p-3">
+                                LKR {{ number_format((float) $today['order_day_dispatch_value'], 2) }} / {{ (int) $today['order_day_dispatch_count'] }} order(s)
+                            </div>
+                            <div class="p-3">
+                                LKR {{ number_format((float) $yesterday['order_day_dispatch_value'], 2) }} / {{ (int) $yesterday['order_day_dispatch_count'] }} order(s)
+                            </div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Moved to dispatch</div>
