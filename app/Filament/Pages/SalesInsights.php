@@ -240,6 +240,8 @@ class SalesInsights extends Page
             ->where('business_id', $business->id)
             ->where('occurred_at', '<=', $asOf->copy()->endOfDay())
             ->whereIn('event_type', [
+                OperationalEvent::ORDER_CREATED,
+                OperationalEvent::ORDER_CONFIRMED,
                 OperationalEvent::TRACKING_NUMBER_ADDED,
                 OperationalEvent::WHOLESALE_PARCEL_SENT,
                 OperationalEvent::ORDER_DELIVERED,
@@ -260,22 +262,7 @@ class SalesInsights extends Page
             OperationalEvent::ORDER_RESENT,
         ], true));
 
-        $orderDayEvents = OperationalEvent::query()
-            ->where('business_id', $business->id)
-            ->whereIn('event_type', [
-                OperationalEvent::ORDER_CREATED,
-                OperationalEvent::ORDER_CONFIRMED,
-                OperationalEvent::TRACKING_NUMBER_ADDED,
-                OperationalEvent::WHOLESALE_PARCEL_SENT,
-                OperationalEvent::ORDER_DELIVERED,
-                OperationalEvent::ORDER_RETURNED,
-                OperationalEvent::ORDER_RESENT,
-            ])
-            ->orderBy('occurred_at')
-            ->orderBy('id')
-            ->get();
-
-        $orderDayDispatchStatuses = $orderDayEvents
+        $orderDayDispatchStatuses = $events
             ->groupBy(fn (OperationalEvent $event): string => $this->parcelKey($event))
             ->map(function (Collection $group): array {
                 $ordered = $group

@@ -138,8 +138,8 @@ class SalesInsightsTest extends TestCase
             ->assertSee('LKR 1,740.00')
             ->assertSee('Verified dispatch on this date')
             ->assertSee('LKR 0.00')
-            ->assertSee('Orders dated this day now in dispatch')
-            ->assertSee('1 order(s) from this date are currently still in dispatch / resend')
+            ->assertSee('Orders first seen this day in dispatch')
+            ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date')
             ->assertSee('Verified stage-date status value: LKR 0.00')
             ->assertSee('dispatch status row(s) are still unverified')
             ->assertSee('Unverified synced rows')
@@ -231,7 +231,7 @@ class SalesInsightsTest extends TestCase
             ->assertSee('2 parcel(s) were still in dispatch / resend waiting result as of this date');
     }
 
-    public function test_sales_insights_shows_orders_from_selected_date_that_are_now_in_dispatch(): void
+    public function test_sales_insights_shows_orders_first_seen_on_selected_date_that_are_in_dispatch_as_of_that_date(): void
     {
         Carbon::setTestNow('2026-07-11 12:00:00');
 
@@ -287,7 +287,7 @@ class SalesInsightsTest extends TestCase
                 'sale_amount' => 2500,
                 'stage_occurred_at_source' => 'stock_app',
             ],
-            'occurred_at' => Carbon::parse('2026-07-12 10:00:00'),
+            'occurred_at' => Carbon::parse('2026-07-11 10:00:00'),
         ]);
 
         OperationalEvent::query()->create([
@@ -331,9 +331,9 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Orders dated this day now in dispatch')
+            ->assertSee('Orders first seen this day in dispatch')
             ->assertSee('LKR 2,500.00')
-            ->assertSee('1 order(s) from this date are currently still in dispatch / resend');
+            ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date');
     }
 
     public function test_sales_insights_separates_dispatch_movement_from_dispatch_status_snapshot(): void
