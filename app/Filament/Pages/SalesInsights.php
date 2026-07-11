@@ -177,8 +177,10 @@ class SalesInsights extends Page
         return [
             'delivered_revenue' => round((float) $delivered->sum('revenue_amount'), 2),
             'delivered_count' => $delivered->count(),
-            'dispatch_moved_value' => round((float) ($dispatchMovement['value'] ?? 0), 2),
-            'dispatch_moved_count' => (int) ($dispatchMovement['count'] ?? 0),
+            'dispatch_moved_value' => round((float) ($dispatchMovement['verified_value'] ?? 0), 2),
+            'dispatch_moved_count' => (int) ($dispatchMovement['verified_count'] ?? 0),
+            'dispatch_moved_hidden_value' => round((float) ($dispatchMovement['unverified_value'] ?? 0), 2),
+            'dispatch_moved_hidden_count' => (int) ($dispatchMovement['unverified_count'] ?? 0),
             'dispatch_signal_value' => round((float) ($dispatchSnapshot['signal_value'] ?? 0), 2),
             'dispatch_signal_count' => (int) ($dispatchSnapshot['signal_count'] ?? 0),
             'dispatch_value' => round((float) ($dispatchSnapshot['verified_value'] ?? 0), 2),
@@ -197,7 +199,7 @@ class SalesInsights extends Page
     }
 
     /**
-     * @return array{value: float, count: int}
+     * @return array{verified_value: float, verified_count: int, unverified_value: float, unverified_count: int}
      */
     private function dispatchMovement(Collection $periodEvents): array
     {
@@ -216,9 +218,14 @@ class SalesInsights extends Page
                 ))
                 ->last());
 
+        $verified = $dispatchEvents->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+        $unverified = $dispatchEvents->reject(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+
         return [
-            'value' => (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
-            'count' => $dispatchEvents->count(),
+            'verified_value' => (float) $verified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'verified_count' => $verified->count(),
+            'unverified_value' => (float) $unverified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'unverified_count' => $unverified->count(),
         ];
     }
 
@@ -404,6 +411,8 @@ class SalesInsights extends Page
             'delivered_count' => 0,
             'dispatch_moved_value' => 0.0,
             'dispatch_moved_count' => 0,
+            'dispatch_moved_hidden_value' => 0.0,
+            'dispatch_moved_hidden_count' => 0,
             'dispatch_signal_value' => 0.0,
             'dispatch_signal_count' => 0,
             'dispatch_value' => 0.0,

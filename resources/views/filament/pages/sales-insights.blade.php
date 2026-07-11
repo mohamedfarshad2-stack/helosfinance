@@ -69,7 +69,13 @@
                 <div class="text-xs uppercase tracking-wide opacity-70">Moved to dispatch on this date</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_moved_count'] }} parcel(s) moved into dispatch / resend on this date</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_moved_count'] }} verified parcel(s) moved into dispatch / resend on this date</div>
+                @if ((int) ($today['dispatch_moved_hidden_count'] ?? 0) > 0)
+                    <div class="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
+                        {{ (int) $today['dispatch_moved_hidden_count'] }} extra row(s) were synced on this date without a verified real dispatch date, worth
+                        LKR {{ number_format((float) $today['dispatch_moved_hidden_value'], 2) }}.
+                    </div>
+                @endif
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
@@ -141,8 +147,22 @@
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Moved to dispatch</div>
-                            <div class="p-3">LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }} / {{ (int) $today['dispatch_moved_count'] }} parcel(s)</div>
-                            <div class="p-3">LKR {{ number_format((float) $yesterday['dispatch_moved_value'], 2) }} / {{ (int) $yesterday['dispatch_moved_count'] }} parcel(s)</div>
+                            <div class="p-3">
+                                LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }} / {{ (int) $today['dispatch_moved_count'] }} verified parcel(s)
+                                @if ((int) ($today['dispatch_moved_hidden_count'] ?? 0) > 0)
+                                    <div class="text-xs text-amber-700 dark:text-amber-300">
+                                        {{ (int) $today['dispatch_moved_hidden_count'] }} unverified same-day row(s)
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="p-3">
+                                LKR {{ number_format((float) $yesterday['dispatch_moved_value'], 2) }} / {{ (int) $yesterday['dispatch_moved_count'] }} verified parcel(s)
+                                @if ((int) ($yesterday['dispatch_moved_hidden_count'] ?? 0) > 0)
+                                    <div class="text-xs text-amber-700 dark:text-amber-300">
+                                        {{ (int) $yesterday['dispatch_moved_hidden_count'] }} unverified same-day row(s)
+                                    </div>
+                                @endif
+                            </div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Dispatched value</div>
