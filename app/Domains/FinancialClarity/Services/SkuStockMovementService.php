@@ -20,7 +20,7 @@ class SkuStockMovementService
             return null;
         }
 
-        return SkuStockMovement::query()->firstOrCreate(
+        return SkuStockMovement::query()->updateOrCreate(
             [
                 'business_id' => $business->id,
                 'operational_event_id' => $event->id,

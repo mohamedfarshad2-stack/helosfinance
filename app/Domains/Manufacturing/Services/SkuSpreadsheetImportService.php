@@ -2,6 +2,7 @@
 
 namespace App\Domains\Manufacturing\Services;
 
+use App\Domains\FinancialClarity\Services\OperationalEventRecalculator;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
 use Illuminate\Support\Str;
@@ -10,6 +11,11 @@ use OpenSpout\Reader\Common\Creator\ReaderFactory;
 
 class SkuSpreadsheetImportService
 {
+    public function __construct(
+        private readonly OperationalEventRecalculator $recalculator,
+    ) {
+    }
+
     /**
      * @return array{created:int, updated:int, skipped:int, skipped_reasons:list<string>}
      */
@@ -64,6 +70,19 @@ class SkuSpreadsheetImportService
                         'active' => $this->bool($data['active'] ?? true),
                     ]
                 );
+
+                if (! $sku->wasRecentlyCreated && $sku->wasChanged([
+                    'code',
+                    'name',
+                    'expected_sale_price',
+                    'material_cost',
+                    'packaging_cost',
+                    'labor_rate',
+                    'finishing_cost',
+                    'active',
+                ])) {
+                    $this->recalculator->recalculateForSku($sku);
+                }
 
                 $sku->wasRecentlyCreated ? $created++ : $updated++;
             }

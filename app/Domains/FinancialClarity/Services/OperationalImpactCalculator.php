@@ -24,10 +24,10 @@ class OperationalImpactCalculator
 
         $delivery = (float) ($payload['transport_cost_amount'] ?? $payload['delivery_amount'] ?? $payload['courier_amount'] ?? $this->assumption($business, ['delivery_fee'], 'Delivery cost', 0));
         $returnCourier = (float) ($payload['return_courier_amount'] ?? $payload['return_charge'] ?? $this->assumption($business, ['return_courier_fee', 'return_fee'], 'Return courier cost', 0));
-        $returnPackaging = $this->assumption($business, ['return_packaging_fee'], 'Return packaging cost', 0);
+        $returnPackaging = (float) ($payload['return_packaging_amount'] ?? $this->assumption($business, ['return_packaging_fee'], 'Return packaging cost', 0));
         $resendCourier = (float) ($payload['resend_courier_amount'] ?? $payload['resend_charge'] ?? $this->assumption($business, ['resend_courier_fee', 'resend_fee'], 'Resend courier cost', 0));
-        $resendPackaging = $this->assumption($business, ['resend_packaging_fee'], 'Resend packaging cost', 0);
-        $verification = $this->assumption($business, 'verification_cost', 'Verification cost', 0);
+        $resendPackaging = (float) ($payload['resend_packaging_amount'] ?? $this->assumption($business, ['resend_packaging_fee'], 'Resend packaging cost', 0));
+        $verification = (float) ($payload['verification_amount'] ?? $this->assumption($business, 'verification_cost', 'Verification cost', 0));
         $restockable = $this->bool($payload['restockable'] ?? $payload['return_stock'] ?? $payload['restock'] ?? false);
         $restockRecovery = $restockable && $sku ? $productCost : 0.0;
 
