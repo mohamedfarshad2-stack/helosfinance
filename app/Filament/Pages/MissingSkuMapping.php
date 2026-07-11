@@ -36,6 +36,12 @@ class MissingSkuMapping extends Page
     /** @var array<string, int|string|null> */
     public array $bulkSkuSelections = [];
 
+    /** @var array<int, string> */
+    public array $skuSearches = [];
+
+    /** @var array<string, string> */
+    public array $bulkSkuSearches = [];
+
     public function mount(): void
     {
         abort_unless(static::canAccess(), 403);
@@ -81,12 +87,16 @@ class MissingSkuMapping extends Page
     {
         $this->skuSelections = [];
         $this->bulkSkuSelections = [];
+        $this->skuSearches = [];
+        $this->bulkSkuSearches = [];
     }
 
     public function updatedScope(): void
     {
         $this->skuSelections = [];
         $this->bulkSkuSelections = [];
+        $this->skuSearches = [];
+        $this->bulkSkuSearches = [];
     }
 
     public function assignSku(int $eventId, OperationalImpactCalculator $calculator, SkuStockMovementService $stockMovements): void
@@ -116,6 +126,7 @@ class MissingSkuMapping extends Page
         $this->repairEvent($event, $sku, $calculator, $stockMovements);
 
         unset($this->skuSelections[$eventId]);
+        unset($this->skuSearches[$eventId]);
 
         Notification::make()
             ->title('Product link fixed')
@@ -164,6 +175,7 @@ class MissingSkuMapping extends Page
         }
 
         unset($this->bulkSkuSelections[$groupKey]);
+        unset($this->bulkSkuSearches[$groupKey]);
         $this->skuSelections = [];
 
         Notification::make()
@@ -207,6 +219,8 @@ class MissingSkuMapping extends Page
 
         $this->skuSelections = [];
         $this->bulkSkuSelections = [];
+        $this->skuSearches = [];
+        $this->bulkSkuSearches = [];
 
         if ($fixed > 0) {
             Notification::make()
@@ -266,14 +280,39 @@ class MissingSkuMapping extends Page
      */
     private function skuOptions(): array
     {
+        return $this->skuOptionsForSearch();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function skuOptionsForSearch(?string $search = null, int|string|null $selectedSkuId = null): array
+    {
         if (! $this->businessId) {
             return [];
         }
 
+        $search = trim((string) $search);
+        $selectedSkuId = (int) ($selectedSkuId ?: 0);
+
         return Sku::query()
             ->where('business_id', $this->businessId)
             ->where('active', true)
+            ->when($search !== '', function (Builder $query) use ($search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%");
+                });
+            })
+            ->when($selectedSkuId > 0, function (Builder $query) use ($selectedSkuId): void {
+                $query->orWhere(function (Builder $query) use ($selectedSkuId): void {
+                    $query->where('business_id', $this->businessId)
+                        ->where('active', true)
+                        ->whereKey($selectedSkuId);
+                });
+            })
             ->orderBy('code')
+            ->limit($search !== '' ? 80 : 40)
             ->get()
             ->mapWithKeys(fn (Sku $sku): array => [$sku->id => trim($sku->code.' - '.$sku->name, ' -')])
             ->all();
