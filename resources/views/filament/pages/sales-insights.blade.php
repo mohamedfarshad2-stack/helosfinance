@@ -66,14 +66,15 @@
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Moved to dispatch on this date</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Verified dispatch on this date</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_moved_count'] }} verified parcel(s) moved into dispatch / resend on this date</div>
                 @if ((int) ($today['dispatch_moved_hidden_count'] ?? 0) > 0)
-                    <div class="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
-                        {{ (int) $today['dispatch_moved_hidden_count'] }} extra row(s) were synced on this date without a verified real dispatch date, worth
-                        LKR {{ number_format((float) $today['dispatch_moved_hidden_value'], 2) }}.
+                    <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                        <div class="font-semibold uppercase tracking-wide">Unverified synced rows</div>
+                        <div class="mt-1">{{ (int) $today['dispatch_moved_hidden_count'] }} row(s) were synced on this date without a trusted real dispatch date.</div>
+                        <div class="mt-1">Unverified value: LKR {{ number_format((float) $today['dispatch_moved_hidden_value'], 2) }}</div>
                     </div>
                 @endif
             </div>

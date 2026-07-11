@@ -136,11 +136,13 @@ class SalesInsightsTest extends TestCase
         $response->assertOk()
             ->assertSee('Parcels in dispatch status')
             ->assertSee('LKR 1,740.00')
-            ->assertSee('Moved to dispatch on this date')
+            ->assertSee('Verified dispatch on this date')
             ->assertSee('LKR 0.00')
             ->assertSee('Verified stage-date status value: LKR 0.00')
             ->assertSee('dispatch status row(s) are still unverified')
-            ->assertSee('extra row(s) were synced on this date without a verified real dispatch date');
+            ->assertSee('Unverified synced rows')
+            ->assertSee('row(s) were synced on this date without a trusted real dispatch date.')
+            ->assertSee('Unverified value: LKR 1,740.00');
     }
 
     public function test_sales_insights_counts_parcels_still_in_dispatch_status_as_of_selected_date(): void
@@ -308,7 +310,7 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Moved to dispatch on this date')
+            ->assertSee('Verified dispatch on this date')
             ->assertSee('2 verified parcel(s) moved into dispatch / resend on this date')
             ->assertSee('LKR 4,000.00')
             ->assertSee('3 parcel(s) were still in dispatch / resend waiting result as of this date')
@@ -379,7 +381,7 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Moved to dispatch on this date')
+            ->assertSee('Verified dispatch on this date')
             ->assertSee('1 verified parcel(s) moved into dispatch / resend on this date')
             ->assertSee('LKR 2,400.00');
     }
