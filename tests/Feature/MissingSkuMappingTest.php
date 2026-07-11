@@ -10,6 +10,7 @@ use App\Domains\Shared\Models\SkuStockMovement;
 use App\Filament\Pages\MissingSkuMapping;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -60,7 +61,7 @@ class MissingSkuMappingTest extends TestCase
                 'tracking_number' => 'TRK-1001',
                 'sale_amount' => 2500,
             ],
-            'occurred_at' => now(),
+            'occurred_at' => now()->subDay(),
         ]);
 
         $this->actingAs($owner);
@@ -181,7 +182,7 @@ class MissingSkuMappingTest extends TestCase
                     'sku_name' => 'Blue slipper from stock app',
                     'sale_amount' => 1900,
                 ],
-                'occurred_at' => now(),
+                'occurred_at' => now()->subDay(),
             ]);
         }
 
@@ -385,7 +386,7 @@ class MissingSkuMappingTest extends TestCase
                 'sku_code' => 'PS487',
                 'sale_amount' => 2500,
             ],
-            'occurred_at' => now(),
+            'occurred_at' => now()->subDay(),
         ]);
 
         $exactName = OperationalEvent::query()->create([
@@ -400,7 +401,7 @@ class MissingSkuMappingTest extends TestCase
                 'sku_name' => 'Brown Geta Size 10',
                 'sale_amount' => 2500,
             ],
-            'occurred_at' => now(),
+            'occurred_at' => now()->subDay(),
         ]);
 
         $unclear = OperationalEvent::query()->create([
@@ -415,7 +416,7 @@ class MissingSkuMappingTest extends TestCase
                 'sku_name' => 'brown geta 1390 + 350 delivery size 10',
                 'sale_amount' => 2500,
             ],
-            'occurred_at' => now(),
+            'occurred_at' => now()->subDay(),
         ]);
 
         $this->actingAs($owner);
@@ -426,5 +427,69 @@ class MissingSkuMappingTest extends TestCase
         $this->assertSame($sku->id, $exactCode->fresh()->sku_id);
         $this->assertSame($sku->id, $exactName->fresh()->sku_id);
         $this->assertNull($unclear->fresh()->sku_id);
+    }
+
+    public function test_missing_product_links_defaults_to_backlog_scope_and_separates_today_from_older_rows(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-11 10:00:00'));
+
+        $business = Business::query()->create([
+            'name' => 'Queue Scope Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'scope-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'backlog-row',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => ['sku_name' => 'Backlog Item'],
+            'occurred_at' => Carbon::parse('2026-07-10 15:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'today-row',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => ['sku_name' => 'Today Item'],
+            'occurred_at' => Carbon::parse('2026-07-11 09:00:00'),
+        ]);
+
+        $this->actingAs($owner);
+
+        Livewire::test(MissingSkuMapping::class)
+            ->assertSet('scope', 'backlog')
+            ->assertSee('1')
+            ->assertSee('Older backlog')
+            ->assertSee('New today')
+            ->assertSee('Total unresolved')
+            ->assertSee('backlog-row')
+            ->assertDontSee('today-row')
+            ->set('scope', 'today')
+            ->assertDontSee('backlog-row')
+            ->assertSee('today-row')
+            ->set('scope', 'all')
+            ->assertSee('backlog-row')
+            ->assertSee('today-row');
+
+        Carbon::setTestNow();
     }
 }

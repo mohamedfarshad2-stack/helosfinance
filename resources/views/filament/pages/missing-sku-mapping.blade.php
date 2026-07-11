@@ -6,20 +6,42 @@
                     <div class="text-xs uppercase tracking-wide text-gray-500">Product repair</div>
                     <h2 class="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">Fix orders that cannot calculate product profit</h2>
                     <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
-                        Start with repeated product hints. Fix many matching Stock App rows together, then use manual repair only for unclear rows.
+                        HELOS now separates older backlog from today’s new inflow so you can see whether the team is really reducing the pile.
                     </p>
                 </div>
 
                 <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                    <div class="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">Still needs fixing</div>
-                    <div class="mt-1 text-3xl font-semibold text-amber-900 dark:text-amber-100">{{ number_format((int) $missingCount) }}</div>
-                    <div class="mt-1 text-sm text-amber-800 dark:text-amber-200">Rows can affect profit, break-even, stock, and owner trust.</div>
+                    <div class="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">Showing now</div>
+                    <div class="mt-1 text-3xl font-semibold text-amber-900 dark:text-amber-100">{{ number_format((int) $showingCount) }}</div>
+                    <div class="mt-1 text-sm text-amber-800 dark:text-amber-200">This is the current queue for the selected scope below, not the whole business forever.</div>
                 </div>
             </div>
         </x-filament::section>
 
         <x-filament::section>
-            <div class="grid gap-4 md:grid-cols-[0.45fr_1fr]">
+            <div class="grid gap-4 lg:grid-cols-3">
+                <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+                    <div class="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Older backlog</div>
+                    <div class="mt-1 text-3xl font-semibold text-emerald-900 dark:text-emerald-100">{{ number_format((int) $backlogCount) }}</div>
+                    <div class="mt-1 text-sm text-emerald-800 dark:text-emerald-200">Rows from before today. This is the real burn-down number.</div>
+                </div>
+
+                <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 dark:border-sky-900 dark:bg-sky-950/20">
+                    <div class="text-xs uppercase tracking-wide text-sky-700 dark:text-sky-300">New today</div>
+                    <div class="mt-1 text-3xl font-semibold text-sky-900 dark:text-sky-100">{{ number_format((int) $todayCount) }}</div>
+                    <div class="mt-1 text-sm text-sky-800 dark:text-sky-200">Fresh rows still arriving today. This can hide progress if you look only at one total.</div>
+                </div>
+
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60">
+                    <div class="text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300">Total unresolved</div>
+                    <div class="mt-1 text-3xl font-semibold text-gray-950 dark:text-white">{{ number_format((int) $totalMissingCount) }}</div>
+                    <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">Everything still unresolved for this business across backlog and today together.</div>
+                </div>
+            </div>
+        </x-filament::section>
+
+        <x-filament::section>
+            <div class="grid gap-4 md:grid-cols-[0.38fr_0.38fr_1fr]">
                 @if ($businesses->count() > 1)
                     <label class="grid gap-1 text-sm">
                         <span class="font-medium text-gray-950 dark:text-white">Business</span>
@@ -37,6 +59,15 @@
                         </div>
                     </div>
                 @endif
+
+                <label class="grid gap-1 text-sm">
+                    <span class="font-medium text-gray-950 dark:text-white">Queue view</span>
+                    <select wire:model.live="scope" class="fi-input block w-full rounded-lg border-gray-300 bg-white py-2 text-sm text-gray-950 shadow-sm outline-none transition duration-75 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-gray-700 dark:bg-white/5 dark:text-white">
+                        @foreach ($scopeOptions as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </label>
 
                 <label class="grid gap-1 text-sm">
                     <span class="font-medium text-gray-950 dark:text-white">Find an order or product hint</span>
@@ -61,7 +92,7 @@
 
                 <div>
                     <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Fix repeated product hints first</h2>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose one SKU for a repeated Stock App product hint. HELOS repairs up to 500 matching rows, recalculates them, and removes the group from this page once the rows are fixed.</p>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose one SKU for a repeated Stock App product hint. HELOS repairs up to 500 matching rows in the selected queue view, recalculates them, and removes the group once fixed.</p>
                 </div>
 
                 <div class="rounded-lg border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900 dark:bg-sky-950/20">

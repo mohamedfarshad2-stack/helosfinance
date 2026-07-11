@@ -26,6 +26,8 @@ class MissingSkuMapping extends Page
 
     public ?int $businessId = null;
 
+    public string $scope = 'backlog';
+
     public string $search = '';
 
     /** @var array<int, int|string|null> */
@@ -52,7 +54,12 @@ class MissingSkuMapping extends Page
             'skuOptions' => $this->skuOptions(),
             'groups' => $business ? $this->groups($business) : collect(),
             'rows' => $business ? $this->rows($business) : collect(),
-            'missingCount' => $business ? $this->missingQuery($business)->count() : 0,
+            'scope' => $this->scope,
+            'scopeOptions' => $this->scopeOptions(),
+            'showingCount' => $business ? $this->missingQuery($business)->count() : 0,
+            'backlogCount' => $business ? $this->backlogQuery($business)->count() : 0,
+            'todayCount' => $business ? $this->todayQuery($business)->count() : 0,
+            'totalMissingCount' => $business ? $this->baseMissingQuery($business)->count() : 0,
         ];
     }
 
@@ -71,6 +78,12 @@ class MissingSkuMapping extends Page
     }
 
     public function updatedBusinessId(): void
+    {
+        $this->skuSelections = [];
+        $this->bulkSkuSelections = [];
+    }
+
+    public function updatedScope(): void
     {
         $this->skuSelections = [];
         $this->bulkSkuSelections = [];
@@ -301,6 +314,21 @@ class MissingSkuMapping extends Page
 
     private function missingQuery(Business $business): Builder
     {
+        return $this->applyScope($this->baseMissingQuery($business));
+    }
+
+    private function backlogQuery(Business $business): Builder
+    {
+        return $this->applyScope($this->baseMissingQuery($business), 'backlog');
+    }
+
+    private function todayQuery(Business $business): Builder
+    {
+        return $this->applyScope($this->baseMissingQuery($business), 'today');
+    }
+
+    private function baseMissingQuery(Business $business): Builder
+    {
         $search = trim($this->search);
 
         return OperationalEvent::query()
@@ -321,6 +349,32 @@ class MissingSkuMapping extends Page
             })
             ->latest('occurred_at')
             ->latest('id');
+    }
+
+    private function applyScope(Builder $query, ?string $scope = null): Builder
+    {
+        $scope ??= $this->scope;
+        $today = now()->startOfDay();
+
+        return match ($scope) {
+            'today' => $query->where(function (Builder $builder) use ($today): void {
+                $builder->where('occurred_at', '>=', $today)->orWhereNull('occurred_at');
+            }),
+            'all' => $query,
+            default => $query->where('occurred_at', '<', $today),
+        };
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function scopeOptions(): array
+    {
+        return [
+            'backlog' => 'Backlog only',
+            'today' => 'Today only',
+            'all' => 'Everything',
+        ];
     }
 
     /**
