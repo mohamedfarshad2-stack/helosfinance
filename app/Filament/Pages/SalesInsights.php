@@ -201,11 +201,20 @@ class SalesInsights extends Page
      */
     private function dispatchMovement(Collection $periodEvents): array
     {
-        $dispatchEvents = $periodEvents->whereIn('event_type', [
-            OperationalEvent::TRACKING_NUMBER_ADDED,
-            OperationalEvent::WHOLESALE_PARCEL_SENT,
-            OperationalEvent::ORDER_RESENT,
-        ]);
+        $dispatchEvents = $periodEvents
+            ->whereIn('event_type', [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->groupBy(fn (OperationalEvent $event): string => $this->dispatchMovementKey($event))
+            ->map(fn (Collection $group): OperationalEvent => $group
+                ->sortBy(fn (OperationalEvent $event): string => sprintf(
+                    '%s-%010d',
+                    $event->occurred_at?->format('Y-m-d H:i:s.u') ?? '',
+                    $event->id
+                ))
+                ->last());
 
         return [
             'value' => (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
@@ -330,6 +339,27 @@ class SalesInsights extends Page
         }
 
         return 'event:'.$event->id;
+    }
+
+    private function dispatchMovementKey(OperationalEvent $event): string
+    {
+        $payload = $event->payload ?? [];
+
+        foreach ([
+            'tracking_number',
+            'cod_order_id',
+            'order_id',
+            'order_number',
+            'reference',
+        ] as $key) {
+            $value = trim((string) ($payload[$key] ?? ''));
+
+            if ($value !== '') {
+                return $key.':'.$value;
+            }
+        }
+
+        return $this->parcelKey($event);
     }
 
     private function isVerifiedDispatchEvent(OperationalEvent $event): bool

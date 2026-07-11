@@ -312,6 +312,75 @@ class SalesInsightsTest extends TestCase
             ->assertSee('LKR 7,000.00');
     }
 
+    public function test_sales_insights_deduplicates_same_day_dispatch_updates_for_the_same_tracking_number(): void
+    {
+        Carbon::setTestNow('2026-07-11 12:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-DUP-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 2400,
+                'tracking_number' => 'TRK-1001',
+                'order_id' => 'ORDER-1001',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 09:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-DUP-2',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 2400,
+                'tracking_number' => 'TRK-1001',
+                'order_id' => 'ORDER-1001',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 09:30:00'),
+        ]);
+
+        $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
+
+        $response->assertOk()
+            ->assertSee('Moved to dispatch on this date')
+            ->assertSee('1 parcel(s) moved into dispatch / resend on this date')
+            ->assertSee('LKR 2,400.00');
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();
