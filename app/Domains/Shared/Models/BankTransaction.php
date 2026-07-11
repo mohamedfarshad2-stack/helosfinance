@@ -54,6 +54,64 @@ class BankTransaction extends Model
         ];
     }
 
+    public static function classificationOptions(): array
+    {
+        return [
+            'unknown' => 'Unknown',
+            'revenue' => 'Revenue',
+            'cod_settlement' => 'COD settlement',
+            'expense' => 'Expense',
+            'salary' => 'Salary',
+            'supplier_payment' => 'Supplier payment',
+            'courier' => 'Courier',
+            'fuel' => 'Fuel',
+            'packing' => 'Packing',
+            'marketing' => 'Marketing',
+            'rent' => 'Rent',
+            'utility' => 'Utility',
+            'bank_charge' => 'Bank charge',
+            'owner_contribution' => 'Owner contribution',
+            'owner_withdrawal' => 'Owner withdrawal',
+            'loan' => 'Loan',
+            'transfer' => 'Transfer',
+            'petty_cash' => 'Petty cash funding',
+            'maintenance' => 'Maintenance',
+        ];
+    }
+
+    public static function transactionTypeOptions(): array
+    {
+        return [
+            'revenue' => 'Revenue',
+            'cod_settlement' => 'COD settlement',
+            'expense' => 'Expense',
+            'transfer' => 'Transfer',
+            'owner_contribution' => 'Owner contribution',
+            'owner_withdrawal' => 'Owner withdrawal',
+            'loan' => 'Loan',
+            'other' => 'Other',
+        ];
+    }
+
+    public static function inferTransactionType(?string $classification): ?string
+    {
+        return match ($classification) {
+            'revenue' => 'revenue',
+            'cod_settlement' => 'cod_settlement',
+            'owner_contribution' => 'owner_contribution',
+            'owner_withdrawal' => 'owner_withdrawal',
+            'loan' => 'loan',
+            'transfer', 'petty_cash' => 'transfer',
+            'expense', 'salary', 'supplier_payment', 'courier', 'fuel', 'packing', 'marketing', 'rent', 'utility', 'bank_charge', 'maintenance' => 'expense',
+            default => null,
+        };
+    }
+
+    public static function needsBusinessAssignment(?string $transactionType): bool
+    {
+        return in_array($transactionType, ['revenue', 'cod_settlement', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true);
+    }
+
     public function setMoneyContainerAttribute(mixed $value): void
     {
         $this->attributes['money_container'] = filled($value) ? Str::squish((string) $value) : null;

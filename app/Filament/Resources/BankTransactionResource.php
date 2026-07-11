@@ -55,7 +55,7 @@ class BankTransactionResource extends Resource
             TextInput::make('balance')->numeric()->prefix('LKR')->nullable(),
             Select::make('transaction_type')
                 ->label('Transaction type')
-                ->options(static::transactionTypeOptions())
+                ->options(BankTransaction::transactionTypeOptions())
                 ->helperText('Use Transfer when money only moved between your own places like Current Account, Savings, Petty Cash, or Store Cash. Use Expense only when the business really spent the money outside.')
                 ->required(),
             Select::make('counter_money_container')
@@ -73,25 +73,21 @@ class BankTransactionResource extends Resource
                 ->nullable()
                 ->placeholder('Shared / Unallocated')
                 ->helperText('Choose the business this money belongs to. Leave blank only for pure internal transfers between your own money containers.'),
-            Select::make('classification')->options([
-                'unknown' => 'Unknown',
-                'revenue' => 'Revenue',
-                'cod_settlement' => 'COD settlement',
-                'expense' => 'Expense',
-                'salary' => 'Salary',
-                'supplier_payment' => 'Supplier payment',
-                'courier' => 'Courier',
-                'fuel' => 'Fuel',
-                'packing' => 'Packing',
-                'marketing' => 'Marketing',
-                'rent' => 'Rent',
-                'utility' => 'Utility',
-                'bank_charge' => 'Bank charge',
-                'owner_withdrawal' => 'Owner withdrawal',
-                'transfer' => 'Transfer',
-                'petty_cash' => 'Petty cash',
-                'maintenance' => 'Maintenance',
-            ])->helperText('If this row only moved money into petty cash or store cash, classify it as Transfer, not Expense.')->required(),
+            Select::make('classification')->options(BankTransaction::classificationOptions())
+                ->helperText('If this row only moved money into petty cash or store cash, classify it as Transfer, not Expense.')
+                ->live()
+                ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
+                    $inferredType = BankTransaction::inferTransactionType($state);
+
+                    if (filled($inferredType)) {
+                        $set('transaction_type', $inferredType);
+                    }
+
+                    if (BankTransaction::needsBusinessAssignment($inferredType) && blank($get('allocated_business_id')) && ! (Auth::user()?->isInternalAdmin() ?? false)) {
+                        $set('allocated_business_id', Auth::user()?->defaultBusinessId());
+                    }
+                })
+                ->required(),
             Select::make('status')->options([
                 'review' => 'Needs review',
                 'classified' => 'Reviewed / classified',
@@ -157,23 +153,39 @@ class BankTransactionResource extends Resource
                         ->weight('semibold'),
                     SelectColumn::make('classification')
                         ->label('Meaning')
-                        ->options(static::classificationOptions())
+                        ->options(BankTransaction::classificationOptions())
                         ->selectablePlaceholder(false)
                         ->afterStateUpdated(function (BankTransaction $record, string $state): void {
+                            $transactionType = BankTransaction::inferTransactionType($state) ?? $record->transaction_type;
+                            $allocatedBusinessId = $record->allocated_business_id;
+
+                            if (blank($allocatedBusinessId) && BankTransaction::needsBusinessAssignment($transactionType)) {
+                                $allocatedBusinessId = $record->business_id;
+                            }
+
                             $record->forceFill([
                                 'classification' => $state,
-                                'status' => static::resolveReviewStatus($record, $state, $record->transaction_type, $record->allocated_business_id),
+                                'transaction_type' => $transactionType,
+                                'allocated_business_id' => $allocatedBusinessId,
+                                'status' => static::resolveReviewStatus($record, $state, $transactionType, $allocatedBusinessId),
                                 'reviewed_at' => now(),
                             ])->save();
                         }),
                     SelectColumn::make('transaction_type')
                         ->label('Effect')
-                        ->options(static::transactionTypeOptions())
+                        ->options(BankTransaction::transactionTypeOptions())
                         ->selectablePlaceholder(false)
                         ->afterStateUpdated(function (BankTransaction $record, string $state): void {
+                            $allocatedBusinessId = $record->allocated_business_id;
+
+                            if (blank($allocatedBusinessId) && BankTransaction::needsBusinessAssignment($state)) {
+                                $allocatedBusinessId = $record->business_id;
+                            }
+
                             $record->forceFill([
                                 'transaction_type' => $state,
-                                'status' => static::resolveReviewStatus($record, $record->classification, $state, $record->allocated_business_id),
+                                'allocated_business_id' => $allocatedBusinessId,
+                                'status' => static::resolveReviewStatus($record, $record->classification, $state, $allocatedBusinessId),
                                 'reviewed_at' => now(),
                             ])->save();
                         }),
@@ -205,7 +217,7 @@ class BankTransactionResource extends Resource
                 'classified' => 'Reviewed / classified',
                 'matched' => 'Matched rule',
             ]),
-            Tables\Filters\SelectFilter::make('classification')->options(static::classificationOptions()),
+            Tables\Filters\SelectFilter::make('classification')->options(BankTransaction::classificationOptions()),
         ])->actions([
             Action::make('markReviewed')
                 ->label('Done')
@@ -247,11 +259,23 @@ class BankTransactionResource extends Resource
                     ->form([
                         Select::make('classification')
                             ->label('Classification')
-                            ->options(static::classificationOptions())
+                            ->options(BankTransaction::classificationOptions())
+                            ->live()
+                            ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
+                                $inferredType = BankTransaction::inferTransactionType($state);
+
+                                if (filled($inferredType)) {
+                                    $set('transaction_type', $inferredType);
+                                }
+
+                                if (BankTransaction::needsBusinessAssignment($inferredType) && blank($get('allocated_business_id')) && ! (Auth::user()?->isInternalAdmin() ?? false)) {
+                                    $set('allocated_business_id', Auth::user()?->defaultBusinessId());
+                                }
+                            })
                             ->required(),
                         Select::make('transaction_type')
                             ->label('Transaction type')
-                            ->options(static::transactionTypeOptions())
+                            ->options(BankTransaction::transactionTypeOptions())
                             ->required(),
                         Select::make('money_container')
                             ->label('Bank account / cash container')
@@ -281,15 +305,20 @@ class BankTransactionResource extends Resource
                             ->default('classified')
                             ->required(),
                     ])
-                    ->action(function (Collection $records, array $data): void {
+                            ->action(function (Collection $records, array $data): void {
                         $records->each(function (BankTransaction $record) use ($data): void {
+                            $transactionType = $data['transaction_type'] ?: BankTransaction::inferTransactionType($data['classification']);
+                            $allocatedBusinessId = filled($data['allocated_business_id'] ?? null)
+                                ? (int) $data['allocated_business_id']
+                                : (BankTransaction::needsBusinessAssignment($transactionType) ? $record->business_id : null);
+
                             $record->forceFill([
                                 'classification' => $data['classification'],
-                                'transaction_type' => $data['transaction_type'],
+                                'transaction_type' => $transactionType,
                                 'money_container' => $data['money_container'],
                                 'counter_money_container' => $data['counter_money_container'] ?? null,
-                                'allocated_business_id' => filled($data['allocated_business_id'] ?? null) ? (int) $data['allocated_business_id'] : null,
-                                'status' => static::resolveReviewStatus($record, $data['classification'], $data['transaction_type'], filled($data['allocated_business_id'] ?? null) ? (int) $data['allocated_business_id'] : null, $data['status']),
+                                'allocated_business_id' => $allocatedBusinessId,
+                                'status' => static::resolveReviewStatus($record, $data['classification'], $transactionType, $allocatedBusinessId, $data['status']),
                                 'reviewed_at' => now(),
                             ])->save();
                         });
@@ -365,29 +394,6 @@ class BankTransactionResource extends Resource
         return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
     }
 
-    private static function classificationOptions(): array
-    {
-        return [
-            'unknown' => 'Unknown',
-            'revenue' => 'Revenue',
-            'cod_settlement' => 'COD settlement',
-            'expense' => 'Expense',
-            'salary' => 'Salary',
-            'supplier_payment' => 'Supplier payment',
-            'courier' => 'Courier',
-            'fuel' => 'Fuel',
-            'packing' => 'Packing',
-            'marketing' => 'Marketing',
-            'rent' => 'Rent',
-            'utility' => 'Utility',
-            'bank_charge' => 'Bank charge',
-            'owner_withdrawal' => 'Owner withdrawal',
-            'transfer' => 'Transfer',
-            'petty_cash' => 'Petty cash',
-            'maintenance' => 'Maintenance',
-        ];
-    }
-
     private static function statusOptions(bool $includeMatched = true): array
     {
         $options = [
@@ -400,20 +406,6 @@ class BankTransactionResource extends Resource
         }
 
         return $options;
-    }
-
-    private static function transactionTypeOptions(): array
-    {
-        return [
-            'revenue' => 'Revenue',
-            'cod_settlement' => 'COD settlement',
-            'expense' => 'Expense',
-            'transfer' => 'Transfer',
-            'owner_contribution' => 'Owner contribution',
-            'owner_withdrawal' => 'Owner withdrawal',
-            'loan' => 'Loan',
-            'other' => 'Other',
-        ];
     }
 
     private static function resolveReviewStatus(BankTransaction $record, ?string $classification, ?string $transactionType, ?int $allocatedBusinessId, ?string $requestedStatus = null): string
@@ -434,7 +426,7 @@ class BankTransactionResource extends Resource
             return blank($record->counter_money_container) ? 'review' : 'classified';
         }
 
-        if (in_array($transactionType, ['revenue', 'cod_settlement', 'expense', 'loan', 'owner_contribution', 'owner_withdrawal'], true) && blank($allocatedBusinessId)) {
+        if (BankTransaction::needsBusinessAssignment($transactionType) && blank($allocatedBusinessId)) {
             return 'review';
         }
 

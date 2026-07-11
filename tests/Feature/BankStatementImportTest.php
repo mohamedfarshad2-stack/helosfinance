@@ -56,8 +56,8 @@ class BankStatementImportTest extends TestCase
 
         $result = app(BankStatementImportService::class)->import($business, $csvPath);
 
-        $this->assertSame(0, $result['created']);
-        $this->assertSame(2, $result['reviewed']);
+        $this->assertSame(2, $result['created']);
+        $this->assertSame(0, $result['reviewed']);
         $this->assertSame(0, $result['skipped']);
         $this->assertDatabaseCount('bank_transactions', 2);
 
@@ -109,6 +109,54 @@ class BankStatementImportTest extends TestCase
         $this->assertSame(1, $result['created'] + $result['reviewed']);
         $this->assertSame(1, $result['duplicates']);
         $this->assertDatabaseCount('bank_transactions', 1);
+
+        @unlink($csvPath);
+        @unlink($path);
+    }
+
+    public function test_it_auto_sets_transaction_effect_and_business_for_clear_expense_rows(): void
+    {
+        $business = Business::query()->create(['name' => 'Test Business']);
+        $path = tempnam(sys_get_temp_dir(), 'bank_statement_');
+        $csvPath = $path.'.csv';
+
+        file_put_contents($csvPath, implode(PHP_EOL, [
+            'Transaction Date,Narrative,Withdrawal,Deposit,Running Balance',
+            '29/05/2026,Supplier payment for material,1000,,5000',
+        ]));
+
+        app(BankStatementImportService::class)->import($business, $csvPath);
+
+        $transaction = BankTransaction::query()->first();
+
+        $this->assertSame('supplier_payment', $transaction?->classification);
+        $this->assertSame('expense', $transaction?->transaction_type);
+        $this->assertSame($business->id, $transaction?->allocated_business_id);
+        $this->assertSame('classified', $transaction?->status);
+
+        @unlink($csvPath);
+        @unlink($path);
+    }
+
+    public function test_it_keeps_possible_transfers_in_review_until_destination_is_confirmed(): void
+    {
+        $business = Business::query()->create(['name' => 'Test Business']);
+        $path = tempnam(sys_get_temp_dir(), 'bank_statement_');
+        $csvPath = $path.'.csv';
+
+        file_put_contents($csvPath, implode(PHP_EOL, [
+            'Transaction Date,Narrative,Withdrawal,Deposit,Running Balance',
+            '29/05/2026,Transfer to savings,1000,,5000',
+        ]));
+
+        app(BankStatementImportService::class)->import($business, $csvPath);
+
+        $transaction = BankTransaction::query()->first();
+
+        $this->assertSame('transfer', $transaction?->classification);
+        $this->assertSame('transfer', $transaction?->transaction_type);
+        $this->assertNull($transaction?->allocated_business_id);
+        $this->assertSame('review', $transaction?->status);
 
         @unlink($csvPath);
         @unlink($path);

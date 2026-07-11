@@ -82,6 +82,8 @@ class BankStatementImportService
                         'credit' => $this->money($data['credit'] ?? 0),
                         'balance' => filled($data['balance'] ?? null) ? $this->money($data['balance']) : null,
                         'classification' => $classification['classification'],
+                        'transaction_type' => $classification['transaction_type'],
+                        'allocated_business_id' => $classification['allocated_business_id'],
                         'confidence' => $classification['confidence'],
                         'rule_key' => $classification['rule_key'],
                         'status' => $classification['status'],
@@ -306,31 +308,38 @@ class BankStatementImportService
         if ($matchedRule) {
             $matchedRule->forceFill(['last_matched_at' => now()])->save();
 
+            $transactionType = BankTransaction::inferTransactionType($matchedRule->classification);
+            $allocatedBusinessId = BankTransaction::needsBusinessAssignment($transactionType) ? $business->id : null;
+
             return [
                 'classification' => $matchedRule->classification,
+                'transaction_type' => $transactionType,
+                'allocated_business_id' => $allocatedBusinessId,
                 'confidence' => (float) $matchedRule->confidence,
                 'rule_key' => 'rule:'.$matchedRule->id,
-                'status' => 'matched',
+                'status' => $this->reviewStatusFor($transactionType, $allocatedBusinessId, null, 'matched'),
             ];
         }
 
         if (filled($data['credit'] ?? null) && (float) $data['credit'] > 0) {
-            return $this->keywordFallback($description, 'revenue');
+            return $this->keywordFallback($business, $description, 'revenue');
         }
 
         if (filled($data['debit'] ?? null) && (float) $data['debit'] > 0) {
-            return $this->keywordFallback($description, 'expense');
+            return $this->keywordFallback($business, $description, 'expense');
         }
 
         return [
             'classification' => 'unknown',
+            'transaction_type' => null,
+            'allocated_business_id' => null,
             'confidence' => 0.2,
             'rule_key' => null,
             'status' => 'review',
         ];
     }
 
-    private function keywordFallback(string $description, string $type): array
+    private function keywordFallback(Business $business, string $description, string $type): array
     {
         $map = [
             'salary' => 'salary',
@@ -361,21 +370,47 @@ class BankStatementImportService
 
         foreach ($map as $needle => $classification) {
             if (Str::contains($description, $needle)) {
+                $transactionType = BankTransaction::inferTransactionType($classification);
+                $allocatedBusinessId = BankTransaction::needsBusinessAssignment($transactionType) ? $business->id : null;
+
                 return [
                     'classification' => $classification,
+                    'transaction_type' => $transactionType,
+                    'allocated_business_id' => $allocatedBusinessId,
                     'confidence' => 0.65,
                     'rule_key' => 'keyword:'.$needle,
-                    'status' => 'review',
+                    'status' => $this->reviewStatusFor($transactionType, $allocatedBusinessId),
                 ];
             }
         }
 
+        $transactionType = BankTransaction::inferTransactionType($type);
+
         return [
             'classification' => $type,
+            'transaction_type' => $transactionType,
+            'allocated_business_id' => BankTransaction::needsBusinessAssignment($transactionType) ? $business->id : null,
             'confidence' => 0.4,
             'rule_key' => null,
-            'status' => 'review',
+            'status' => $this->reviewStatusFor($transactionType, BankTransaction::needsBusinessAssignment($transactionType) ? $business->id : null),
         ];
+    }
+
+    private function reviewStatusFor(?string $transactionType, ?int $allocatedBusinessId, ?string $counterMoneyContainer = null, string $preferred = 'classified'): string
+    {
+        if (blank($transactionType)) {
+            return 'review';
+        }
+
+        if ($transactionType === 'transfer') {
+            return blank($counterMoneyContainer) ? 'review' : $preferred;
+        }
+
+        if (BankTransaction::needsBusinessAssignment($transactionType) && blank($allocatedBusinessId)) {
+            return 'review';
+        }
+
+        return $preferred;
     }
 
     private function money(mixed $value): float
