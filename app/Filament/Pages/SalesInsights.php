@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 
 class SalesInsights extends Page
 {
@@ -46,6 +45,13 @@ class SalesInsights extends Page
             'todayLabel' => $selectedDate->format('M j, Y'),
             'yesterdayLabel' => $previousDate->format('M j, Y'),
             'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
+            'weekDates' => collect(range(0, 6))
+                ->map(fn (int $offset): array => [
+                    'date' => $weekStart->copy()->addDays($offset)->toDateString(),
+                    'label' => $weekStart->copy()->addDays($offset)->format('D j'),
+                    'is_selected' => $weekStart->copy()->addDays($offset)->isSameDay($selectedDate),
+                    'is_today' => $weekStart->copy()->addDays($offset)->isToday(),
+                ]),
             'today' => $business ? $this->periodStats($business, $selectedDate) : $this->emptyStats(),
             'yesterday' => $business ? $this->periodStats($business, $previousDate) : $this->emptyStats(),
             'week' => $business ? $this->rangeStats($business, $weekStart, $weekEnd) : $this->emptyStats(),
@@ -136,6 +142,13 @@ class SalesInsights extends Page
         $this->selectedDate = Carbon::parse($value)->toDateString();
     }
 
+    public function moveDay(int $direction): void
+    {
+        $this->selectedDate = $this->selectedDateObject()
+            ->addDays($direction)
+            ->toDateString();
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -156,10 +169,13 @@ class SalesInsights extends Page
         $delivered = $events->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $dispatchEvents = $events->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT]);
         $dispatched = $dispatchEvents->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+        $unverifiedDispatch = $dispatchEvents->reject(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
         $unverifiedDispatchCount = $dispatchEvents->count() - $dispatched->count();
         $returned = $events->where('event_type', OperationalEvent::ORDER_RETURNED);
 
+        $dispatchSignalValue = $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
         $dispatchValue = $dispatched->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
+        $unverifiedDispatchValue = $unverifiedDispatch->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
         $pendingValue = $dispatchValue;
         $marketingSpend = $this->marketingSpend($business, $start, $end);
         $profitAfterDirectCosts = (float) ($delivered->sum('revenue_amount') - $events->sum('direct_cost_amount') - $events->sum('leakage_amount') + $events->sum('recovery_amount'));
@@ -167,9 +183,12 @@ class SalesInsights extends Page
         return [
             'delivered_revenue' => round((float) $delivered->sum('revenue_amount'), 2),
             'delivered_count' => $delivered->count(),
+            'dispatch_signal_value' => round((float) $dispatchSignalValue, 2),
+            'dispatch_signal_count' => $dispatchEvents->count(),
             'dispatch_value' => round((float) $dispatchValue, 2),
             'dispatch_count' => $dispatched->count(),
             'dispatch_hidden_count' => $unverifiedDispatchCount,
+            'dispatch_hidden_value' => round((float) $unverifiedDispatchValue, 2),
             'pending_value' => round((float) $pendingValue, 2),
             'pending_count' => $dispatched->count(),
             'returned_count' => $returned->count(),
@@ -267,9 +286,12 @@ class SalesInsights extends Page
         return [
             'delivered_revenue' => 0.0,
             'delivered_count' => 0,
+            'dispatch_signal_value' => 0.0,
+            'dispatch_signal_count' => 0,
             'dispatch_value' => 0.0,
             'dispatch_count' => 0,
             'dispatch_hidden_count' => 0,
+            'dispatch_hidden_value' => 0.0,
             'pending_value' => 0.0,
             'pending_count' => 0,
             'returned_count' => 0,

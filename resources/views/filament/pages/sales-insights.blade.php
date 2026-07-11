@@ -9,13 +9,29 @@
                         Delivered orders count as sales. Finance starts once a COD parcel gets a tracking number or a wholesale parcel is sent. Marketing only shows here after you record it in Expenses or Bank Review with the Marketing category.
                     </p>
                     <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium">
+                        <button type="button" wire:click="moveDay(-1)" class="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">Previous day</button>
                         <button type="button" wire:click="selectDate('{{ now()->toDateString() }}')" class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">Today: {{ now()->format('M j, Y') }}</button>
                         <button type="button" wire:click="selectDate('{{ now()->subDay()->toDateString() }}')" class="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">Yesterday: {{ now()->subDay()->format('M j, Y') }}</button>
+                        <button type="button" wire:click="moveDay(1)" class="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">Next day</button>
                         <span class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">This week: {{ $weekLabel }}</span>
                         <label class="ml-2 inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                             <span>Open date</span>
                             <input wire:model.live="selectedDate" type="date" class="fi-input rounded-lg border-gray-300 bg-white px-2 py-1 text-xs text-gray-950 shadow-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-gray-700 dark:bg-white/5 dark:text-white" />
                         </label>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+                        @foreach ($weekDates as $weekDate)
+                            @php
+                                $weekDateTone = $weekDate['is_selected']
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100'
+                                    : ($weekDate['is_today']
+                                        ? 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100'
+                                        : 'border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200');
+                            @endphp
+                            <button type="button" wire:click="selectDate('{{ $weekDate['date'] }}')" class="rounded-full border px-3 py-1 {{ $weekDateTone }}">
+                                {{ $weekDate['label'] }}
+                            </button>
+                        @endforeach
                     </div>
                 </div>
 
@@ -50,13 +66,18 @@
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Today dispatched value</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Today dispatch signal</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
-                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_count'] }} parcel(s) still waiting result</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_signal_value'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_signal_count'] }} parcel(s) moved into dispatch / resend waiting result</div>
+                <div class="mt-2 text-xs opacity-80">
+                    Verified stage-date value: LKR {{ number_format((float) $today['dispatch_value'], 2) }}
+                    from {{ (int) $today['dispatch_count'] }} parcel(s)
+                </div>
                 @if ((int) ($today['dispatch_hidden_count'] ?? 0) > 0)
                     <div class="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
-                        {{ (int) $today['dispatch_hidden_count'] }} dispatch row(s) hidden until real stage date is verified.
+                        {{ (int) $today['dispatch_hidden_count'] }} dispatch row(s) are still unverified, worth
+                        LKR {{ number_format((float) $today['dispatch_hidden_value'], 2) }}.
                     </div>
                 @endif
             </div>
@@ -113,8 +134,22 @@
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Dispatched value</div>
-                            <div class="p-3">LKR {{ number_format((float) $today['dispatch_value'], 2) }}</div>
-                            <div class="p-3">LKR {{ number_format((float) $yesterday['dispatch_value'], 2) }}</div>
+                            <div class="p-3">
+                                LKR {{ number_format((float) $today['dispatch_signal_value'], 2) }}
+                                @if ((int) ($today['dispatch_hidden_count'] ?? 0) > 0)
+                                    <div class="text-xs text-amber-700 dark:text-amber-300">
+                                        {{ (int) $today['dispatch_hidden_count'] }} unverified row(s)
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="p-3">
+                                LKR {{ number_format((float) $yesterday['dispatch_signal_value'], 2) }}
+                                @if ((int) ($yesterday['dispatch_hidden_count'] ?? 0) > 0)
+                                    <div class="text-xs text-amber-700 dark:text-amber-300">
+                                        {{ (int) $yesterday['dispatch_hidden_count'] }} unverified row(s)
+                                    </div>
+                                @endif
+                            </div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
                             <div class="p-3 font-medium">Returns</div>
@@ -149,7 +184,7 @@
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Pipeline value</span>
-                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['pending_value'], 2) }}</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['dispatch_signal_value'], 2) }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Returns</span>
