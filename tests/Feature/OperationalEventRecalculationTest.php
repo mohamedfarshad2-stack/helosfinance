@@ -7,6 +7,7 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuStockMovement;
+use App\Filament\Resources\OperationalEventResource\Pages\EditOperationalEvent;
 use App\Filament\Resources\SkuResource\Pages\EditSku;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -164,5 +165,86 @@ class OperationalEventRecalculationTest extends TestCase
         $this->assertSame(1, $processed);
         $this->assertSame(600.0, (float) $event->direct_cost_amount);
         $this->assertSame(600.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
+    }
+
+    public function test_editing_operational_event_sku_recalculates_costs_immediately(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Event Edit Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'event-edit-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'PS476',
+            'name' => 'Brown Geta',
+            'material_cost' => 416,
+            'packaging_cost' => 0,
+            'labor_rate' => 291,
+            'finishing_cost' => 0,
+            'expected_sale_price' => 2350,
+            'active' => true,
+        ]);
+
+        $event = OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => null,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'cod-order-edit-ps476',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sku_code' => 'ps 476',
+                'sku_name' => 'brown geta 1390 + 350 delivery size 6',
+                'sale_amount' => 1740,
+                'tracking_number' => 'TRK-EDIT-476',
+                'economics' => [
+                    'product_cost_amount' => 0,
+                ],
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $this->actingAs($owner);
+
+        Livewire::test(EditOperationalEvent::class, ['record' => (string) $event->getKey()])
+            ->fillForm([
+                'business_id' => $business->id,
+                'sku_id' => $sku->id,
+                'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+                'external_id' => $event->external_id,
+                'channel' => 'cod',
+                'department' => 'Operations',
+                'quantity' => 1,
+                'revenue_amount' => 0,
+                'direct_cost_amount' => 0,
+                'leakage_amount' => 0,
+                'recovery_amount' => 0,
+                'occurred_at' => $event->occurred_at,
+            ])
+            ->call('save');
+
+        $event->refresh();
+
+        $this->assertSame($sku->id, $event->sku_id);
+        $this->assertSame(707.0, (float) $event->direct_cost_amount);
+        $this->assertSame('PS476', $event->payload['sku_code'] ?? null);
+        $this->assertSame(707.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
     }
 }
