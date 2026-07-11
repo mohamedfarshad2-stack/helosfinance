@@ -154,7 +154,7 @@ class SalesInsights extends Page
      */
     private function rangeStats(Business $business, Carbon $start, Carbon $end): array
     {
-        $events = OperationalEvent::query()
+        $periodEvents = OperationalEvent::query()
             ->where('business_id', $business->id)
             ->whereBetween('occurred_at', [$start, $end])
             ->whereIn('event_type', [
@@ -166,37 +166,72 @@ class SalesInsights extends Page
             ])
             ->get();
 
-        $delivered = $events->where('event_type', OperationalEvent::ORDER_DELIVERED);
-        $dispatchEvents = $events->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT]);
-        $dispatched = $dispatchEvents->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
-        $unverifiedDispatch = $dispatchEvents->reject(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
-        $unverifiedDispatchCount = $dispatchEvents->count() - $dispatched->count();
-        $returned = $events->where('event_type', OperationalEvent::ORDER_RETURNED);
-
-        $dispatchSignalValue = $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
-        $dispatchValue = $dispatched->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
-        $unverifiedDispatchValue = $unverifiedDispatch->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
-        $pendingValue = $dispatchValue;
+        $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
+        $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
+        $dispatchSnapshot = $this->dispatchSnapshot($business, $end);
+        $pendingValue = (float) ($dispatchSnapshot['signal_value'] ?? 0);
         $marketingSpend = $this->marketingSpend($business, $start, $end);
-        $profitAfterDirectCosts = (float) ($delivered->sum('revenue_amount') - $events->sum('direct_cost_amount') - $events->sum('leakage_amount') + $events->sum('recovery_amount'));
+        $profitAfterDirectCosts = (float) ($delivered->sum('revenue_amount') - $periodEvents->sum('direct_cost_amount') - $periodEvents->sum('leakage_amount') + $periodEvents->sum('recovery_amount'));
 
         return [
             'delivered_revenue' => round((float) $delivered->sum('revenue_amount'), 2),
             'delivered_count' => $delivered->count(),
-            'dispatch_signal_value' => round((float) $dispatchSignalValue, 2),
-            'dispatch_signal_count' => $dispatchEvents->count(),
-            'dispatch_value' => round((float) $dispatchValue, 2),
-            'dispatch_count' => $dispatched->count(),
-            'dispatch_hidden_count' => $unverifiedDispatchCount,
-            'dispatch_hidden_value' => round((float) $unverifiedDispatchValue, 2),
-            'pending_value' => round((float) $pendingValue, 2),
-            'pending_count' => $dispatched->count(),
+            'dispatch_signal_value' => round((float) ($dispatchSnapshot['signal_value'] ?? 0), 2),
+            'dispatch_signal_count' => (int) ($dispatchSnapshot['signal_count'] ?? 0),
+            'dispatch_value' => round((float) ($dispatchSnapshot['verified_value'] ?? 0), 2),
+            'dispatch_count' => (int) ($dispatchSnapshot['verified_count'] ?? 0),
+            'dispatch_hidden_count' => (int) ($dispatchSnapshot['unverified_count'] ?? 0),
+            'dispatch_hidden_value' => round((float) ($dispatchSnapshot['unverified_value'] ?? 0), 2),
+            'pending_value' => round((float) ($dispatchSnapshot['signal_value'] ?? 0), 2),
+            'pending_count' => (int) ($dispatchSnapshot['signal_count'] ?? 0),
             'returned_count' => $returned->count(),
             'return_cost' => round((float) $returned->sum('leakage_amount'), 2),
             'marketing_spend' => round($marketingSpend, 2),
             'marketing_per_delivered_order' => $delivered->count() > 0 ? round($marketingSpend / $delivered->count(), 2) : 0.0,
             'profit_after_direct_costs' => round($profitAfterDirectCosts, 2),
             'profit_after_marketing' => round($profitAfterDirectCosts - $marketingSpend, 2),
+        ];
+    }
+
+    /**
+     * @return array{signal_value: float, signal_count: int, verified_value: float, verified_count: int, unverified_value: float, unverified_count: int}
+     */
+    private function dispatchSnapshot(Business $business, Carbon $asOf): array
+    {
+        $events = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->where('occurred_at', '<=', $asOf->copy()->endOfDay())
+            ->whereIn('event_type', [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->get();
+
+        $latestStatuses = $events
+            ->groupBy(fn (OperationalEvent $event): string => $this->parcelKey($event))
+            ->map(fn (Collection $group): OperationalEvent => $group->last());
+
+        $dispatchStatuses = $latestStatuses->filter(fn (OperationalEvent $event): bool => in_array($event->event_type, [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_RESENT,
+        ], true));
+
+        $verified = $dispatchStatuses->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+        $unverified = $dispatchStatuses->reject(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+
+        return [
+            'signal_value' => (float) $dispatchStatuses->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'signal_count' => $dispatchStatuses->count(),
+            'verified_value' => (float) $verified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'verified_count' => $verified->count(),
+            'unverified_value' => (float) $unverified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'unverified_count' => $unverified->count(),
         ];
     }
 
@@ -244,6 +279,37 @@ class SalesInsights extends Page
         $payload = $event->payload ?? [];
 
         return (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? $event->revenue_amount ?? 0);
+    }
+
+    private function parcelKey(OperationalEvent $event): string
+    {
+        $payload = $event->payload ?? [];
+
+        foreach ([
+            'cod_order_id',
+            'order_id',
+            'order_number',
+            'tracking_number',
+            'reference',
+        ] as $key) {
+            $value = trim((string) ($payload[$key] ?? ''));
+
+            if ($value !== '') {
+                return $key.':'.$value;
+            }
+        }
+
+        $externalId = trim((string) ($event->external_id ?? ''));
+
+        if ($externalId !== '') {
+            if (preg_match('/^(.*?)-(?:confirmed|delivered|returned|resent|tracking_number_added|tracking_added|tracking|dispatch|dispatched)(?:-|$)/i', $externalId, $matches) === 1) {
+                return 'external:'.$matches[1];
+            }
+
+            return 'external:'.$externalId;
+        }
+
+        return 'event:'.$event->id;
     }
 
     private function isVerifiedDispatchEvent(OperationalEvent $event): bool

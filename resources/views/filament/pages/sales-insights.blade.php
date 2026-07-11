@@ -66,17 +66,17 @@
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Today dispatch signal</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Parcels in dispatch status</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_signal_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_signal_count'] }} parcel(s) moved into dispatch / resend waiting result</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_signal_count'] }} parcel(s) were still in dispatch / resend waiting result as of this date</div>
                 <div class="mt-2 text-xs opacity-80">
-                    Verified stage-date value: LKR {{ number_format((float) $today['dispatch_value'], 2) }}
+                    Verified stage-date status value: LKR {{ number_format((float) $today['dispatch_value'], 2) }}
                     from {{ (int) $today['dispatch_count'] }} parcel(s)
                 </div>
                 @if ((int) ($today['dispatch_hidden_count'] ?? 0) > 0)
                     <div class="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
-                        {{ (int) $today['dispatch_hidden_count'] }} dispatch row(s) are still unverified, worth
+                        {{ (int) $today['dispatch_hidden_count'] }} dispatch status row(s) are still unverified, worth
                         LKR {{ number_format((float) $today['dispatch_hidden_value'], 2) }}.
                     </div>
                 @endif
