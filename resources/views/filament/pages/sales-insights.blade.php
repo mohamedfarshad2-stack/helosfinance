@@ -8,10 +8,14 @@
                     <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
                         Delivered orders count as sales. Finance starts once a COD parcel gets a tracking number or a wholesale parcel is sent. Marketing only shows here after you record it in Expenses or Bank Review with the Marketing category.
                     </p>
-                    <div class="mt-3 inline-flex flex-wrap gap-2 text-xs font-medium">
-                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">Today: {{ $todayLabel }}</span>
-                        <span class="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">Yesterday: {{ $yesterdayLabel }}</span>
+                    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium">
+                        <button type="button" wire:click="selectDate('{{ now()->toDateString() }}')" class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">Today: {{ now()->format('M j, Y') }}</button>
+                        <button type="button" wire:click="selectDate('{{ now()->subDay()->toDateString() }}')" class="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">Yesterday: {{ now()->subDay()->format('M j, Y') }}</button>
                         <span class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">This week: {{ $weekLabel }}</span>
+                        <label class="ml-2 inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                            <span>Open date</span>
+                            <input wire:model.live="selectedDate" type="date" class="fi-input rounded-lg border-gray-300 bg-white px-2 py-1 text-xs text-gray-950 shadow-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-gray-700 dark:bg-white/5 dark:text-white" />
+                        </label>
                     </div>
                 </div>
 
@@ -50,6 +54,11 @@
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_value'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_count'] }} parcel(s) still waiting result</div>
+                @if ((int) ($today['dispatch_hidden_count'] ?? 0) > 0)
+                    <div class="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
+                        {{ (int) $today['dispatch_hidden_count'] }} dispatch row(s) hidden until real stage date is verified.
+                    </div>
+                @endif
             </div>
 
             <div class="rounded-lg border p-4 {{ $todayMarketingTone }}">

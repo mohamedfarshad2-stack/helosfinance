@@ -95,6 +95,49 @@ class SalesInsightsTest extends TestCase
         $this->assertSame(2075.0, $profitAfterMarketing);
     }
 
+    public function test_sales_insights_hides_unverified_stock_app_dispatch_rows_until_stage_date_is_verified(): void
+    {
+        Carbon::setTestNow('2026-07-11 12:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-UNVERIFIED-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 1740],
+            'occurred_at' => now()->subHour(),
+        ]);
+
+        $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
+
+        $response->assertOk()
+            ->assertSee('dispatch row(s) hidden until real stage date is verified')
+            ->assertSee('LKR 0.00');
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();

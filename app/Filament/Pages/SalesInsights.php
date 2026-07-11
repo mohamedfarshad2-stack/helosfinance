@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class SalesInsights extends Page
 {
@@ -21,27 +22,33 @@ class SalesInsights extends Page
     protected static string $view = 'filament.pages.sales-insights';
 
     public ?int $businessId = null;
+    public string $selectedDate = '';
 
     public function mount(): void
     {
         abort_unless(static::canAccess(), 403);
 
         $this->businessId = $this->defaultBusinessId();
+        $this->selectedDate = today()->toDateString();
     }
 
     protected function getViewData(): array
     {
         $business = $this->selectedBusiness();
+        $selectedDate = $this->selectedDateObject();
+        $previousDate = $selectedDate->copy()->subDay();
+        $weekStart = $selectedDate->copy()->startOfWeek();
+        $weekEnd = $selectedDate->copy()->endOfWeek();
 
         return [
             'businesses' => $this->businesses(),
             'business' => $business,
-            'todayLabel' => today()->format('M j, Y'),
-            'yesterdayLabel' => today()->subDay()->format('M j, Y'),
-            'weekLabel' => now()->startOfWeek()->format('M j').' - '.now()->endOfWeek()->format('M j, Y'),
-            'today' => $business ? $this->periodStats($business, today()) : $this->emptyStats(),
-            'yesterday' => $business ? $this->periodStats($business, today()->subDay()) : $this->emptyStats(),
-            'week' => $business ? $this->rangeStats($business, now()->startOfWeek(), now()->endOfWeek()) : $this->emptyStats(),
+            'todayLabel' => $selectedDate->format('M j, Y'),
+            'yesterdayLabel' => $previousDate->format('M j, Y'),
+            'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
+            'today' => $business ? $this->periodStats($business, $selectedDate) : $this->emptyStats(),
+            'yesterday' => $business ? $this->periodStats($business, $previousDate) : $this->emptyStats(),
+            'week' => $business ? $this->rangeStats($business, $weekStart, $weekEnd) : $this->emptyStats(),
             'topProducts' => $business ? $this->topProducts($business) : collect(),
             'missingProductLinks' => $business ? $this->missingProductLinks($business) : 0,
         ];
@@ -119,6 +126,16 @@ class SalesInsights extends Page
         return $this->rangeStats($business, $day->copy()->startOfDay(), $day->copy()->endOfDay());
     }
 
+    public function selectDate(string $date): void
+    {
+        $this->selectedDate = Carbon::parse($date)->toDateString();
+    }
+
+    public function updatedSelectedDate(string $value): void
+    {
+        $this->selectedDate = Carbon::parse($value)->toDateString();
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -137,7 +154,9 @@ class SalesInsights extends Page
             ->get();
 
         $delivered = $events->where('event_type', OperationalEvent::ORDER_DELIVERED);
-        $dispatched = $events->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT]);
+        $dispatchEvents = $events->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT]);
+        $dispatched = $dispatchEvents->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+        $unverifiedDispatchCount = $dispatchEvents->count() - $dispatched->count();
         $returned = $events->where('event_type', OperationalEvent::ORDER_RETURNED);
 
         $dispatchValue = $dispatched->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
@@ -150,6 +169,7 @@ class SalesInsights extends Page
             'delivered_count' => $delivered->count(),
             'dispatch_value' => round((float) $dispatchValue, 2),
             'dispatch_count' => $dispatched->count(),
+            'dispatch_hidden_count' => $unverifiedDispatchCount,
             'pending_value' => round((float) $pendingValue, 2),
             'pending_count' => $dispatched->count(),
             'returned_count' => $returned->count(),
@@ -168,7 +188,7 @@ class SalesInsights extends Page
     {
         return OperationalEvent::query()
             ->where('business_id', $business->id)
-            ->whereDate('occurred_at', today()->toDateString())
+            ->whereDate('occurred_at', $this->selectedDateObject()->toDateString())
             ->where('event_type', OperationalEvent::ORDER_DELIVERED)
             ->whereNotNull('sku_id')
             ->with('sku')
@@ -207,6 +227,25 @@ class SalesInsights extends Page
         return (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? $event->revenue_amount ?? 0);
     }
 
+    private function isVerifiedDispatchEvent(OperationalEvent $event): bool
+    {
+        if (! in_array($event->event_type, [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_RESENT,
+        ], true)) {
+            return true;
+        }
+
+        if ($event->source !== 'stock_app_sync') {
+            return true;
+        }
+
+        $payload = $event->payload ?? [];
+
+        return filled($payload['stage_occurred_at_source'] ?? null);
+    }
+
     private function marketingSpend(Business $business, Carbon $start, Carbon $end): float
     {
         return (float) Expense::query()
@@ -230,6 +269,7 @@ class SalesInsights extends Page
             'delivered_count' => 0,
             'dispatch_value' => 0.0,
             'dispatch_count' => 0,
+            'dispatch_hidden_count' => 0,
             'pending_value' => 0.0,
             'pending_count' => 0,
             'returned_count' => 0,
@@ -247,5 +287,16 @@ class SalesInsights extends Page
     private function accessibleBusinessIds(): array
     {
         return Auth::user()?->accessibleBusinessIds() ?? [];
+    }
+
+    private function selectedDateObject(): Carbon
+    {
+        $date = trim($this->selectedDate);
+
+        if ($date === '') {
+            return today();
+        }
+
+        return Carbon::parse($date);
     }
 }
