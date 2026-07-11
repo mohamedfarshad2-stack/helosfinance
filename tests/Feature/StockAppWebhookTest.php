@@ -8,6 +8,7 @@ use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\SkuStockMovement;
 use App\Domains\Shared\Models\Sku;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -373,6 +374,44 @@ class StockAppWebhookTest extends TestCase
 
         $this->assertSame(1, OperationalEvent::query()->count());
         $this->assertNotNull(IntegrationSource::query()->where('business_id', $business->id)->first()?->last_synced_at);
+    }
+
+    public function test_duplicate_sync_event_keeps_the_earliest_real_occurred_at(): void
+    {
+        $business = Business::query()->create(['name' => 'Test Business']);
+        IntegrationSource::query()->create([
+            'business_id' => $business->id,
+            'name' => 'Test stock-app',
+            'type' => 'stock_app',
+            'base_url' => 'http://127.0.0.1:8001',
+            'status' => 'testing',
+            'settings' => ['stock_app_business_key' => 'TEST-001'],
+        ]);
+
+        $firstOccurredAt = Carbon::parse('2026-07-08 10:00:00')->toIso8601String();
+        $wrongLaterOccurredAt = Carbon::parse('2026-07-11 09:00:00')->toIso8601String();
+
+        $payload = [
+            'business_key' => 'TEST-001',
+            'orders' => [[
+                'event_type' => 'tracking_number_added',
+                'external_id' => 'ORDER-DATE-1',
+                'sku_code' => 'SKU-001',
+                'quantity' => 1,
+                'occurred_at' => $firstOccurredAt,
+            ]],
+        ];
+
+        $this->postJson('/api/v1/stock-app/sync/orders', $payload)->assertOk();
+
+        $payload['orders'][0]['occurred_at'] = $wrongLaterOccurredAt;
+
+        $this->postJson('/api/v1/stock-app/sync/orders', $payload)->assertOk();
+
+        $event = OperationalEvent::query()->where('external_id', 'ORDER-DATE-1')->first();
+
+        $this->assertNotNull($event);
+        $this->assertSame('2026-07-08 10:00:00', $event->occurred_at?->format('Y-m-d H:i:s'));
     }
 
     public function test_webhook_rejects_missing_business_context(): void

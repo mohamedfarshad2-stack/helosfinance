@@ -11,6 +11,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\StockAppIntegrationSecurityService;
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -137,7 +138,7 @@ class StockAppSyncController extends Controller
                         'department' => $order['department'] ?? $event->department,
                         'quantity' => $order['quantity'] ?? $event->quantity,
                         'payload' => array_merge($event->payload ?? [], $eventPayload),
-                        'occurred_at' => $order['occurred_at'] ?? $event->occurred_at,
+                        'occurred_at' => $this->resolvedOccurredAt($event->occurred_at, $order['occurred_at'] ?? null),
                     ])->save();
                 }
 
@@ -280,5 +281,24 @@ class StockAppSyncController extends Controller
                 'active' => true,
             ]
         );
+    }
+
+    private function resolvedOccurredAt(mixed $existingOccurredAt, mixed $incomingOccurredAt): mixed
+    {
+        if (blank($incomingOccurredAt)) {
+            return $existingOccurredAt;
+        }
+
+        $incoming = Carbon::parse($incomingOccurredAt);
+
+        if (blank($existingOccurredAt)) {
+            return $incoming;
+        }
+
+        $existing = $existingOccurredAt instanceof Carbon
+            ? $existingOccurredAt
+            : Carbon::parse($existingOccurredAt);
+
+        return $incoming->lt($existing) ? $incoming : $existing;
     }
 }
