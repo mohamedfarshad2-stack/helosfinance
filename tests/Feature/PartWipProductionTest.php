@@ -9,9 +9,11 @@ use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
 use App\Filament\Resources\ProductionEntryResource;
+use App\Filament\Resources\ProductionEntryResource\Pages\CreateProductionEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class PartWipProductionTest extends TestCase
@@ -128,5 +130,80 @@ class PartWipProductionTest extends TestCase
             ->assertOk()
             ->assertSee('What was produced?')
             ->assertSee('Product part');
+    }
+
+    public function test_production_form_auto_selects_single_matching_work_step_and_sets_paid_date(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Factory Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'production-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'PS364',
+            'name' => 'Classic Slipper',
+            'expected_sale_price' => 1200,
+        ]);
+
+        $employee = \App\Domains\Shared\Models\Employee::query()->create([
+            'business_id' => $business->id,
+            'name' => 'Fathima',
+            'role' => 'Production',
+            'active' => true,
+        ]);
+
+        $workStep = ProductionWorkStep::query()->create([
+            'business_id' => $business->id,
+            'name' => 'Strap stitching labour',
+            'unit_cost' => 35,
+            'active' => true,
+        ]);
+
+        $recipeLine = SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_LABOR,
+            'part_name' => 'Strap',
+            'component_name' => $workStep->name,
+            'production_work_step_id' => $workStep->id,
+            'quantity_per_unit' => 1,
+            'unit_cost' => 35,
+            'active' => true,
+        ]);
+
+        $this->actingAs($owner);
+
+        Livewire::test(CreateProductionEntry::class)
+            ->fillForm([
+                'business_id' => $business->id,
+                'sku_id' => $sku->id,
+                'production_kind' => 'part_production',
+                'part_name' => 'Strap',
+                'employee_name' => $employee->name,
+                'quantity_produced' => 10,
+                'payment_status' => 'paid',
+                'produced_on' => now()->toDateString(),
+            ])
+            ->assertFormSet([
+                'sku_recipe_item_id' => $recipeLine->id,
+                'production_step' => 'Strap stitching labour',
+                'piece_rate' => 35.0,
+                'employee_payout' => 350.0,
+                'net_payable' => 350.0,
+                'paid_on' => now()->toDateString(),
+            ]);
     }
 }

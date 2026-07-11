@@ -53,11 +53,8 @@ class ProductionEntryResource extends Resource
                 ->preload()
                 ->helperText('Choose the finished product this work belongs to.')
                 ->afterStateUpdated(function (Get $get, Set $set): void {
-                    $set('sku_recipe_item_id', null);
-                    $set('production_step', null);
-                    $set('piece_rate', 0);
-                    $set('employee_payout', static::calculateGrossPay($get));
-                    $set('net_payable', static::calculateNetPayable($get));
+                    static::resetLaborSelection($set);
+                    static::applySuggestedLaborStep($get, $set);
                 })
                 ->required(),
             Select::make('production_kind')
@@ -72,9 +69,7 @@ class ProductionEntryResource extends Resource
                 ->required()
                 ->afterStateUpdated(function (Set $set): void {
                     $set('part_name', null);
-                    $set('sku_recipe_item_id', null);
-                    $set('production_step', null);
-                    $set('piece_rate', 0);
+                    static::resetLaborSelection($set);
                 }),
             Select::make('part_name')
                 ->label('Product part')
@@ -87,11 +82,8 @@ class ProductionEntryResource extends Resource
                 ->visible(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
                 ->required(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
                 ->afterStateUpdated(function (Get $get, Set $set): void {
-                    $set('sku_recipe_item_id', null);
-                    $set('production_step', null);
-                    $set('piece_rate', 0);
-                    $set('employee_payout', static::calculateGrossPay($get));
-                    $set('net_payable', static::calculateNetPayable($get));
+                    static::resetLaborSelection($set);
+                    static::applySuggestedLaborStep($get, $set);
                 }),
             Select::make('sku_recipe_item_id')
                 ->label('Production work / pay step')
@@ -103,12 +95,7 @@ class ProductionEntryResource extends Resource
                 ->preload()
                 ->afterStateUpdated(function (Get $get, Set $set): void {
                     $step = static::selectedLaborStep((int) ($get('sku_recipe_item_id') ?? 0));
-
-                    $set('part_name', $step?->part_name);
-                    $set('production_step', $step?->component_name);
-                    $set('piece_rate', $step ? static::pieceRate($step) : 0);
-                    $set('employee_payout', static::calculateGrossPay($get));
-                    $set('net_payable', static::calculateNetPayable($get));
+                    static::applySelectedLaborStep($get, $set, $step);
                 }),
             TextInput::make('production_step')
                 ->label('Selected work')
@@ -128,6 +115,7 @@ class ProductionEntryResource extends Resource
             Select::make('employee_name')
                 ->label('Worker / employee')
                 ->searchable()
+                ->preload()
                 ->placeholder('Select worker')
                 ->options(fn (Get $get) => static::employeeOptions((int) ($get('business_id') ?? 0)))
                 ->helperText('Choose the person who did this work.')
@@ -188,8 +176,20 @@ class ProductionEntryResource extends Resource
                     'paid' => 'Paid',
                 ])
                 ->default('pending')
+                ->live()
+                ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
+                    if ($state === 'paid' && blank($get('paid_on'))) {
+                        $set('paid_on', now()->toDateString());
+                    }
+
+                    if ($state !== 'paid') {
+                        $set('paid_on', null);
+                    }
+                })
                 ->required(),
-            DatePicker::make('paid_on')->label('Paid on'),
+            DatePicker::make('paid_on')
+                ->label('Paid on')
+                ->visible(fn (Get $get): bool => ($get('payment_status') ?? 'pending') === 'paid'),
             DatePicker::make('produced_on')->required()->default(now()),
         ])->columns(2);
     }
@@ -407,6 +407,45 @@ class ProductionEntryResource extends Resource
     private static function pieceRate(SkuRecipeItem $item): float
     {
         return (float) $item->quantity_per_unit * (float) $item->unit_cost;
+    }
+
+    private static function resetLaborSelection(Set $set): void
+    {
+        $set('sku_recipe_item_id', null);
+        $set('production_step', null);
+        $set('piece_rate', 0);
+        $set('employee_payout', 0);
+        $set('net_payable', 0);
+    }
+
+    private static function applySuggestedLaborStep(Get $get, Set $set): void
+    {
+        $options = static::laborStepOptions(
+            (int) ($get('sku_id') ?? 0),
+            (string) ($get('part_name') ?? ''),
+            (string) ($get('production_kind') ?? 'part_production')
+        );
+
+        if (count($options) !== 1) {
+            $set('employee_payout', static::calculateGrossPay($get));
+            $set('net_payable', static::calculateNetPayable($get));
+
+            return;
+        }
+
+        $recipeItemId = (int) array_key_first($options);
+        $set('sku_recipe_item_id', $recipeItemId);
+
+        static::applySelectedLaborStep($get, $set, static::selectedLaborStep($recipeItemId));
+    }
+
+    private static function applySelectedLaborStep(Get $get, Set $set, ?SkuRecipeItem $step): void
+    {
+        $set('part_name', $step?->part_name);
+        $set('production_step', $step?->component_name);
+        $set('piece_rate', $step ? static::pieceRate($step) : 0);
+        $set('employee_payout', static::calculateGrossPay($get));
+        $set('net_payable', static::calculateNetPayable($get));
     }
 
     private static function employeeOptions(int $businessId): array
