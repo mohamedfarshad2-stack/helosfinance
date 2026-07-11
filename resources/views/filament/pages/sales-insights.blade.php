@@ -8,6 +8,11 @@
                     <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
                         Delivered orders count as sales. Finance starts once a COD parcel gets a tracking number or a wholesale parcel is sent. Marketing only shows here after you record it in Expenses or Bank Review with the Marketing category.
                     </p>
+                    <div class="mt-3 inline-flex flex-wrap gap-2 text-xs font-medium">
+                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">Today: {{ $todayLabel }}</span>
+                        <span class="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">Yesterday: {{ $yesterdayLabel }}</span>
+                        <span class="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">This week: {{ $weekLabel }}</span>
+                    </div>
                 </div>
 
                 @if ($businesses->count() > 1)
@@ -35,18 +40,21 @@
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
                 <div class="text-xs uppercase tracking-wide opacity-70">Today delivered sales</div>
+                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['delivered_revenue'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">{{ (int) $today['delivered_count'] }} delivered parcel(s)</div>
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
                 <div class="text-xs uppercase tracking-wide opacity-70">Today dispatched value</div>
+                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_value'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_count'] }} parcel(s) still waiting result</div>
             </div>
 
             <div class="rounded-lg border p-4 {{ $todayMarketingTone }}">
                 <div class="text-xs uppercase tracking-wide opacity-70">Today marketing spend</div>
+                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['marketing_spend'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">
                     @if ((int) $today['delivered_count'] > 0)
@@ -59,6 +67,7 @@
 
             <div class="rounded-lg border p-4 {{ $todayProfitTone }}">
                 <div class="text-xs uppercase tracking-wide opacity-70">Today profit after direct + marketing</div>
+                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">After courier, returns, resend impact, and marketing rows already recorded today</div>
             </div>
@@ -70,7 +79,7 @@
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Today vs yesterday</h2>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Use this to see whether the day is moving forward or getting stuck.</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Use this to see whether the day is moving forward or getting stuck. Today is {{ $todayLabel }} and yesterday is {{ $yesterdayLabel }}.</p>
                         </div>
                         <a href="{{ \App\Filament\Pages\MissingSkuMapping::getUrl() }}" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
                             Fix product links
@@ -119,10 +128,10 @@
 
             <x-filament::section>
                 <div class="grid gap-4">
-                    <div>
-                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">This week</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">A simple week picture without treating dispatched parcels as final sales.</p>
-                    </div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-950 dark:text-white">This week</h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">A simple week picture for {{ $weekLabel }} without treating dispatched parcels as final sales.</p>
+                        </div>
 
                     <div class="grid gap-3">
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">

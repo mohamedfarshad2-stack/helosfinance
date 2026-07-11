@@ -36,6 +36,9 @@ class SalesInsights extends Page
         return [
             'businesses' => $this->businesses(),
             'business' => $business,
+            'todayLabel' => today()->format('M j, Y'),
+            'yesterdayLabel' => today()->subDay()->format('M j, Y'),
+            'weekLabel' => now()->startOfWeek()->format('M j').' - '.now()->endOfWeek()->format('M j, Y'),
             'today' => $business ? $this->periodStats($business, today()) : $this->emptyStats(),
             'yesterday' => $business ? $this->periodStats($business, today()->subDay()) : $this->emptyStats(),
             'week' => $business ? $this->rangeStats($business, now()->startOfWeek(), now()->endOfWeek()) : $this->emptyStats(),
