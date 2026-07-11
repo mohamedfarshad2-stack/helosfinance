@@ -11,8 +11,11 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Tables\Actions\Action;
 use Filament\Tables\Actions\BulkAction;
 use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Columns\Layout\Grid;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables;
 use Filament\Tables\Filters\Filter;
@@ -98,58 +101,95 @@ class BankTransactionResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query))->defaultSort('transaction_date', 'desc')
+        return $table->modifyQueryUsing(fn (Builder $query) => static::scopeToCurrentBusiness($query)
+                ->orderByRaw("case when status = 'review' then 0 else 1 end")
+                ->orderByDesc('transaction_date')
+                ->orderByDesc('id'))
+            ->defaultSort('transaction_date', 'desc')
+            ->paginationPageOptions([25, 50, 100])
+            ->defaultPaginationPageOption(50)
             ->emptyStateHeading('No bank or cash rows to review')
             ->emptyStateDescription('Import a statement or add a cash row here. First decide what happened: money came in, money went out, or money only moved between your own accounts.')
             ->columns([
-            Tables\Columns\TextColumn::make('transaction_date')->date()->sortable(),
-            Tables\Columns\TextColumn::make('description')->searchable()->limit(30),
-            Tables\Columns\TextColumn::make('money_container')->label('Account')->placeholder('Unassigned')->badge(),
-            Tables\Columns\TextColumn::make('transaction_type')->badge()->label('Type'),
-            Tables\Columns\TextColumn::make('allocatedBusiness.name')->label('Business')->placeholder('Shared / Unallocated')->toggleable(),
-            Tables\Columns\TextColumn::make('counter_money_container')->label('Transfer to')->placeholder('-')->toggleable(),
-            SelectColumn::make('classification')
-                ->options(static::classificationOptions())
-                ->afterStateUpdated(function (BankTransaction $record, string $state): void {
-                    $record->forceFill([
-                        'classification' => $state,
-                        'status' => static::resolveReviewStatus($record, $state, $record->transaction_type, $record->allocated_business_id),
-                        'reviewed_at' => now(),
-                    ])->save();
-                }),
-            SelectColumn::make('transaction_type')
-                ->options(static::transactionTypeOptions())
-                ->afterStateUpdated(function (BankTransaction $record, string $state): void {
-                    $record->forceFill([
-                        'transaction_type' => $state,
-                        'status' => static::resolveReviewStatus($record, $record->classification, $state, $record->allocated_business_id),
-                        'reviewed_at' => now(),
-                    ])->save();
-                }),
-            SelectColumn::make('allocated_business_id')
-                ->label('Business')
-                ->options(static::businessOptions())
-                ->placeholder('Shared / Unallocated')
-                ->afterStateUpdated(function (BankTransaction $record, $state): void {
-                    $record->forceFill([
-                        'allocated_business_id' => filled($state) ? (int) $state : null,
-                        'status' => static::resolveReviewStatus($record, $record->classification, $record->transaction_type, filled($state) ? (int) $state : null),
-                        'reviewed_at' => now(),
-                    ])->save();
-                }),
-            Tables\Columns\TextColumn::make('debit')->money('LKR'),
-            Tables\Columns\TextColumn::make('credit')->money('LKR'),
-            Tables\Columns\TextColumn::make('confidence')->label('Conf.')->formatStateUsing(fn ($state) => number_format((float) $state, 2)),
-            SelectColumn::make('status')
-                ->options(static::statusOptions())
-                ->disableOptionWhen(fn (string $value): bool => $value === 'matched')
-                ->afterStateUpdated(function (BankTransaction $record, string $state): void {
-                    $record->forceFill([
-                        'status' => $state,
-                        'reviewed_at' => now(),
-                    ])->save();
-                }),
-        ])->filters([
+                Grid::make([
+                    'default' => 1,
+                    'xl' => 6,
+                ])->schema([
+                    Stack::make([
+                        Tables\Columns\TextColumn::make('transaction_date')
+                            ->label('Date')
+                            ->date('M j, Y')
+                            ->sortable()
+                            ->weight('semibold'),
+                        Tables\Columns\TextColumn::make('status')
+                            ->label('Review')
+                            ->badge()
+                            ->formatStateUsing(fn (string $state): string => static::statusOptions()[$state] ?? ucfirst($state))
+                            ->color(fn (string $state): string => match ($state) {
+                                'classified', 'matched' => 'success',
+                                default => 'warning',
+                            }),
+                    ])->space(1),
+                    Stack::make([
+                        Tables\Columns\TextColumn::make('description')
+                            ->label('Bank line')
+                            ->searchable()
+                            ->wrap()
+                            ->weight('medium'),
+                        Tables\Columns\TextColumn::make('money_container')
+                            ->label('Container')
+                            ->placeholder('Unassigned')
+                            ->badge(),
+                        Tables\Columns\TextColumn::make('counter_money_container')
+                            ->label('Transfer to')
+                            ->placeholder('-')
+                            ->visible(fn (?BankTransaction $record): bool => filled($record?->counter_money_container)),
+                    ])->space(1)->grow(true),
+                    Tables\Columns\TextColumn::make('signed_amount')
+                        ->label('Amount')
+                        ->state(function (BankTransaction $record): string {
+                            $amount = (float) ($record->credit ?: 0) - (float) ($record->debit ?: 0);
+                            $prefix = $amount >= 0 ? '+' : '-';
+
+                            return $prefix.'LKR '.number_format(abs($amount), 2);
+                        })
+                        ->color(fn (BankTransaction $record): string => ((float) ($record->credit ?: 0) - (float) ($record->debit ?: 0)) >= 0 ? 'success' : 'danger')
+                        ->weight('semibold'),
+                    SelectColumn::make('classification')
+                        ->label('Meaning')
+                        ->options(static::classificationOptions())
+                        ->selectablePlaceholder(false)
+                        ->afterStateUpdated(function (BankTransaction $record, string $state): void {
+                            $record->forceFill([
+                                'classification' => $state,
+                                'status' => static::resolveReviewStatus($record, $state, $record->transaction_type, $record->allocated_business_id),
+                                'reviewed_at' => now(),
+                            ])->save();
+                        }),
+                    SelectColumn::make('transaction_type')
+                        ->label('Effect')
+                        ->options(static::transactionTypeOptions())
+                        ->selectablePlaceholder(false)
+                        ->afterStateUpdated(function (BankTransaction $record, string $state): void {
+                            $record->forceFill([
+                                'transaction_type' => $state,
+                                'status' => static::resolveReviewStatus($record, $record->classification, $state, $record->allocated_business_id),
+                                'reviewed_at' => now(),
+                            ])->save();
+                        }),
+                    SelectColumn::make('allocated_business_id')
+                        ->label('Business')
+                        ->options(static::businessOptions())
+                        ->placeholder('Shared / Unallocated')
+                        ->afterStateUpdated(function (BankTransaction $record, $state): void {
+                            $record->forceFill([
+                                'allocated_business_id' => filled($state) ? (int) $state : null,
+                                'status' => static::resolveReviewStatus($record, $record->classification, $record->transaction_type, filled($state) ? (int) $state : null),
+                                'reviewed_at' => now(),
+                            ])->save();
+                        }),
+                ]),
+            ])->filters([
             Filter::make('transaction_date')
                 ->form([
                     DatePicker::make('from')->label('From'),
@@ -167,7 +207,38 @@ class BankTransactionResource extends Resource
             ]),
             Tables\Filters\SelectFilter::make('classification')->options(static::classificationOptions()),
         ])->actions([
-            Tables\Actions\EditAction::make(),
+            Action::make('markReviewed')
+                ->label('Done')
+                ->icon('heroicon-o-check-circle')
+                ->color('success')
+                ->requiresConfirmation()
+                ->modalHeading('Mark this row as reviewed')
+                ->modalDescription('HELOS will keep the row, but treat this decision as checked and ready for finance reporting.')
+                ->action(function (BankTransaction $record): void {
+                    $status = static::resolveReviewStatus($record, $record->classification, $record->transaction_type, $record->allocated_business_id, 'classified');
+
+                    if ($status === 'review') {
+                        Notification::make()
+                            ->title('This row still needs a few fields')
+                            ->body('Choose the meaning, effect, and business first. Transfers also need the transfer destination.')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    $record->forceFill([
+                        'status' => 'classified',
+                        'reviewed_at' => now(),
+                    ])->save();
+
+                    Notification::make()
+                        ->title('Row marked as reviewed')
+                        ->success()
+                        ->send();
+                }),
+            Tables\Actions\EditAction::make()
+                ->label('More'),
         ])->bulkActions([
             BulkActionGroup::make([
                 BulkAction::make('reviewSelected')
