@@ -134,8 +134,10 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('dispatch row(s) hidden until real stage date is verified')
-            ->assertSee('LKR 0.00');
+            ->assertSee('Today dispatch signal')
+            ->assertSee('LKR 1,740.00')
+            ->assertSee('Verified stage-date value: LKR 0.00')
+            ->assertSee('dispatch row(s) are still unverified');
     }
 
     protected function tearDown(): void
