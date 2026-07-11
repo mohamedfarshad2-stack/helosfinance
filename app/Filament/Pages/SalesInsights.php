@@ -168,6 +168,7 @@ class SalesInsights extends Page
 
         $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
+        $dispatchMovement = $this->dispatchMovement($periodEvents);
         $dispatchSnapshot = $this->dispatchSnapshot($business, $end);
         $pendingValue = (float) ($dispatchSnapshot['signal_value'] ?? 0);
         $marketingSpend = $this->marketingSpend($business, $start, $end);
@@ -176,6 +177,8 @@ class SalesInsights extends Page
         return [
             'delivered_revenue' => round((float) $delivered->sum('revenue_amount'), 2),
             'delivered_count' => $delivered->count(),
+            'dispatch_moved_value' => round((float) ($dispatchMovement['value'] ?? 0), 2),
+            'dispatch_moved_count' => (int) ($dispatchMovement['count'] ?? 0),
             'dispatch_signal_value' => round((float) ($dispatchSnapshot['signal_value'] ?? 0), 2),
             'dispatch_signal_count' => (int) ($dispatchSnapshot['signal_count'] ?? 0),
             'dispatch_value' => round((float) ($dispatchSnapshot['verified_value'] ?? 0), 2),
@@ -190,6 +193,23 @@ class SalesInsights extends Page
             'marketing_per_delivered_order' => $delivered->count() > 0 ? round($marketingSpend / $delivered->count(), 2) : 0.0,
             'profit_after_direct_costs' => round($profitAfterDirectCosts, 2),
             'profit_after_marketing' => round($profitAfterDirectCosts - $marketingSpend, 2),
+        ];
+    }
+
+    /**
+     * @return array{value: float, count: int}
+     */
+    private function dispatchMovement(Collection $periodEvents): array
+    {
+        $dispatchEvents = $periodEvents->whereIn('event_type', [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_RESENT,
+        ]);
+
+        return [
+            'value' => (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'count' => $dispatchEvents->count(),
         ];
     }
 
@@ -352,6 +372,8 @@ class SalesInsights extends Page
         return [
             'delivered_revenue' => 0.0,
             'delivered_count' => 0,
+            'dispatch_moved_value' => 0.0,
+            'dispatch_moved_count' => 0,
             'dispatch_signal_value' => 0.0,
             'dispatch_signal_count' => 0,
             'dispatch_value' => 0.0,

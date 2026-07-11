@@ -224,6 +224,94 @@ class SalesInsightsTest extends TestCase
             ->assertSee('2 parcel(s) were still in dispatch / resend waiting result as of this date');
     }
 
+    public function test_sales_insights_separates_dispatch_movement_from_dispatch_status_snapshot(): void
+    {
+        Carbon::setTestNow('2026-07-11 12:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-DAY-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 1800,
+                'order_id' => 'ORDER-DAY-1',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 09:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-DAY-2',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 2200,
+                'order_id' => 'ORDER-DAY-2',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 10:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-OLD-3',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 3000,
+                'order_id' => 'ORDER-OLD-3',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-10 10:00:00'),
+        ]);
+
+        $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
+
+        $response->assertOk()
+            ->assertSee('Moved to dispatch on this date')
+            ->assertSee('2 parcel(s) moved into dispatch / resend on this date')
+            ->assertSee('LKR 4,000.00')
+            ->assertSee('3 parcel(s) were still in dispatch / resend waiting result as of this date')
+            ->assertSee('LKR 7,000.00');
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();
