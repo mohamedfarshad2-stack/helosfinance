@@ -1,0 +1,39 @@
+name: Debug production log
+
+on:
+  push:
+    branches:
+      - helosfinance
+
+jobs:
+  inspect-production-log:
+    name: Inspect production Laravel log
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          install -m 600 /dev/null ~/.ssh/helios_lightsail
+          printf '%s\n' "${{ secrets.HELIOS_LIGHTSAIL_SSH_KEY }}" > ~/.ssh/helios_lightsail
+          ssh-keyscan -H 65.1.151.96 >> ~/.ssh/known_hosts
+
+      - name: Print deploy helper
+        run: ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 'command -v deploy-helosfinance || true'
+
+      - name: Find Laravel logs
+        run: |
+          ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 "
+            sudo bash -lc 'find /var/www -path \"*/storage/logs/laravel.log\" 2>/dev/null | sort -u'
+          "
+
+      - name: Tail Laravel logs
+        run: |
+          ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 "
+            sudo bash -lc '
+              for file in \$(find /var/www -path \"*/storage/logs/laravel.log\" 2>/dev/null | sort -u); do
+                echo \"===== \$file =====\"
+                tail -n 120 \"\$file\" || true
+              done
+            '
+          "
