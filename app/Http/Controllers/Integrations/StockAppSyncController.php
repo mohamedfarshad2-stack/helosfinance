@@ -65,6 +65,7 @@ class StockAppSyncController extends Controller
             'orders.*.return_reason' => ['nullable', 'string'],
             'orders.*.preferred_delivery_at' => ['nullable', 'date'],
             'orders.*.occurred_at' => ['nullable', 'date'],
+            'orders.*.stage_occurred_at_source' => ['nullable', 'string'],
             'orders.*.restockable' => ['nullable'],
             'orders.*.return_stock' => ['nullable'],
             'orders.*.restock' => ['nullable'],
@@ -138,7 +139,13 @@ class StockAppSyncController extends Controller
                         'department' => $order['department'] ?? $event->department,
                         'quantity' => $order['quantity'] ?? $event->quantity,
                         'payload' => array_merge($event->payload ?? [], $eventPayload),
-                        'occurred_at' => $this->resolvedOccurredAt($event->occurred_at, $order['occurred_at'] ?? null),
+                        'occurred_at' => $this->resolvedOccurredAt(
+                            $event->occurred_at,
+                            $order['occurred_at'] ?? null,
+                            $event->payload ?? [],
+                            $eventPayload,
+                            $eventType,
+                        ),
                     ])->save();
                 }
 
@@ -283,7 +290,13 @@ class StockAppSyncController extends Controller
         );
     }
 
-    private function resolvedOccurredAt(mixed $existingOccurredAt, mixed $incomingOccurredAt): mixed
+    private function resolvedOccurredAt(
+        mixed $existingOccurredAt,
+        mixed $incomingOccurredAt,
+        array $existingPayload = [],
+        array $incomingPayload = [],
+        ?string $eventType = null,
+    ): mixed
     {
         if (blank($incomingOccurredAt)) {
             return $existingOccurredAt;
@@ -299,6 +312,66 @@ class StockAppSyncController extends Controller
             ? $existingOccurredAt
             : Carbon::parse($existingOccurredAt);
 
+        $existingRank = $this->occurredAtSourceRank(
+            (string) ($existingPayload['stage_occurred_at_source'] ?? ''),
+            $eventType,
+        );
+        $incomingRank = $this->occurredAtSourceRank(
+            (string) ($incomingPayload['stage_occurred_at_source'] ?? ''),
+            $eventType,
+        );
+
+        if ($incomingRank > $existingRank) {
+            return $incoming;
+        }
+
+        if ($incomingRank < $existingRank) {
+            return $existing;
+        }
+
         return $incoming->lt($existing) ? $incoming : $existing;
+    }
+
+    private function occurredAtSourceRank(string $source, ?string $eventType): int
+    {
+        $normalized = trim(strtolower($source));
+
+        if ($normalized === '') {
+            return 0;
+        }
+
+        $dispatchLike = [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_RESENT,
+        ];
+
+        $deliveryLike = [
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+        ];
+
+        return match (true) {
+            in_array($eventType, $dispatchLike, true) => match ($normalized) {
+                'client_dispatched_at' => 4,
+                'shipped_at' => 3,
+                'confirmed_at' => 2,
+                'order_date' => 1,
+                default => 0,
+            },
+            in_array($eventType, $deliveryLike, true) => match ($normalized) {
+                'delivered_at', 'returned_at' => 5,
+                'client_dispatched_at' => 4,
+                'shipped_at' => 3,
+                'confirmed_at' => 2,
+                'order_date' => 1,
+                default => 0,
+            },
+            default => match ($normalized) {
+                'confirmed_at' => 2,
+                'order_date' => 1,
+                default => 0,
+            },
+        };
     }
 }

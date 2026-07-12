@@ -154,17 +154,10 @@ class SalesInsights extends Page
      */
     private function rangeStats(Business $business, Carbon $start, Carbon $end): array
     {
-        $periodEvents = OperationalEvent::query()
-            ->where('business_id', $business->id)
-            ->whereBetween('occurred_at', [$start, $end])
-            ->whereIn('event_type', [
-                OperationalEvent::TRACKING_NUMBER_ADDED,
-                OperationalEvent::WHOLESALE_PARCEL_SENT,
-                OperationalEvent::ORDER_DELIVERED,
-                OperationalEvent::ORDER_RETURNED,
-                OperationalEvent::ORDER_RESENT,
-            ])
-            ->get();
+        $candidateEvents = $this->salesEventsUpTo($business, $end);
+        $periodEvents = $candidateEvents->filter(
+            fn (OperationalEvent $event): bool => $this->effectiveOccurredAt($event)->betweenIncluded($start, $end)
+        )->values();
 
         $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
@@ -215,7 +208,7 @@ class SalesInsights extends Page
             ->map(fn (Collection $group): OperationalEvent => $group
                 ->sortBy(fn (OperationalEvent $event): string => sprintf(
                     '%s-%010d',
-                    $event->occurred_at?->format('Y-m-d H:i:s.u') ?? '',
+                    $this->effectiveOccurredAt($event)->format('Y-m-d H:i:s.u'),
                     $event->id
                 ))
                 ->last());
@@ -236,21 +229,13 @@ class SalesInsights extends Page
      */
     private function dispatchSnapshot(Business $business, Carbon $asOf): array
     {
-        $events = OperationalEvent::query()
-            ->where('business_id', $business->id)
-            ->where('occurred_at', '<=', $asOf->copy()->endOfDay())
-            ->whereIn('event_type', [
-                OperationalEvent::ORDER_CREATED,
-                OperationalEvent::ORDER_CONFIRMED,
-                OperationalEvent::TRACKING_NUMBER_ADDED,
-                OperationalEvent::WHOLESALE_PARCEL_SENT,
-                OperationalEvent::ORDER_DELIVERED,
-                OperationalEvent::ORDER_RETURNED,
-                OperationalEvent::ORDER_RESENT,
-            ])
-            ->orderBy('occurred_at')
-            ->orderBy('id')
-            ->get();
+        $events = $this->salesEventsUpTo($business, $asOf)
+            ->sortBy(fn (OperationalEvent $event): string => sprintf(
+                '%s-%010d',
+                $this->effectiveOccurredAt($event)->format('Y-m-d H:i:s.u'),
+                $event->id
+            ))
+            ->values();
 
         $latestStatuses = $events
             ->groupBy(fn (OperationalEvent $event): string => $this->parcelKey($event))
@@ -268,7 +253,7 @@ class SalesInsights extends Page
                 $ordered = $group
                     ->sortBy(fn (OperationalEvent $event): string => sprintf(
                         '%s-%010d',
-                        $event->occurred_at?->format('Y-m-d H:i:s.u') ?? '',
+                        $this->effectiveOccurredAt($event)->format('Y-m-d H:i:s.u'),
                         $event->id
                     ))
                     ->values();
@@ -288,7 +273,7 @@ class SalesInsights extends Page
                     return false;
                 }
 
-                if (! $first->occurred_at?->isSameDay($this->selectedDateObject())) {
+                if (! $this->effectiveOccurredAt($first)->isSameDay($this->selectedDateObject())) {
                     return false;
                 }
 
@@ -320,13 +305,10 @@ class SalesInsights extends Page
      */
     private function topProducts(Business $business): Collection
     {
-        return OperationalEvent::query()
-            ->where('business_id', $business->id)
-            ->whereDate('occurred_at', $this->selectedDateObject()->toDateString())
+        return $this->salesEventsUpTo($business, $this->selectedDateObject())
             ->where('event_type', OperationalEvent::ORDER_DELIVERED)
             ->whereNotNull('sku_id')
-            ->with('sku')
-            ->get()
+            ->filter(fn (OperationalEvent $event): bool => $this->effectiveOccurredAt($event)->isSameDay($this->selectedDateObject()))
             ->groupBy('sku_id')
             ->map(fn (Collection $events): array => [
                 'sku' => $events->first()?->sku?->code ?? 'Unknown SKU',
@@ -359,6 +341,47 @@ class SalesInsights extends Page
         $payload = $event->payload ?? [];
 
         return (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? $event->revenue_amount ?? 0);
+    }
+
+    /**
+     * @return Collection<int, OperationalEvent>
+     */
+    private function salesEventsUpTo(Business $business, Carbon $end): Collection
+    {
+        return OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->where('occurred_at', '<=', $end->copy()->endOfDay())
+            ->whereIn('event_type', [
+                OperationalEvent::ORDER_CREATED,
+                OperationalEvent::ORDER_CONFIRMED,
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->with('sku')
+            ->get();
+    }
+
+    private function effectiveOccurredAt(OperationalEvent $event): Carbon
+    {
+        $payload = $event->payload ?? [];
+        $payloadOccurredAt = trim((string) ($payload['occurred_at'] ?? ''));
+
+        if (
+            $event->source === 'stock_app_sync'
+            && $payloadOccurredAt !== ''
+            && filled($payload['stage_occurred_at_source'] ?? null)
+        ) {
+            return Carbon::parse($payloadOccurredAt);
+        }
+
+        if ($event->occurred_at instanceof Carbon) {
+            return $event->occurred_at->copy();
+        }
+
+        return Carbon::parse($event->occurred_at ?? now());
     }
 
     private function parcelKey(OperationalEvent $event): string
