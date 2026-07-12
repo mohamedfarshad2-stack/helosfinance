@@ -372,6 +372,7 @@ class SalesInsights extends Page
     {
         $payload = $event->payload ?? [];
         $payloadOccurredAt = trim((string) ($payload['occurred_at'] ?? ''));
+        $storedOccurredAt = $event->getRawOriginal('occurred_at');
 
         if (
             $event->source === 'stock_app_sync'
@@ -385,12 +386,8 @@ class SalesInsights extends Page
             }
         }
 
-        if ($event->occurred_at instanceof Carbon) {
-            return $event->occurred_at->copy();
-        }
-
         try {
-            return Carbon::parse($event->occurred_at ?? now());
+            return Carbon::parse($storedOccurredAt ?: now());
         } catch (Throwable) {
             return now();
         }
