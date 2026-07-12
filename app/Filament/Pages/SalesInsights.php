@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Throwable;
 
 class SalesInsights extends Page
 {
@@ -377,14 +378,22 @@ class SalesInsights extends Page
             && $payloadOccurredAt !== ''
             && filled($payload['stage_occurred_at_source'] ?? null)
         ) {
-            return Carbon::parse($payloadOccurredAt);
+            try {
+                return Carbon::parse($payloadOccurredAt);
+            } catch (Throwable) {
+                // Fall back to the stored event timestamp when legacy payloads contain bad dates.
+            }
         }
 
         if ($event->occurred_at instanceof Carbon) {
             return $event->occurred_at->copy();
         }
 
-        return Carbon::parse($event->occurred_at ?? now());
+        try {
+            return Carbon::parse($event->occurred_at ?? now());
+        } catch (Throwable) {
+            return now();
+        }
     }
 
     private function parcelKey(OperationalEvent $event): string
