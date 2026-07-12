@@ -28,58 +28,95 @@ class SalesInsights extends Page
     {
         abort_unless(static::canAccess(), 403);
 
-        $this->businessId = $this->defaultBusinessId();
         $this->selectedDate = today()->toDateString();
+
+        try {
+            $this->businessId = $this->defaultBusinessId();
+        } catch (Throwable $exception) {
+            report($exception);
+
+            $this->businessId = null;
+        }
     }
 
     protected function getViewData(): array
     {
-        $business = $this->selectedBusiness();
-        $selectedDate = $this->selectedDateObject();
-        $previousDate = $selectedDate->copy()->subDay();
-        $weekStart = $selectedDate->copy()->startOfWeek();
-        $weekEnd = $selectedDate->copy()->endOfWeek();
-        $pageWarning = null;
-        $today = $this->emptyStats();
-        $yesterday = $this->emptyStats();
-        $week = $this->emptyStats();
-        $topProducts = collect();
-        $missingProductLinks = 0;
+        try {
+            $business = $this->selectedBusiness();
+            $selectedDate = $this->selectedDateObject();
+            $previousDate = $selectedDate->copy()->subDay();
+            $weekStart = $selectedDate->copy()->startOfWeek();
+            $weekEnd = $selectedDate->copy()->endOfWeek();
+            $pageWarning = null;
+            $today = $this->emptyStats();
+            $yesterday = $this->emptyStats();
+            $week = $this->emptyStats();
+            $topProducts = collect();
+            $missingProductLinks = 0;
 
-        if ($business) {
-            try {
-                $today = $this->periodStats($business, $selectedDate);
-                $yesterday = $this->periodStats($business, $previousDate);
-                $week = $this->rangeStats($business, $weekStart, $weekEnd);
-                $topProducts = $this->topProducts($business);
-                $missingProductLinks = $this->missingProductLinks($business);
-            } catch (Throwable $exception) {
-                report($exception);
+            if ($business) {
+                try {
+                    $today = $this->periodStats($business, $selectedDate);
+                    $yesterday = $this->periodStats($business, $previousDate);
+                    $week = $this->rangeStats($business, $weekStart, $weekEnd);
+                    $topProducts = $this->topProducts($business);
+                    $missingProductLinks = $this->missingProductLinks($business);
+                } catch (Throwable $exception) {
+                    report($exception);
 
-                $pageWarning = 'Some historical sales rows are malformed. HELOS is showing only the safe part of Sales Insights until those rows are cleaned.';
+                    $pageWarning = 'Some historical sales rows are malformed. HELOS is showing only the safe part of Sales Insights until those rows are cleaned.';
+                }
             }
-        }
 
-        return [
-            'businesses' => $this->businesses(),
-            'business' => $business,
-            'pageWarning' => $pageWarning,
-            'todayLabel' => $selectedDate->format('M j, Y'),
-            'yesterdayLabel' => $previousDate->format('M j, Y'),
-            'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
-            'weekDates' => collect(range(0, 6))
-                ->map(fn (int $offset): array => [
-                    'date' => $weekStart->copy()->addDays($offset)->toDateString(),
-                    'label' => $weekStart->copy()->addDays($offset)->format('D j'),
-                    'is_selected' => $weekStart->copy()->addDays($offset)->isSameDay($selectedDate),
-                    'is_today' => $weekStart->copy()->addDays($offset)->isToday(),
-                ]),
-            'today' => $today,
-            'yesterday' => $yesterday,
-            'week' => $week,
-            'topProducts' => $topProducts,
-            'missingProductLinks' => $missingProductLinks,
-        ];
+            return [
+                'businesses' => $this->businesses(),
+                'business' => $business,
+                'pageWarning' => $pageWarning,
+                'todayLabel' => $selectedDate->format('M j, Y'),
+                'yesterdayLabel' => $previousDate->format('M j, Y'),
+                'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
+                'weekDates' => collect(range(0, 6))
+                    ->map(fn (int $offset): array => [
+                        'date' => $weekStart->copy()->addDays($offset)->toDateString(),
+                        'label' => $weekStart->copy()->addDays($offset)->format('D j'),
+                        'is_selected' => $weekStart->copy()->addDays($offset)->isSameDay($selectedDate),
+                        'is_today' => $weekStart->copy()->addDays($offset)->isToday(),
+                    ]),
+                'today' => $today,
+                'yesterday' => $yesterday,
+                'week' => $week,
+                'topProducts' => $topProducts,
+                'missingProductLinks' => $missingProductLinks,
+            ];
+        } catch (Throwable $exception) {
+            report($exception);
+
+            $selectedDate = today();
+            $previousDate = $selectedDate->copy()->subDay();
+            $weekStart = $selectedDate->copy()->startOfWeek();
+            $weekEnd = $selectedDate->copy()->endOfWeek();
+
+            return [
+                'businesses' => collect(),
+                'business' => null,
+                'pageWarning' => 'Sales Insights found malformed live data and switched to safe mode. The page is available, but historical rows still need cleanup.',
+                'todayLabel' => $selectedDate->format('M j, Y'),
+                'yesterdayLabel' => $previousDate->format('M j, Y'),
+                'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
+                'weekDates' => collect(range(0, 6))
+                    ->map(fn (int $offset): array => [
+                        'date' => $weekStart->copy()->addDays($offset)->toDateString(),
+                        'label' => $weekStart->copy()->addDays($offset)->format('D j'),
+                        'is_selected' => $weekStart->copy()->addDays($offset)->isSameDay($selectedDate),
+                        'is_today' => $weekStart->copy()->addDays($offset)->isToday(),
+                    ]),
+                'today' => $this->emptyStats(),
+                'yesterday' => $this->emptyStats(),
+                'week' => $this->emptyStats(),
+                'topProducts' => collect(),
+                'missingProductLinks' => 0,
+            ];
+        }
     }
 
     public static function shouldRegisterNavigation(): bool
