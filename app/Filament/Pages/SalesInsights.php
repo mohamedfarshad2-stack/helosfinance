@@ -342,7 +342,7 @@ class SalesInsights extends Page
 
     private function saleAmount(OperationalEvent $event): float
     {
-        $payload = $event->payload ?? [];
+        $payload = $this->eventPayload($event);
 
         return (float) ($payload['sale_amount'] ?? $payload['revenue_amount'] ?? $event->revenue_amount ?? 0);
     }
@@ -370,7 +370,7 @@ class SalesInsights extends Page
 
     private function effectiveOccurredAt(OperationalEvent $event): Carbon
     {
-        $payload = $event->payload ?? [];
+        $payload = $this->eventPayload($event);
         $payloadOccurredAt = trim((string) ($payload['occurred_at'] ?? ''));
         $storedOccurredAt = $event->getRawOriginal('occurred_at');
 
@@ -395,7 +395,7 @@ class SalesInsights extends Page
 
     private function parcelKey(OperationalEvent $event): string
     {
-        $payload = $event->payload ?? [];
+        $payload = $this->eventPayload($event);
 
         foreach ([
             'cod_order_id',
@@ -426,7 +426,7 @@ class SalesInsights extends Page
 
     private function dispatchMovementKey(OperationalEvent $event): string
     {
-        $payload = $event->payload ?? [];
+        $payload = $this->eventPayload($event);
 
         foreach ([
             'tracking_number',
@@ -459,9 +459,37 @@ class SalesInsights extends Page
             return true;
         }
 
-        $payload = $event->payload ?? [];
+        $payload = $this->eventPayload($event);
 
         return filled($payload['stage_occurred_at_source'] ?? null);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function eventPayload(OperationalEvent $event): array
+    {
+        $rawPayload = $event->getRawOriginal('payload');
+
+        if (is_array($rawPayload)) {
+            return $rawPayload;
+        }
+
+        if (is_string($rawPayload) && trim($rawPayload) !== '') {
+            $decoded = json_decode($rawPayload, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        try {
+            $payload = $event->getAttributeValue('payload');
+
+            return is_array($payload) ? $payload : [];
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     private function marketingSpend(Business $business, Carbon $start, Carbon $end): float
