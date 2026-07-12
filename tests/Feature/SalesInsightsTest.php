@@ -476,6 +476,57 @@ class SalesInsightsTest extends TestCase
             ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date');
     }
 
+    public function test_sales_insights_uses_trusted_payload_date_for_historic_stock_app_webhook_rows(): void
+    {
+        Carbon::setTestNow('2026-07-11 12:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-HISTORIC-WEBHOOK-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 2500,
+                'order_id' => 'ORDER-HISTORIC-WEBHOOK-1',
+                'occurred_at' => '2026-07-11T14:30:00+05:30',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-10 09:00:00'),
+        ]);
+
+        $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
+
+        $response->assertOk()
+            ->assertSee('Verified dispatch on this date')
+            ->assertSee('1 verified parcel(s) moved into dispatch / resend on this date')
+            ->assertSee('LKR 2,500.00')
+            ->assertSee('Orders first seen this day in dispatch')
+            ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date');
+    }
+
     public function test_sales_insights_deduplicates_same_day_dispatch_updates_for_the_same_tracking_number(): void
     {
         Carbon::setTestNow('2026-07-11 12:00:00');

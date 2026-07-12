@@ -117,6 +117,40 @@ class StockAppWebhookTest extends TestCase
         $this->assertSame(1, SkuStockMovement::query()->where('business_id', $business->id)->where('movement_type', 'dispatch')->count());
     }
 
+    public function test_webhook_upgrades_fallback_dispatch_date_when_real_stage_date_arrives(): void
+    {
+        $business = Business::query()->create(['name' => 'Test Business']);
+
+        $this->postJson('/api/v1/stock-app/webhook', [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-DISPATCH-UPGRADE-1',
+            'order_id' => 'ORDER-UPGRADE-1',
+            'sale_amount' => 2500,
+            'occurred_at' => '2026-07-10 09:00:00',
+            'stage_occurred_at_source' => 'order_date',
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/stock-app/webhook', [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-DISPATCH-UPGRADE-1',
+            'order_id' => 'ORDER-UPGRADE-1',
+            'sale_amount' => 2500,
+            'occurred_at' => '2026-07-11 14:30:00',
+            'stage_occurred_at_source' => 'stock_app',
+        ])->assertCreated();
+
+        $event = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->where('external_id', 'ORDER-DISPATCH-UPGRADE-1')
+            ->first();
+
+        $this->assertNotNull($event);
+        $this->assertSame('2026-07-11 14:30:00', $event->occurred_at?->format('Y-m-d H:i:s'));
+        $this->assertSame('stock_app', $event->payload['stage_occurred_at_source'] ?? null);
+    }
+
     public function test_wholesale_transport_status_records_parcel_cost_without_tracking_number(): void
     {
         $business = Business::query()->create(['name' => 'Wholesale Business']);

@@ -9,6 +9,7 @@ use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Services\StockAppIntegrationSecurityService;
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -57,6 +58,14 @@ class StockAppWebhookController extends Controller
             'return_reason' => ['nullable', 'string'],
             'preferred_delivery_at' => ['nullable', 'date'],
             'occurred_at' => ['nullable', 'date'],
+            'order_id' => ['nullable', 'string'],
+            'reference' => ['nullable', 'string'],
+            'stage_occurred_at_source' => ['nullable', 'string'],
+            'restockable' => ['nullable'],
+            'return_stock' => ['nullable'],
+            'restock' => ['nullable'],
+            'damage_cost' => ['nullable', 'numeric'],
+            'recovery_amount' => ['nullable', 'numeric'],
         ], [
             'business_id.required' => 'Business context is required for this webhook.',
             'event_type.required' => 'Event type or status is required for this webhook.',
@@ -92,6 +101,11 @@ class StockAppWebhookController extends Controller
             $payload = array_merge($request->all(), ['event_type' => $eventType]);
             $impact = $calculator->calculate($business, $payload);
             $externalId = $data['external_id'] ?? $this->stableExternalId($business->id, $payload);
+            $eventImpact = $impact;
+            unset($eventImpact['economics']);
+            $eventPayload = array_merge($payload, [
+                'economics' => $impact['economics'] ?? [],
+            ]);
 
             $event = OperationalEvent::query()->firstOrCreate(
                 [
@@ -101,16 +115,31 @@ class StockAppWebhookController extends Controller
                     'external_id' => $externalId,
                 ],
                 [
-                    ...$impact,
+                    ...$eventImpact,
                     'channel' => $data['channel'] ?? null,
                     'department' => $data['department'] ?? 'Operations',
                     'quantity' => $data['quantity'] ?? 1,
-                    'payload' => array_merge($payload, [
-                        'economics' => $impact['economics'] ?? [],
-                    ]),
+                    'payload' => $eventPayload,
                     'occurred_at' => $data['occurred_at'] ?? now(),
                 ]
             );
+
+            if (! $event->wasRecentlyCreated) {
+                $event->forceFill([
+                    ...$eventImpact,
+                    'channel' => $data['channel'] ?? $event->channel,
+                    'department' => $data['department'] ?? $event->department,
+                    'quantity' => $data['quantity'] ?? $event->quantity,
+                    'payload' => array_merge($event->payload ?? [], $eventPayload),
+                    'occurred_at' => $this->resolvedOccurredAt(
+                        $event->occurred_at,
+                        $data['occurred_at'] ?? null,
+                        $event->payload ?? [],
+                        $eventPayload,
+                        $eventType,
+                    ),
+                ])->save();
+            }
 
             $stockMovements->record($business, $event, $payload);
             $security->recordSuccess($integrationSource, ! $event->wasRecentlyCreated);
@@ -197,6 +226,91 @@ class StockAppWebhookController extends Controller
             'created' => OperationalEvent::ORDER_CREATED,
             'confirmed' => OperationalEvent::ORDER_CONFIRMED,
             default => $eventType,
+        };
+    }
+
+    private function resolvedOccurredAt(
+        mixed $existingOccurredAt,
+        mixed $incomingOccurredAt,
+        array $existingPayload = [],
+        array $incomingPayload = [],
+        ?string $eventType = null,
+    ): mixed
+    {
+        if (blank($incomingOccurredAt)) {
+            return $existingOccurredAt;
+        }
+
+        $incoming = Carbon::parse($incomingOccurredAt);
+
+        if (blank($existingOccurredAt)) {
+            return $incoming;
+        }
+
+        $existing = $existingOccurredAt instanceof Carbon
+            ? $existingOccurredAt
+            : Carbon::parse($existingOccurredAt);
+
+        $existingRank = $this->occurredAtSourceRank(
+            (string) ($existingPayload['stage_occurred_at_source'] ?? ''),
+            $eventType,
+        );
+        $incomingRank = $this->occurredAtSourceRank(
+            (string) ($incomingPayload['stage_occurred_at_source'] ?? ''),
+            $eventType,
+        );
+
+        if ($incomingRank > $existingRank) {
+            return $incoming;
+        }
+
+        if ($incomingRank < $existingRank) {
+            return $existing;
+        }
+
+        return $incoming->lt($existing) ? $incoming : $existing;
+    }
+
+    private function occurredAtSourceRank(string $source, ?string $eventType): int
+    {
+        $normalized = trim(strtolower($source));
+
+        if ($normalized === '') {
+            return 0;
+        }
+
+        $dispatchLike = [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_RESENT,
+        ];
+
+        $deliveryLike = [
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+        ];
+
+        return match (true) {
+            in_array($eventType, $dispatchLike, true) => match ($normalized) {
+                'client_dispatched_at' => 4,
+                'stock_app', 'shipped_at' => 3,
+                'confirmed_at' => 2,
+                'order_date' => 1,
+                default => 0,
+            },
+            in_array($eventType, $deliveryLike, true) => match ($normalized) {
+                'delivered_at', 'returned_at' => 5,
+                'client_dispatched_at' => 4,
+                'stock_app', 'shipped_at' => 3,
+                'confirmed_at' => 2,
+                'order_date' => 1,
+                default => 0,
+            },
+            default => match ($normalized) {
+                'confirmed_at' => 2,
+                'order_date' => 1,
+                default => 0,
+            },
         };
     }
 }

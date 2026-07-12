@@ -354,7 +354,7 @@ class StockAppSyncController extends Controller
         return match (true) {
             in_array($eventType, $dispatchLike, true) => match ($normalized) {
                 'client_dispatched_at' => 4,
-                'shipped_at' => 3,
+                'stock_app', 'shipped_at' => 3,
                 'confirmed_at' => 2,
                 'order_date' => 1,
                 default => 0,
@@ -362,7 +362,7 @@ class StockAppSyncController extends Controller
             in_array($eventType, $deliveryLike, true) => match ($normalized) {
                 'delivered_at', 'returned_at' => 5,
                 'client_dispatched_at' => 4,
-                'shipped_at' => 3,
+                'stock_app', 'shipped_at' => 3,
                 'confirmed_at' => 2,
                 'order_date' => 1,
                 default => 0,

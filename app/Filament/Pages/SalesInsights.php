@@ -487,7 +487,7 @@ class SalesInsights extends Page
         $storedOccurredAt = $event->getRawOriginal('occurred_at');
 
         if (
-            $event->source === 'stock_app_sync'
+            in_array($event->source, ['stock_app_sync', 'stock_app'], true)
             && $payloadOccurredAt !== ''
             && filled($payload['stage_occurred_at_source'] ?? null)
         ) {
