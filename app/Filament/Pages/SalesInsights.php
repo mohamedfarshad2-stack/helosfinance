@@ -27,6 +27,7 @@ class SalesInsights extends Page
     public function mount(): void
     {
         abort_unless(static::canAccess(), 403);
+        @ini_set('memory_limit', '512M');
 
         $this->selectedDate = today()->toDateString();
 
@@ -367,9 +368,21 @@ class SalesInsights extends Page
      */
     private function topProducts(Business $business): Collection
     {
-        return $this->salesEventsUpTo($business, $this->selectedDateObject())
+        return OperationalEvent::query()
+            ->select([
+                'id',
+                'business_id',
+                'sku_id',
+                'event_type',
+                'revenue_amount',
+                'occurred_at',
+            ])
+            ->where('business_id', $business->id)
+            ->where('occurred_at', '<=', $this->selectedDateObject()->copy()->endOfDay())
             ->where('event_type', OperationalEvent::ORDER_DELIVERED)
             ->whereNotNull('sku_id')
+            ->with(['sku:id,code,name'])
+            ->get()
             ->filter(fn (OperationalEvent $event): bool => $this->effectiveOccurredAt($event)->isSameDay($this->selectedDateObject()))
             ->groupBy('sku_id')
             ->map(fn (Collection $events): array => [
@@ -411,6 +424,20 @@ class SalesInsights extends Page
     private function salesEventsUpTo(Business $business, Carbon $end): Collection
     {
         return OperationalEvent::query()
+            ->select([
+                'id',
+                'business_id',
+                'sku_id',
+                'source',
+                'event_type',
+                'external_id',
+                'revenue_amount',
+                'direct_cost_amount',
+                'leakage_amount',
+                'recovery_amount',
+                'payload',
+                'occurred_at',
+            ])
             ->where('business_id', $business->id)
             ->where('occurred_at', '<=', $end->copy()->endOfDay())
             ->whereIn('event_type', [
@@ -422,7 +449,6 @@ class SalesInsights extends Page
                 OperationalEvent::ORDER_RETURNED,
                 OperationalEvent::ORDER_RESENT,
             ])
-            ->with('sku')
             ->get();
     }
 
