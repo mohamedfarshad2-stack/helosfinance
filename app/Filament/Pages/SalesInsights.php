@@ -155,9 +155,12 @@ class SalesInsights extends Page
     private function rangeStats(Business $business, Carbon $start, Carbon $end): array
     {
         $candidateEvents = $this->salesEventsUpTo($business, $end);
-        $periodEvents = $candidateEvents->filter(
-            fn (OperationalEvent $event): bool => $this->effectiveOccurredAt($event)->betweenIncluded($start, $end)
-        )->values();
+        $periodEvents = $candidateEvents->filter(function (OperationalEvent $event) use ($start, $end): bool {
+            $effectiveOccurredAt = $this->effectiveOccurredAt($event);
+
+            return $effectiveOccurredAt->greaterThanOrEqualTo($start)
+                && $effectiveOccurredAt->lessThanOrEqualTo($end);
+        })->values();
 
         $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
