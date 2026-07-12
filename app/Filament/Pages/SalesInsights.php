@@ -214,13 +214,7 @@ class SalesInsights extends Page
      */
     private function rangeStats(Business $business, Carbon $start, Carbon $end): array
     {
-        $candidateEvents = $this->salesEventsUpTo($business, $end);
-        $periodEvents = $candidateEvents->filter(function (OperationalEvent $event) use ($start, $end): bool {
-            $effectiveOccurredAt = $this->effectiveOccurredAt($event);
-
-            return $effectiveOccurredAt->greaterThanOrEqualTo($start)
-                && $effectiveOccurredAt->lessThanOrEqualTo($end);
-        })->values();
+        $periodEvents = $this->salesEventsBetween($business, $start, $end);
 
         $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
@@ -292,74 +286,65 @@ class SalesInsights extends Page
      */
     private function dispatchSnapshot(Business $business, Carbon $asOf): array
     {
-        $events = $this->salesEventsUpTo($business, $asOf)
-            ->sortBy(fn (OperationalEvent $event): string => sprintf(
-                '%s-%010d',
-                $this->effectiveOccurredAt($event)->format('Y-m-d H:i:s.u'),
-                $event->id
-            ))
-            ->values();
+        $latestStatuses = [];
+        $firstSeenDates = [];
+        $selectedDate = $this->selectedDateObject();
 
-        $latestStatuses = $events
-            ->groupBy(fn (OperationalEvent $event): string => $this->parcelKey($event))
-            ->map(fn (Collection $group): OperationalEvent => $group->last());
+        foreach ($this->salesEventsCursorUpTo($business, $asOf) as $event) {
+            $parcelKey = $this->parcelKey($event);
 
-        $dispatchStatuses = $latestStatuses->filter(fn (OperationalEvent $event): bool => in_array($event->event_type, [
-            OperationalEvent::TRACKING_NUMBER_ADDED,
-            OperationalEvent::WHOLESALE_PARCEL_SENT,
-            OperationalEvent::ORDER_RESENT,
-        ], true));
+            if (! array_key_exists($parcelKey, $firstSeenDates)) {
+                $firstSeenDates[$parcelKey] = $this->effectiveOccurredAt($event)->toDateString();
+            }
 
-        $orderDayDispatchStatuses = $events
-            ->groupBy(fn (OperationalEvent $event): string => $this->parcelKey($event))
-            ->map(function (Collection $group): array {
-                $ordered = $group
-                    ->sortBy(fn (OperationalEvent $event): string => sprintf(
-                        '%s-%010d',
-                        $this->effectiveOccurredAt($event)->format('Y-m-d H:i:s.u'),
-                        $event->id
-                    ))
-                    ->values();
+            $latestStatuses[$parcelKey] = $event;
+        }
 
-                return [
-                    'first' => $ordered->first(),
-                    'latest' => $ordered->last(),
-                ];
-            })
-            ->filter(function (array $parcel): bool {
-                /** @var OperationalEvent|null $first */
-                $first = $parcel['first'] ?? null;
-                /** @var OperationalEvent|null $latest */
-                $latest = $parcel['latest'] ?? null;
+        $signalValue = 0.0;
+        $signalCount = 0;
+        $verifiedValue = 0.0;
+        $verifiedCount = 0;
+        $unverifiedValue = 0.0;
+        $unverifiedCount = 0;
+        $orderDayValue = 0.0;
+        $orderDayCount = 0;
 
-                if (! $first || ! $latest) {
-                    return false;
-                }
+        foreach ($latestStatuses as $parcelKey => $event) {
+            if (! in_array($event->event_type, [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_RESENT,
+            ], true)) {
+                continue;
+            }
 
-                if (! $this->effectiveOccurredAt($first)->isSameDay($this->selectedDateObject())) {
-                    return false;
-                }
+            $amount = $this->saleAmount($event);
+            $signalValue += $amount;
+            $signalCount++;
 
-                return in_array($latest->event_type, [
-                    OperationalEvent::TRACKING_NUMBER_ADDED,
-                    OperationalEvent::WHOLESALE_PARCEL_SENT,
-                    OperationalEvent::ORDER_RESENT,
-                ], true);
-            })
-            ->map(fn (array $parcel): OperationalEvent => $parcel['latest']);
+            if ($this->isVerifiedDispatchEvent($event)) {
+                $verifiedValue += $amount;
+                $verifiedCount++;
+            } else {
+                $unverifiedValue += $amount;
+                $unverifiedCount++;
+            }
 
-        $verified = $dispatchStatuses->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
-        $unverified = $dispatchStatuses->reject(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+            if (($firstSeenDates[$parcelKey] ?? null) === $selectedDate->toDateString()) {
+                $orderDayValue += $amount;
+                $orderDayCount++;
+            }
+        }
 
         return [
-            'signal_value' => (float) $dispatchStatuses->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
-            'signal_count' => $dispatchStatuses->count(),
-            'verified_value' => (float) $verified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
-            'verified_count' => $verified->count(),
-            'unverified_value' => (float) $unverified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
-            'unverified_count' => $unverified->count(),
-            'order_day_value' => (float) $orderDayDispatchStatuses->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
-            'order_day_count' => $orderDayDispatchStatuses->count(),
+            'signal_value' => $signalValue,
+            'signal_count' => $signalCount,
+            'verified_value' => $verifiedValue,
+            'verified_count' => $verifiedCount,
+            'unverified_value' => $unverifiedValue,
+            'unverified_count' => $unverifiedCount,
+            'order_day_value' => $orderDayValue,
+            'order_day_count' => $orderDayCount,
         ];
     }
 
@@ -368,6 +353,9 @@ class SalesInsights extends Page
      */
     private function topProducts(Business $business): Collection
     {
+        $dayStart = $this->selectedDateObject()->copy()->startOfDay();
+        $dayEnd = $this->selectedDateObject()->copy()->endOfDay();
+
         return OperationalEvent::query()
             ->select([
                 'id',
@@ -378,12 +366,11 @@ class SalesInsights extends Page
                 'occurred_at',
             ])
             ->where('business_id', $business->id)
-            ->where('occurred_at', '<=', $this->selectedDateObject()->copy()->endOfDay())
+            ->whereBetween('occurred_at', [$dayStart, $dayEnd])
             ->where('event_type', OperationalEvent::ORDER_DELIVERED)
             ->whereNotNull('sku_id')
             ->with(['sku:id,code,name'])
             ->get()
-            ->filter(fn (OperationalEvent $event): bool => $this->effectiveOccurredAt($event)->isSameDay($this->selectedDateObject()))
             ->groupBy('sku_id')
             ->map(fn (Collection $events): array => [
                 'sku' => $events->first()?->sku?->code ?? 'Unknown SKU',
@@ -421,7 +408,46 @@ class SalesInsights extends Page
     /**
      * @return Collection<int, OperationalEvent>
      */
-    private function salesEventsUpTo(Business $business, Carbon $end): Collection
+    private function salesEventsBetween(Business $business, Carbon $start, Carbon $end): Collection
+    {
+        $dayStart = $start->copy()->startOfDay();
+        $dayEnd = $end->copy()->endOfDay();
+
+        return OperationalEvent::query()
+            ->select([
+                'id',
+                'business_id',
+                'sku_id',
+                'source',
+                'event_type',
+                'external_id',
+                'revenue_amount',
+                'direct_cost_amount',
+                'leakage_amount',
+                'recovery_amount',
+                'payload',
+                'occurred_at',
+            ])
+            ->where('business_id', $business->id)
+            ->where('occurred_at', '<=', $dayEnd)
+            ->whereIn('event_type', [
+                OperationalEvent::ORDER_CREATED,
+                OperationalEvent::ORDER_CONFIRMED,
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->cursor()
+            ->filter(fn (OperationalEvent $event): bool => $this->effectiveOccurredAt($event)->betweenIncluded($dayStart, $dayEnd))
+            ->values()
+            ->collect();
+    }
+
+    private function salesEventsCursorUpTo(Business $business, Carbon $end)
     {
         return OperationalEvent::query()
             ->select([
@@ -449,7 +475,9 @@ class SalesInsights extends Page
                 OperationalEvent::ORDER_RETURNED,
                 OperationalEvent::ORDER_RESENT,
             ])
-            ->get();
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->cursor();
     }
 
     private function effectiveOccurredAt(OperationalEvent $event): Carbon
