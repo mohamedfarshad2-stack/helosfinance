@@ -1,5 +1,13 @@
 <x-filament-panels::page>
     <div class="grid gap-6">
+        @if (filled($pageWarning ?? null))
+            <x-filament::section>
+                <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                    {{ $pageWarning }}
+                </div>
+            </x-filament::section>
+        @endif
+
         <x-filament::section>
             <div class="grid gap-4 lg:grid-cols-[1fr_0.35fr] lg:items-start">
                 <div>

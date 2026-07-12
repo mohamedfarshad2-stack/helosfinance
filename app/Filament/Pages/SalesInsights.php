@@ -39,10 +39,31 @@ class SalesInsights extends Page
         $previousDate = $selectedDate->copy()->subDay();
         $weekStart = $selectedDate->copy()->startOfWeek();
         $weekEnd = $selectedDate->copy()->endOfWeek();
+        $pageWarning = null;
+        $today = $this->emptyStats();
+        $yesterday = $this->emptyStats();
+        $week = $this->emptyStats();
+        $topProducts = collect();
+        $missingProductLinks = 0;
+
+        if ($business) {
+            try {
+                $today = $this->periodStats($business, $selectedDate);
+                $yesterday = $this->periodStats($business, $previousDate);
+                $week = $this->rangeStats($business, $weekStart, $weekEnd);
+                $topProducts = $this->topProducts($business);
+                $missingProductLinks = $this->missingProductLinks($business);
+            } catch (Throwable $exception) {
+                report($exception);
+
+                $pageWarning = 'Some historical sales rows are malformed. HELOS is showing only the safe part of Sales Insights until those rows are cleaned.';
+            }
+        }
 
         return [
             'businesses' => $this->businesses(),
             'business' => $business,
+            'pageWarning' => $pageWarning,
             'todayLabel' => $selectedDate->format('M j, Y'),
             'yesterdayLabel' => $previousDate->format('M j, Y'),
             'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
@@ -53,11 +74,11 @@ class SalesInsights extends Page
                     'is_selected' => $weekStart->copy()->addDays($offset)->isSameDay($selectedDate),
                     'is_today' => $weekStart->copy()->addDays($offset)->isToday(),
                 ]),
-            'today' => $business ? $this->periodStats($business, $selectedDate) : $this->emptyStats(),
-            'yesterday' => $business ? $this->periodStats($business, $previousDate) : $this->emptyStats(),
-            'week' => $business ? $this->rangeStats($business, $weekStart, $weekEnd) : $this->emptyStats(),
-            'topProducts' => $business ? $this->topProducts($business) : collect(),
-            'missingProductLinks' => $business ? $this->missingProductLinks($business) : 0,
+            'today' => $today,
+            'yesterday' => $yesterday,
+            'week' => $week,
+            'topProducts' => $topProducts,
+            'missingProductLinks' => $missingProductLinks,
         ];
     }
 
