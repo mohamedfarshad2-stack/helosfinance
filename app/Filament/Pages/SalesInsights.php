@@ -219,6 +219,7 @@ class SalesInsights extends Page
         $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
         $dispatchMovement = $this->dispatchMovement($periodEvents);
+        $stockAppDispatchSignals = $this->stockAppDispatchSignals($business, $start, $end);
         $dispatchSnapshot = $this->dispatchSnapshot($business, $end);
         $pendingValue = (float) ($dispatchSnapshot['signal_value'] ?? 0);
         $marketingSpend = $this->marketingSpend($business, $start, $end);
@@ -231,6 +232,8 @@ class SalesInsights extends Page
             'dispatch_moved_count' => (int) ($dispatchMovement['verified_count'] ?? 0),
             'dispatch_moved_hidden_value' => round((float) ($dispatchMovement['unverified_value'] ?? 0), 2),
             'dispatch_moved_hidden_count' => (int) ($dispatchMovement['unverified_count'] ?? 0),
+            'stock_app_dispatch_value' => round((float) ($stockAppDispatchSignals['value'] ?? 0), 2),
+            'stock_app_dispatch_count' => (int) ($stockAppDispatchSignals['count'] ?? 0),
             'dispatch_signal_value' => round((float) ($dispatchSnapshot['signal_value'] ?? 0), 2),
             'dispatch_signal_count' => (int) ($dispatchSnapshot['signal_count'] ?? 0),
             'dispatch_value' => round((float) ($dispatchSnapshot['verified_value'] ?? 0), 2),
@@ -247,6 +250,43 @@ class SalesInsights extends Page
             'marketing_per_delivered_order' => $delivered->count() > 0 ? round($marketingSpend / $delivered->count(), 2) : 0.0,
             'profit_after_direct_costs' => round($profitAfterDirectCosts, 2),
             'profit_after_marketing' => round($profitAfterDirectCosts - $marketingSpend, 2),
+        ];
+    }
+
+    /**
+     * @return array{value: float, count: int}
+     */
+    private function stockAppDispatchSignals(Business $business, Carbon $start, Carbon $end): array
+    {
+        $events = OperationalEvent::query()
+            ->select([
+                'id',
+                'business_id',
+                'source',
+                'event_type',
+                'external_id',
+                'revenue_amount',
+                'payload',
+                'occurred_at',
+                'created_at',
+            ])
+            ->where('business_id', $business->id)
+            ->whereIn('source', ['stock_app', 'stock_app_sync'])
+            ->whereIn('event_type', [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->whereBetween('created_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (OperationalEvent $event): string => $this->dispatchMovementKey($event))
+            ->map(fn (Collection $group): OperationalEvent => $group->last());
+
+        return [
+            'value' => (float) $events->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
+            'count' => $events->count(),
         ];
     }
 
@@ -629,6 +669,8 @@ class SalesInsights extends Page
             'dispatch_moved_count' => 0,
             'dispatch_moved_hidden_value' => 0.0,
             'dispatch_moved_hidden_count' => 0,
+            'stock_app_dispatch_value' => 0.0,
+            'stock_app_dispatch_count' => 0,
             'dispatch_signal_value' => 0.0,
             'dispatch_signal_count' => 0,
             'dispatch_value' => 0.0,

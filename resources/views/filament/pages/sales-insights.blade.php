@@ -74,10 +74,10 @@
             </div>
 
             <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Orders first seen this day in dispatch</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Stock App dispatch value</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
-                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['order_day_dispatch_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['order_day_dispatch_count'] }} order(s) first seen on this date were in dispatch / resend as of this date</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['stock_app_dispatch_value'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['stock_app_dispatch_count'] }} dispatch signal(s) received from Stock App on this date</div>
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
@@ -162,12 +162,12 @@
                             <div class="p-3">{{ (int) $yesterday['delivered_count'] }}</div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">
-                            <div class="p-3 font-medium">Orders first seen this day in dispatch</div>
+                            <div class="p-3 font-medium">Stock App dispatch value</div>
                             <div class="p-3">
-                                LKR {{ number_format((float) $today['order_day_dispatch_value'], 2) }} / {{ (int) $today['order_day_dispatch_count'] }} order(s)
+                                LKR {{ number_format((float) $today['stock_app_dispatch_value'], 2) }} / {{ (int) $today['stock_app_dispatch_count'] }} dispatch signal(s)
                             </div>
                             <div class="p-3">
-                                LKR {{ number_format((float) $yesterday['order_day_dispatch_value'], 2) }} / {{ (int) $yesterday['order_day_dispatch_count'] }} order(s)
+                                LKR {{ number_format((float) $yesterday['stock_app_dispatch_value'], 2) }} / {{ (int) $yesterday['stock_app_dispatch_count'] }} dispatch signal(s)
                             </div>
                         </div>
                         <div class="grid grid-cols-3 border-t border-gray-200 text-sm dark:border-gray-800">

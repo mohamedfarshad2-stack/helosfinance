@@ -138,8 +138,8 @@ class SalesInsightsTest extends TestCase
             ->assertSee('LKR 1,740.00')
             ->assertSee('Verified dispatch on this date')
             ->assertSee('LKR 0.00')
-            ->assertSee('Orders first seen this day in dispatch')
-            ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date')
+            ->assertSee('Stock App dispatch value')
+            ->assertSee('1 dispatch signal(s) received from Stock App on this date')
             ->assertSee('Verified stage-date status value: LKR 0.00')
             ->assertSee('dispatch status row(s) are still unverified')
             ->assertSee('Unverified synced rows')
@@ -331,9 +331,100 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Orders first seen this day in dispatch')
-            ->assertSee('LKR 2,500.00')
-            ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date');
+            ->assertSee('Stock App dispatch value')
+            ->assertSee('LKR 4,300.00')
+            ->assertSee('2 dispatch signal(s) received from Stock App on this date');
+    }
+
+    public function test_sales_insights_shows_stock_app_dispatch_signals_received_on_selected_date(): void
+    {
+        Carbon::setTestNow('2026-07-11 12:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-3001-tracking',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'order_id' => 'ORDER-3001',
+                'tracking_number' => 'TRK-3001',
+                'sale_amount' => 2500,
+            ],
+            'occurred_at' => Carbon::parse('2026-07-09 10:00:00'),
+            'created_at' => Carbon::parse('2026-07-11 09:00:00'),
+            'updated_at' => Carbon::parse('2026-07-11 09:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-3002-tracking',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'order_id' => 'ORDER-3002',
+                'tracking_number' => 'TRK-3002',
+                'sale_amount' => 1800,
+            ],
+            'occurred_at' => Carbon::parse('2026-07-08 10:00:00'),
+            'created_at' => Carbon::parse('2026-07-11 10:00:00'),
+            'updated_at' => Carbon::parse('2026-07-11 10:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-OLD-tracking',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'order_id' => 'ORDER-OLD',
+                'tracking_number' => 'TRK-OLD',
+                'sale_amount' => 3000,
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 11:00:00'),
+            'created_at' => Carbon::parse('2026-07-10 11:00:00'),
+            'updated_at' => Carbon::parse('2026-07-10 11:00:00'),
+        ]);
+
+        $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
+
+        $response->assertOk()
+            ->assertSee('Stock App dispatch value')
+            ->assertSee('LKR 4,300.00');
     }
 
     public function test_sales_insights_separates_dispatch_movement_from_dispatch_status_snapshot(): void
@@ -472,8 +563,8 @@ class SalesInsightsTest extends TestCase
             ->assertSee('Verified dispatch on this date')
             ->assertSee('1 verified parcel(s) moved into dispatch / resend on this date')
             ->assertSee('LKR 2,500.00')
-            ->assertSee('Orders first seen this day in dispatch')
-            ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date');
+            ->assertSee('Stock App dispatch value')
+            ->assertSee('1 dispatch signal(s) received from Stock App on this date');
     }
 
     public function test_sales_insights_uses_trusted_payload_date_for_historic_stock_app_webhook_rows(): void
@@ -523,8 +614,8 @@ class SalesInsightsTest extends TestCase
             ->assertSee('Verified dispatch on this date')
             ->assertSee('1 verified parcel(s) moved into dispatch / resend on this date')
             ->assertSee('LKR 2,500.00')
-            ->assertSee('Orders first seen this day in dispatch')
-            ->assertSee('1 order(s) first seen on this date were in dispatch / resend as of this date');
+            ->assertSee('Stock App dispatch value')
+            ->assertSee('1 dispatch signal(s) received from Stock App on this date');
     }
 
     public function test_sales_insights_deduplicates_same_day_dispatch_updates_for_the_same_tracking_number(): void
