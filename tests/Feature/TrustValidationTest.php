@@ -227,6 +227,133 @@ class TrustValidationTest extends TestCase
         $this->assertLessThan(100, $trust['data_quality_percent']);
     }
 
+    public function test_stale_zero_product_cost_events_block_trusted_profit_until_recalculated(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Stale Cost Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'STALE-001',
+            'name' => 'Stale Cost Product',
+            'material_cost' => 0,
+            'packaging_cost' => 50,
+            'labor_rate' => 0,
+            'finishing_cost' => 25,
+            'expected_sale_price' => 2500,
+            'active' => true,
+        ]);
+
+        SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_RAW_MATERIAL,
+            'component_name' => 'EVA sheet',
+            'quantity_per_unit' => 1,
+            'unit_cost' => 400,
+            'active' => true,
+        ]);
+
+        SkuRecipeItem::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'line_type' => SkuRecipeItem::TYPE_LABOR,
+            'component_name' => 'Stitching',
+            'quantity_per_unit' => 1,
+            'unit_cost' => 175,
+            'active' => true,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'STALE-ORDER-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'economics' => [
+                    'product_cost_amount' => 0,
+                    'product_cost_skipped' => false,
+                ],
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $trust = app(TrustValidationService::class)->forCurrentMonth($business);
+
+        $warning = collect($trust['warnings']['critical'])
+            ->firstWhere('title', 'Incomplete event product cost');
+
+        $this->assertNotNull($warning);
+        $this->assertSame('Pending Validation', $trust['metric_statuses']['profit']['status']);
+        $this->assertSame('Pending Validation', $trust['metric_statuses']['break_even']['status']);
+        $this->assertSame('Pending Validation', $trust['metric_statuses']['goal_progress']['status']);
+        $this->assertLessThan(100, $trust['business_completeness_percent']);
+    }
+
+    public function test_zero_cost_sku_used_by_current_orders_blocks_trusted_profit(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Zero Cost Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'ZERO-001',
+            'name' => 'Zero Cost Product',
+            'material_cost' => 0,
+            'packaging_cost' => 0,
+            'labor_rate' => 0,
+            'finishing_cost' => 0,
+            'expected_sale_price' => 2500,
+            'active' => true,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'ZERO-COST-ORDER-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 2500,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sku_code' => 'ZERO-001',
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        $trust = app(TrustValidationService::class)->forCurrentMonth($business);
+
+        $warning = collect($trust['warnings']['critical'])
+            ->firstWhere('title', 'Zero-cost SKU used by orders');
+
+        $this->assertNotNull($warning);
+        $this->assertSame('Pending Validation', $trust['metric_statuses']['profit']['status']);
+        $this->assertSame('Pending Validation', $trust['metric_statuses']['break_even']['status']);
+        $this->assertSame('Pending Validation', $trust['metric_statuses']['goal_progress']['status']);
+        $this->assertContains('ZERO-001', $warning['examples']);
+    }
+
     public function test_owner_dashboard_renders_the_trust_status_section(): void
     {
         $business = Business::query()->create([

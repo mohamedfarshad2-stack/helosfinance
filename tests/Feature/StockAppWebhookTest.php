@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\CostAssumption;
+use App\Domains\Shared\Models\CourierRate;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\SkuStockMovement;
@@ -226,6 +227,32 @@ class StockAppWebhookTest extends TestCase
             ->assertJsonPath('impact.economics.customer_delivery_charge_amount', 350)
             ->assertJsonPath('impact.economics.actual_courier_cost_amount', 425)
             ->assertJsonPath('impact.economics.delivery_charge_margin_amount', -75);
+    }
+
+    public function test_stock_app_delivered_order_uses_owner_courier_rate_when_payload_has_no_courier_cost(): void
+    {
+        $business = Business::query()->create(['name' => 'Test Business']);
+
+        CourierRate::query()->create([
+            'business_id' => $business->id,
+            'courier_name' => 'Fardar Express',
+            'delivery_charge' => 425,
+            'return_charge' => 212.50,
+            'resend_charge' => 0,
+            'active' => true,
+        ]);
+
+        $this->postJson('/api/v1/stock-app/webhook', [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'ORDER-COURIER-RATE-1',
+            'customer_total_amount' => 1740,
+            'quantity' => 1,
+        ])->assertCreated()
+            ->assertJsonPath('impact.revenue_amount', 1740)
+            ->assertJsonPath('impact.direct_cost_amount', 425)
+            ->assertJsonPath('impact.economics.actual_courier_cost_amount', 425)
+            ->assertJsonPath('impact.economics.delivery_cost_source', 'courier_rate');
     }
 
     public function test_resent_order_has_retry_cost_without_new_cogs(): void

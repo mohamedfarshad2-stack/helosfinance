@@ -129,10 +129,20 @@ class TrustValidationService
                 'action_url' => SkuResource::getUrl('index'),
                 'fix_guidance' => 'Open Products / SKUs or Product Cost Recipes and enter the missing material cost truth.',
             ],
+            'Zero-cost SKU used by orders' => [
+                'action_label' => 'Fix used SKU costs',
+                'action_url' => SkuResource::getUrl('index'),
+                'fix_guidance' => 'Open Products / SKUs, search the listed product code, and complete its product cost before trusting profit.',
+            ],
             'Missing stock mapping', 'Missing lifecycle stages' => [
                 'action_label' => 'Fix missing product links',
                 'action_url' => MissingSkuMapping::getUrl(),
                 'fix_guidance' => 'Open Missing Product Links, choose the correct product for each order row, and save. HELOS will recalculate the affected costs.',
+            ],
+            'Incomplete event product cost' => [
+                'action_label' => 'Recalculate product costs',
+                'action_url' => MissingSkuMapping::getUrl(),
+                'fix_guidance' => 'Open Missing Product Links or Products / SKUs, confirm the product cost is correct, then recalculate the affected order rows before trusting profit.',
             ],
             'Missing supplier name', 'Missing due date' => [
                 'action_label' => 'Fix expenses',
@@ -173,21 +183,65 @@ class TrustValidationService
     {
         $criticalCount = count($warnings['critical']);
         $importantCount = count($warnings['important']);
+        $criticalTitles = collect($warnings['critical'])->pluck('title')->filter()->values();
+        $importantTitles = collect($warnings['important'])->pluck('title')->filter()->values();
+        $allTitles = $criticalTitles->merge($importantTitles)->values();
         $goalConfigured = (bool) ($goal['configured'] ?? false);
         $hasCurrentActivity = (($breakEven['progress']['current_deliveries'] ?? 0) > 0)
             || (($breakEven['progress']['current_revenue'] ?? 0) > 0)
             || (($goal['goal']['target'] ?? 0) > 0);
 
-        $status = function (string $metric) use ($criticalCount, $importantCount, $goalConfigured, $hasCurrentActivity): array {
+        $hasAny = fn (array $titles): bool => $allTitles
+            ->intersect($titles)
+            ->isNotEmpty();
+        $hasCritical = fn (array $titles): bool => $criticalTitles
+            ->intersect($titles)
+            ->isNotEmpty();
+
+        $productTruthIssues = [
+            'Missing SKU recipe',
+            'Missing material cost',
+            'Zero-cost SKU used by orders',
+            'Missing stock mapping',
+            'Incomplete event product cost',
+            'Missing material SKU link',
+        ];
+        $treasuryTruthIssues = [
+            'Missing business allocation',
+            'Missing treasury allocation',
+            'Missing due date',
+        ];
+        $payrollTruthIssues = [
+            'Missing salary mapping',
+        ];
+
+        $status = function (string $metric) use ($criticalCount, $importantCount, $goalConfigured, $hasCurrentActivity, $hasAny, $hasCritical, $productTruthIssues, $treasuryTruthIssues, $payrollTruthIssues): array {
+            $pending = match ($metric) {
+                'profit', 'break_even', 'goal_progress' => $hasCritical(array_merge($productTruthIssues, $treasuryTruthIssues, $payrollTruthIssues)),
+                'cash_pressure', 'safe_to_use', 'safe_to_withdraw', 'treasury' => $hasCritical($treasuryTruthIssues) || $hasAny($payrollTruthIssues),
+                'revenue', 'returns', 'stock' => $hasCritical($productTruthIssues),
+                default => $criticalCount > 0,
+            };
+
+            $estimated = match ($metric) {
+                'profit', 'break_even', 'goal_progress' => $hasAny(array_merge($productTruthIssues, $treasuryTruthIssues, $payrollTruthIssues)) || $importantCount > 0,
+                'cash_pressure', 'treasury' => $hasAny(array_merge($treasuryTruthIssues, $payrollTruthIssues)) || $importantCount > 0,
+                'safe_to_use', 'safe_to_withdraw', 'growth_capacity' => true,
+                'revenue', 'returns', 'stock' => $hasAny($productTruthIssues) || $importantCount > 0,
+                default => $importantCount > 0,
+            };
+
             $value = match ($metric) {
-                'safe_to_use', 'safe_to_withdraw', 'growth_capacity', 'treasury' => $criticalCount > 0 ? 'Pending Validation' : 'Estimated',
-                'profit', 'break_even' => $criticalCount > 0 ? 'Pending Validation' : ($importantCount > 0 ? 'Estimated' : 'Verified'),
+                'safe_to_withdraw' => $pending ? 'Pending Validation' : 'Estimated',
+                'safe_to_use', 'growth_capacity' => $pending ? 'Pending Validation' : 'Estimated',
+                'treasury' => $pending ? 'Pending Validation' : ($estimated ? 'Estimated' : 'Verified'),
+                'profit', 'break_even' => $pending ? 'Pending Validation' : ($estimated ? 'Estimated' : 'Verified'),
                 'goal_progress' => ! $goalConfigured
                     ? 'Pending Validation'
-                    : ($criticalCount > 0 ? 'Pending Validation' : ($importantCount > 0 ? 'Estimated' : 'Verified')),
-                'cash_pressure' => $criticalCount > 0 ? 'Pending Validation' : ($importantCount > 0 ? 'Estimated' : 'Verified'),
-                'revenue', 'returns', 'stock' => $criticalCount > 0 ? 'Pending Validation' : ($hasCurrentActivity ? 'Verified' : 'Pending Validation'),
-                default => $importantCount > 0 ? 'Estimated' : ($criticalCount > 0 ? 'Pending Validation' : 'Verified'),
+                    : ($pending ? 'Pending Validation' : ($estimated ? 'Estimated' : 'Verified')),
+                'cash_pressure' => $pending ? 'Pending Validation' : ($estimated ? 'Estimated' : 'Verified'),
+                'revenue', 'returns', 'stock' => $pending ? 'Pending Validation' : ($hasCurrentActivity ? ($estimated ? 'Estimated' : 'Verified') : 'Pending Validation'),
+                default => $estimated ? 'Estimated' : ($pending ? 'Pending Validation' : 'Verified'),
             };
 
             $reason = match ($metric) {

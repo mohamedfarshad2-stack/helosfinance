@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\CourierRate;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Filament\Pages\SalesInsights;
@@ -134,17 +135,17 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
+            ->assertSee('Dispatched today, not sales yet')
+            ->assertSee('Needs date check')
             ->assertSee('Parcels in dispatch status')
             ->assertSee('LKR 1,740.00')
-            ->assertSee('Verified dispatch on this date')
             ->assertSee('LKR 0.00')
             ->assertSee('Stock App dispatch value')
-            ->assertSee('1 dispatch signal(s) received from Stock App on this date')
-            ->assertSee('Verified stage-date status value: LKR 0.00')
-            ->assertSee('dispatch status row(s) are still unverified')
-            ->assertSee('Unverified synced rows')
-            ->assertSee('row(s) were synced on this date without a trusted real dispatch date.')
-            ->assertSee('Unverified value: LKR 1,740.00');
+            ->assertSee('1 dispatch signal(s)')
+            ->assertSee('Trusted stage-date portion')
+            ->assertSee('dispatch status row(s) still need trusted stage dates')
+            ->assertSee('synced row(s) still need a trusted real dispatch date')
+            ->assertSee('worth LKR 1,740.00');
     }
 
     public function test_sales_insights_counts_parcels_still_in_dispatch_status_as_of_selected_date(): void
@@ -228,7 +229,7 @@ class SalesInsightsTest extends TestCase
 
         $response->assertOk()
             ->assertSee('LKR 5,000.00')
-            ->assertSee('2 parcel(s) were still in dispatch / resend waiting result as of this date');
+            ->assertSee('2 waiting result');
     }
 
     public function test_sales_insights_shows_orders_first_seen_on_selected_date_that_are_in_dispatch_as_of_that_date(): void
@@ -333,7 +334,7 @@ class SalesInsightsTest extends TestCase
         $response->assertOk()
             ->assertSee('Stock App dispatch value')
             ->assertSee('LKR 4,300.00')
-            ->assertSee('2 dispatch signal(s) received from Stock App on this date');
+            ->assertSee('2 dispatch signal(s)');
     }
 
     public function test_sales_insights_shows_stock_app_dispatch_signals_received_on_selected_date(): void
@@ -508,11 +509,69 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Verified dispatch on this date')
-            ->assertSee('2 verified parcel(s) moved into dispatch / resend on this date')
+            ->assertSee('Dispatched today, not sales yet')
+            ->assertSee('2 parcel(s) sent today')
             ->assertSee('LKR 4,000.00')
-            ->assertSee('3 parcel(s) were still in dispatch / resend waiting result as of this date')
+            ->assertSee('3 waiting result')
             ->assertSee('LKR 7,000.00');
+    }
+
+    public function test_sales_insights_shows_possible_dispatch_profit_using_owner_courier_rate(): void
+    {
+        Carbon::setTestNow('2026-07-11 12:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        CourierRate::query()->create([
+            'business_id' => $business->id,
+            'courier_name' => 'Fardar Express',
+            'delivery_charge' => 425,
+            'return_charge' => 212.50,
+            'resend_charge' => 0,
+            'active' => true,
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-POTENTIAL-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 700,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 2500,
+                'order_id' => 'ORDER-POTENTIAL-1',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 09:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(SalesInsights::getUrl())
+            ->assertOk()
+            ->assertSee("Possible profit if today's dispatch delivers", false)
+            ->assertSee('LKR 1,375.00')
+            ->assertSee('Product cost: LKR 700.00')
+            ->assertSee('Expected courier: LKR 425.00');
     }
 
     public function test_sales_insights_uses_trusted_payload_date_for_historic_stock_app_dispatch_rows(): void
@@ -560,11 +619,11 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Verified dispatch on this date')
-            ->assertSee('1 verified parcel(s) moved into dispatch / resend on this date')
+            ->assertSee('Dispatched today, not sales yet')
+            ->assertSee('1 parcel(s) sent today')
             ->assertSee('LKR 2,500.00')
             ->assertSee('Stock App dispatch value')
-            ->assertSee('1 dispatch signal(s) received from Stock App on this date');
+            ->assertSee('1 dispatch signal(s)');
     }
 
     public function test_sales_insights_uses_trusted_payload_date_for_historic_stock_app_webhook_rows(): void
@@ -611,11 +670,11 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Verified dispatch on this date')
-            ->assertSee('1 verified parcel(s) moved into dispatch / resend on this date')
+            ->assertSee('Dispatched today, not sales yet')
+            ->assertSee('1 parcel(s) sent today')
             ->assertSee('LKR 2,500.00')
             ->assertSee('Stock App dispatch value')
-            ->assertSee('1 dispatch signal(s) received from Stock App on this date');
+            ->assertSee('1 dispatch signal(s)');
     }
 
     public function test_sales_insights_deduplicates_same_day_dispatch_updates_for_the_same_tracking_number(): void
@@ -682,8 +741,8 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Verified dispatch on this date')
-            ->assertSee('1 verified parcel(s) moved into dispatch / resend on this date')
+            ->assertSee('Dispatched today, not sales yet')
+            ->assertSee('1 parcel(s) sent today')
             ->assertSee('LKR 2,400.00');
     }
 

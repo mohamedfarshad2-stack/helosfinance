@@ -10,6 +10,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
 use Filament\Forms\Form;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Actions\BulkAction;
@@ -54,9 +55,9 @@ class BankTransactionResource extends Resource
             TextInput::make('credit')->numeric()->prefix('LKR')->default(0),
             TextInput::make('balance')->numeric()->prefix('LKR')->nullable(),
             Select::make('transaction_type')
-                ->label('Transaction type')
+                ->label('HELOS money effect')
                 ->options(BankTransaction::transactionTypeOptions())
-                ->helperText('Use Transfer when money only moved between your own places like Current Account, Savings, Petty Cash, or Store Cash. Use Expense only when the business really spent the money outside.')
+                ->helperText('HELOS normally fills this after you choose what happened. This controls whether the row affects sales, cost, cash only, owner money, or loan.')
                 ->required(),
             Select::make('counter_money_container')
                 ->label('Transfer destination account')
@@ -67,14 +68,16 @@ class BankTransactionResource extends Resource
                 ->visible(fn (Get $get): bool => $get('transaction_type') === 'transfer')
                 ->required(fn (Get $get): bool => $get('transaction_type') === 'transfer'),
             Select::make('allocated_business_id')
-                ->label('Business assignment')
+                ->label('Which business does this belong to?')
                 ->options(fn () => static::businessOptions())
                 ->searchable()
                 ->nullable()
                 ->placeholder('Shared / Unallocated')
                 ->helperText('Choose the business this money belongs to. Leave blank only for pure internal transfers between your own money containers.'),
-            Select::make('classification')->options(BankTransaction::classificationOptions())
-                ->helperText('If this row only moved money into petty cash or store cash, classify it as Transfer, not Expense.')
+            Select::make('classification')
+                ->label('What happened?')
+                ->options(BankTransaction::classificationOptions())
+                ->helperText('Choose the real-world meaning. If money only moved into petty cash, store cash, savings, or another own account, choose Transfer, not Expense.')
                 ->live()
                 ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
                     $inferredType = BankTransaction::inferTransactionType($state);
@@ -109,7 +112,7 @@ class BankTransactionResource extends Resource
             ->columns([
                 Grid::make([
                     'default' => 1,
-                    'xl' => 6,
+                    'xl' => 5,
                 ])->schema([
                     Stack::make([
                         Tables\Columns\TextColumn::make('transaction_date')
@@ -151,55 +154,62 @@ class BankTransactionResource extends Resource
                         })
                         ->color(fn (BankTransaction $record): string => ((float) ($record->credit ?: 0) - (float) ($record->debit ?: 0)) >= 0 ? 'success' : 'danger')
                         ->weight('semibold'),
-                    SelectColumn::make('classification')
-                        ->label('Meaning')
-                        ->options(BankTransaction::classificationOptions())
-                        ->selectablePlaceholder(false)
-                        ->afterStateUpdated(function (BankTransaction $record, string $state): void {
-                            $transactionType = BankTransaction::inferTransactionType($state) ?? $record->transaction_type;
-                            $allocatedBusinessId = $record->allocated_business_id;
+                    Stack::make([
+                        Tables\Columns\TextColumn::make('review_meaning_label')
+                            ->label('Step 1')
+                            ->state('What happened?')
+                            ->size('xs')
+                            ->color('gray'),
+                        SelectColumn::make('classification')
+                            ->label('What happened?')
+                            ->options(BankTransaction::classificationOptions())
+                            ->selectablePlaceholder(false)
+                            ->afterStateUpdated(function (BankTransaction $record, string $state): void {
+                                $transactionType = BankTransaction::inferTransactionType($state) ?? $record->transaction_type;
+                                $allocatedBusinessId = $record->allocated_business_id;
 
-                            if (blank($allocatedBusinessId) && BankTransaction::needsBusinessAssignment($transactionType)) {
-                                $allocatedBusinessId = $record->business_id;
-                            }
+                                if (blank($allocatedBusinessId) && BankTransaction::needsBusinessAssignment($transactionType)) {
+                                    $allocatedBusinessId = $record->business_id;
+                                }
 
-                            $record->forceFill([
-                                'classification' => $state,
-                                'transaction_type' => $transactionType,
-                                'allocated_business_id' => $allocatedBusinessId,
-                                'status' => static::resolveReviewStatus($record, $state, $transactionType, $allocatedBusinessId),
-                                'reviewed_at' => now(),
-                            ])->save();
-                        }),
-                    SelectColumn::make('transaction_type')
-                        ->label('Effect')
-                        ->options(BankTransaction::transactionTypeOptions())
-                        ->selectablePlaceholder(false)
-                        ->afterStateUpdated(function (BankTransaction $record, string $state): void {
-                            $allocatedBusinessId = $record->allocated_business_id;
-
-                            if (blank($allocatedBusinessId) && BankTransaction::needsBusinessAssignment($state)) {
-                                $allocatedBusinessId = $record->business_id;
-                            }
-
-                            $record->forceFill([
-                                'transaction_type' => $state,
-                                'allocated_business_id' => $allocatedBusinessId,
-                                'status' => static::resolveReviewStatus($record, $record->classification, $state, $allocatedBusinessId),
-                                'reviewed_at' => now(),
-                            ])->save();
-                        }),
-                    SelectColumn::make('allocated_business_id')
-                        ->label('Business')
-                        ->options(static::businessOptions())
-                        ->placeholder('Shared / Unallocated')
-                        ->afterStateUpdated(function (BankTransaction $record, $state): void {
-                            $record->forceFill([
-                                'allocated_business_id' => filled($state) ? (int) $state : null,
-                                'status' => static::resolveReviewStatus($record, $record->classification, $record->transaction_type, filled($state) ? (int) $state : null),
-                                'reviewed_at' => now(),
-                            ])->save();
-                        }),
+                                $record->forceFill([
+                                    'classification' => $state,
+                                    'transaction_type' => $transactionType,
+                                    'allocated_business_id' => $allocatedBusinessId,
+                                    'status' => static::resolveReviewStatus($record, $state, $transactionType, $allocatedBusinessId),
+                                    'reviewed_at' => now(),
+                                ])->save();
+                            }),
+                        Tables\Columns\TextColumn::make('transaction_type')
+                            ->label('Money effect')
+                            ->state(fn (BankTransaction $record): string => static::moneyEffectLabel($record))
+                            ->badge()
+                            ->color(fn (BankTransaction $record): string => static::moneyEffectColor($record)),
+                    ])->space(1),
+                    Stack::make([
+                        Tables\Columns\TextColumn::make('business_assignment_label')
+                            ->label('Step 2')
+                            ->state('Which business?')
+                            ->size('xs')
+                            ->color('gray'),
+                        SelectColumn::make('allocated_business_id')
+                            ->label('Which business?')
+                            ->options(static::businessOptions())
+                            ->placeholder('Shared / Unallocated')
+                            ->afterStateUpdated(function (BankTransaction $record, $state): void {
+                                $record->forceFill([
+                                    'allocated_business_id' => filled($state) ? (int) $state : null,
+                                    'status' => static::resolveReviewStatus($record, $record->classification, $record->transaction_type, filled($state) ? (int) $state : null),
+                                    'reviewed_at' => now(),
+                                ])->save();
+                            }),
+                        Tables\Columns\TextColumn::make('business_assignment_hint')
+                            ->label('Hint')
+                            ->state(fn (BankTransaction $record): string => static::businessAssignmentHint($record))
+                            ->size('xs')
+                            ->color(fn (BankTransaction $record): string => BankTransaction::needsBusinessAssignment($record->transaction_type) && blank($record->allocated_business_id) ? 'warning' : 'gray')
+                            ->wrap(),
+                    ])->space(1),
                 ]),
             ])->filters([
             Filter::make('transaction_date')
@@ -258,7 +268,7 @@ class BankTransactionResource extends Resource
                     ->icon('heroicon-o-check-circle')
                     ->form([
                         Select::make('classification')
-                            ->label('Classification')
+                            ->label('What happened?')
                             ->options(BankTransaction::classificationOptions())
                             ->live()
                             ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
@@ -272,10 +282,6 @@ class BankTransactionResource extends Resource
                                     $set('allocated_business_id', Auth::user()?->defaultBusinessId());
                                 }
                             })
-                            ->required(),
-                        Select::make('transaction_type')
-                            ->label('Transaction type')
-                            ->options(BankTransaction::transactionTypeOptions())
                             ->required(),
                         Select::make('money_container')
                             ->label('Bank account / cash container')
@@ -294,7 +300,7 @@ class BankTransactionResource extends Resource
                             ->visible(fn (Get $get): bool => $get('transaction_type') === 'transfer')
                             ->required(fn (Get $get): bool => $get('transaction_type') === 'transfer'),
                         Select::make('allocated_business_id')
-                            ->label('Business assignment')
+                            ->label('Which business?')
                             ->options(fn () => static::businessOptions())
                             ->searchable()
                             ->nullable()
@@ -307,18 +313,18 @@ class BankTransactionResource extends Resource
                     ])
                             ->action(function (Collection $records, array $data): void {
                         $records->each(function (BankTransaction $record) use ($data): void {
-                            $transactionType = $data['transaction_type'] ?: BankTransaction::inferTransactionType($data['classification']);
+                            $transactionType = BankTransaction::inferTransactionType($data['classification']);
                             $allocatedBusinessId = filled($data['allocated_business_id'] ?? null)
                                 ? (int) $data['allocated_business_id']
                                 : (BankTransaction::needsBusinessAssignment($transactionType) ? $record->business_id : null);
 
                             $record->forceFill([
                                 'classification' => $data['classification'],
-                                'transaction_type' => $transactionType,
+                                'transaction_type' => $transactionType ?? $record->transaction_type,
                                 'money_container' => $data['money_container'],
                                 'counter_money_container' => $data['counter_money_container'] ?? null,
                                 'allocated_business_id' => $allocatedBusinessId,
-                                'status' => static::resolveReviewStatus($record, $data['classification'], $transactionType, $allocatedBusinessId, $data['status']),
+                                'status' => static::resolveReviewStatus($record, $data['classification'], $transactionType ?? $record->transaction_type, $allocatedBusinessId, $data['status']),
                                 'reviewed_at' => now(),
                             ])->save();
                         });
@@ -406,6 +412,49 @@ class BankTransactionResource extends Resource
         }
 
         return $options;
+    }
+
+    private static function moneyEffectLabel(BankTransaction $record): string
+    {
+        return match ($record->transaction_type) {
+            'revenue' => 'Adds sales',
+            'cod_settlement' => 'Confirms COD cash',
+            'expense' => 'Adds cost',
+            'transfer' => 'Moves own cash only',
+            'owner_contribution' => 'Owner put money in',
+            'owner_withdrawal' => 'Owner took money out',
+            'loan' => 'Loan / debt',
+            'other' => 'Other',
+            default => 'Choose meaning first',
+        };
+    }
+
+    private static function moneyEffectColor(BankTransaction $record): string
+    {
+        return match ($record->transaction_type) {
+            'revenue', 'cod_settlement', 'owner_contribution' => 'success',
+            'expense', 'owner_withdrawal' => 'danger',
+            'loan', 'other' => 'warning',
+            'transfer' => 'gray',
+            default => 'warning',
+        };
+    }
+
+    private static function businessAssignmentHint(BankTransaction $record): string
+    {
+        if ($record->transaction_type === 'transfer') {
+            return filled($record->counter_money_container)
+                ? 'No profit effect'
+                : 'Choose destination in More';
+        }
+
+        if (BankTransaction::needsBusinessAssignment($record->transaction_type)) {
+            return filled($record->allocated_business_id)
+                ? 'Profit/cash will use this business'
+                : 'Needed before owner can trust cash';
+        }
+
+        return 'Leave shared only when unclear';
     }
 
     private static function resolveReviewStatus(BankTransaction $record, ?string $classification, ?string $transactionType, ?int $allocatedBusinessId, ?string $requestedStatus = null): string

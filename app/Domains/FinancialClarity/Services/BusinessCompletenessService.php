@@ -89,6 +89,78 @@ class BusinessCompletenessService
                 );
                 $score -= min(24, $missingStockMappings * 8);
             }
+
+            $zeroCostSkusUsedInOrders = OperationalEvent::query()
+                ->where('business_id', $business->id)
+                ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereIn('event_type', [
+                    OperationalEvent::TRACKING_NUMBER_ADDED,
+                    OperationalEvent::WHOLESALE_PARCEL_SENT,
+                    OperationalEvent::ORDER_DELIVERED,
+                ])
+                ->whereNotNull('sku_id')
+                ->with('sku')
+                ->get()
+                ->map(fn (OperationalEvent $event): ?Sku => $event->sku instanceof Sku ? $event->sku : null)
+                ->filter(fn (?Sku $sku): bool => $sku instanceof Sku && (float) $sku->productionCostPerUnit() <= 0)
+                ->unique(fn (Sku $sku): string => (string) $sku->id)
+                ->values();
+
+            if ($zeroCostSkusUsedInOrders->isNotEmpty()) {
+                $issues['critical'][] = $this->issue(
+                    'Zero-cost SKU used by orders',
+                    $zeroCostSkusUsedInOrders->count().' SKU(s) used by current-month order rows still have zero product cost.',
+                    'Product profit can be overstated when an active sales SKU has no material, labour, or product cost truth.',
+                    'Profit, break-even, product contribution, and goal progress.',
+                    $zeroCostSkusUsedInOrders->take(3)->map(fn (Sku $sku): string => $sku->code ?: $sku->name ?: 'SKU')->all()
+                );
+                $score -= min(28, $zeroCostSkusUsedInOrders->count() * 10);
+            }
+
+            $incompleteProductCostEvents = OperationalEvent::query()
+                ->where('business_id', $business->id)
+                ->whereBetween('occurred_at', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereIn('event_type', [
+                    OperationalEvent::TRACKING_NUMBER_ADDED,
+                    OperationalEvent::WHOLESALE_PARCEL_SENT,
+                ])
+                ->whereNotNull('sku_id')
+                ->with('sku')
+                ->get()
+                ->filter(function (OperationalEvent $event): bool {
+                    $sku = $event->sku;
+
+                    if (! $sku instanceof Sku) {
+                        return false;
+                    }
+
+                    $economics = is_array($event->payload ?? null)
+                        ? (array) data_get($event->payload, 'economics', [])
+                        : [];
+
+                    $productCostSkipped = filter_var($economics['product_cost_skipped'] ?? false, FILTER_VALIDATE_BOOL);
+
+                    if ($productCostSkipped) {
+                        return false;
+                    }
+
+                    $expectedProductCost = (float) $sku->productionCostPerUnit() * max((int) ($event->quantity ?? 1), 1);
+                    $eventProductCost = (float) ($economics['product_cost_amount'] ?? $event->direct_cost_amount ?? 0);
+
+                    return $expectedProductCost > 0 && $eventProductCost <= 0;
+                })
+                ->values();
+
+            if ($incompleteProductCostEvents->isNotEmpty()) {
+                $issues['critical'][] = $this->issue(
+                    'Incomplete event product cost',
+                    $incompleteProductCostEvents->count().' current-month dispatch or wholesale row(s) are linked to SKUs but still carry zero product cost.',
+                    'Profit can be overstated when older order rows are not recalculated after product costs are fixed.',
+                    'Profit, break-even, product contribution, and goal progress.',
+                    $incompleteProductCostEvents->take(3)->map(fn (OperationalEvent $event): string => $event->external_id ?: 'Operational event '.$event->id)->all()
+                );
+                $score -= min(28, $incompleteProductCostEvents->count() * 9);
+            }
         }
 
         $missingSupplier = Expense::query()
@@ -268,6 +340,8 @@ class BusinessCompletenessService
                 'materials' => $missingMaterialSku,
                 'due_dates' => $missingDueDates,
                 'lifecycle' => $missingLifecycleStages['count'],
+                'zero_cost_skus_used_in_orders' => isset($zeroCostSkusUsedInOrders) ? $zeroCostSkusUsedInOrders->count() : 0,
+                'incomplete_event_product_costs' => isset($incompleteProductCostEvents) ? $incompleteProductCostEvents->count() : 0,
             ],
         ];
     }

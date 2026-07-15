@@ -575,11 +575,12 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->actingAs($user)
             ->get(BankTransactionResource::getUrl('edit', ['record' => $transaction]))
             ->assertOk()
-            ->assertSee('Transaction type')
-            ->assertSee('Business assignment')
+            ->assertSee('HELOS money effect')
+            ->assertSee('Which business does this belong to?')
+            ->assertSee('What happened?')
             ->assertSee('Bank account / cash container')
             ->assertSee('Transfer destination account')
-            ->assertSee('Use Transfer when money only moved between your own places like Current Account, Savings, Petty Cash, or Store Cash. Use Expense only when the business really spent the money outside.');
+            ->assertSee('If money only moved into petty cash, store cash, savings, or another own account, choose Transfer, not Expense.');
     }
 
     public function test_client_owner_dashboard_keeps_the_existing_business_picture_and_operational_summary(): void

@@ -61,75 +61,79 @@
         </x-filament::section>
 
         @php
-            $todayMarketingTone = (float) $today['marketing_spend'] > 0 ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100' : 'border-gray-200 bg-white text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-white';
             $todayProfitTone = (float) $today['profit_after_marketing'] >= 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100';
+            $dispatchPotentialTone = (float) $today['dispatch_potential_profit'] >= 0 ? 'border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100' : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100';
         @endphp
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Today delivered sales</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Actual delivered sales</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['delivered_revenue'], 2) }}</div>
                 <div class="mt-1 text-sm opacity-80">{{ (int) $today['delivered_count'] }} delivered parcel(s)</div>
             </div>
 
-            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Stock App dispatch value</div>
-                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
-                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['stock_app_dispatch_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['stock_app_dispatch_count'] }} dispatch signal(s) received from Stock App on this date</div>
-            </div>
-
-            <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Verified dispatch on this date</div>
-                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
-                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_moved_count'] }} verified parcel(s) moved into dispatch / resend on this date</div>
-                @if ((int) ($today['dispatch_moved_hidden_count'] ?? 0) > 0)
-                    <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                        <div class="font-semibold uppercase tracking-wide">Unverified synced rows</div>
-                        <div class="mt-1">{{ (int) $today['dispatch_moved_hidden_count'] }} row(s) were synced on this date without a trusted real dispatch date.</div>
-                        <div class="mt-1">Unverified value: LKR {{ number_format((float) $today['dispatch_moved_hidden_value'], 2) }}</div>
-                    </div>
-                @endif
-            </div>
-
-            <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Parcels in dispatch status</div>
-                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
-                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_signal_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_signal_count'] }} parcel(s) were still in dispatch / resend waiting result as of this date</div>
-                <div class="mt-2 text-xs opacity-80">
-                    Verified stage-date status value: LKR {{ number_format((float) $today['dispatch_value'], 2) }}
-                    from {{ (int) $today['dispatch_count'] }} parcel(s)
-                </div>
-                @if ((int) ($today['dispatch_hidden_count'] ?? 0) > 0)
-                    <div class="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
-                        {{ (int) $today['dispatch_hidden_count'] }} dispatch status row(s) are still unverified, worth
-                        LKR {{ number_format((float) $today['dispatch_hidden_value'], 2) }}.
-                    </div>
-                @endif
-            </div>
-
-            <div class="rounded-lg border p-4 {{ $todayMarketingTone }}">
-                <div class="text-xs uppercase tracking-wide opacity-70">Today marketing spend</div>
-                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
-                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['marketing_spend'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">
-                    @if ((int) $today['delivered_count'] > 0)
-                        About LKR {{ number_format((float) $today['marketing_per_delivered_order'], 2) }} per delivered parcel
-                    @else
-                        No delivered parcel yet to spread this over
-                    @endif
-                </div>
-            </div>
-
             <div class="rounded-lg border p-4 {{ $todayProfitTone }}">
-                <div class="text-xs uppercase tracking-wide opacity-70">Today profit after direct + marketing</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Actual profit today</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">After courier, returns, resend impact, and marketing rows already recorded today</div>
+                <div class="mt-1 text-sm opacity-80">Delivered revenue minus recorded direct cost, returns, resends, and marketing.</div>
             </div>
+
+            <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+                <div class="text-xs uppercase tracking-wide opacity-70">Dispatched today, not sales yet</div>
+                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }}</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_moved_count'] }} parcel(s) sent today. This becomes sales only after delivery.</div>
+                @if ((int) ($today['dispatch_moved_hidden_count'] ?? 0) > 0)
+                    <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                        <div class="font-semibold uppercase tracking-wide">Needs date check</div>
+                        <div class="mt-1">{{ (int) $today['dispatch_moved_hidden_count'] }} synced row(s) still need a trusted real dispatch date.</div>
+                    </div>
+                @endif
+            </div>
+
+            <div class="rounded-lg border p-4 {{ $dispatchPotentialTone }}">
+                <div class="text-xs uppercase tracking-wide opacity-70">Possible profit if today's dispatch delivers</div>
+                <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
+                <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_potential_profit'], 2) }}</div>
+                <div class="mt-2 text-xs opacity-80">
+                    Assumes all {{ (int) $today['dispatch_moved_count'] }} dispatched parcel(s) are delivered.
+                    Product cost: LKR {{ number_format((float) $today['dispatch_product_cost'], 2) }}.
+                    Expected courier: LKR {{ number_format((float) $today['dispatch_expected_delivery_cost'], 2) }}.
+                </div>
+                @if ((int) ($today['dispatch_missing_delivery_cost_count'] ?? 0) > 0)
+                    <div class="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
+                        {{ (int) $today['dispatch_missing_delivery_cost_count'] }} parcel(s) do not have delivery cost truth yet.
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <div class="text-xs uppercase tracking-wide opacity-70">Open dispatch risk</div>
+                    <div class="mt-1 text-sm opacity-80">Parcels in dispatch status are not sales yet. They still need delivered or returned result.</div>
+                </div>
+                <div class="grid gap-2 text-sm sm:grid-cols-2 lg:min-w-[28rem]">
+                    <div class="rounded-lg bg-white/70 p-3 dark:bg-gray-950/30">
+                        <div class="text-xs uppercase tracking-wide opacity-70">Parcels in dispatch status</div>
+                        <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $today['dispatch_signal_value'], 2) }}</div>
+                        <div class="text-xs opacity-80">{{ (int) $today['dispatch_signal_count'] }} waiting result</div>
+                    </div>
+                    <div class="rounded-lg bg-white/70 p-3 dark:bg-gray-950/30">
+                        <div class="text-xs uppercase tracking-wide opacity-70">Trusted stage-date portion</div>
+                        <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $today['dispatch_value'], 2) }}</div>
+                        <div class="text-xs opacity-80">{{ (int) $today['dispatch_count'] }} verified parcel(s)</div>
+                    </div>
+                </div>
+            </div>
+            @if ((int) ($today['dispatch_hidden_count'] ?? 0) > 0)
+                <div class="mt-3 text-xs font-medium">
+                    {{ (int) $today['dispatch_hidden_count'] }} dispatch status row(s) still need trusted stage dates, worth LKR {{ number_format((float) $today['dispatch_hidden_value'], 2) }}.
+                </div>
+            @endif
         </div>
 
         <div class="grid gap-6 xl:grid-cols-[1fr_0.75fr]">

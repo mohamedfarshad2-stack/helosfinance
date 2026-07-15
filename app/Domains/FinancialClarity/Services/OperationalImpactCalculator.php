@@ -21,11 +21,12 @@ class OperationalImpactCalculator
         $saleAmount = $selling['gross_customer_amount'];
         $skipProductCost = $this->bool($payload['skip_product_cost'] ?? $payload['resend_from_stock'] ?? false);
         $productCost = $skipProductCost ? 0.0 : ($sku ? $sku->productionCostPerUnit() * $quantity : (float) ($payload['cogs_amount'] ?? 0));
+        $courier = $this->courierCosts($business, $payload);
 
-        $delivery = (float) ($payload['transport_cost_amount'] ?? $payload['delivery_amount'] ?? $payload['courier_amount'] ?? $this->assumption($business, ['delivery_fee'], 'Delivery cost', 0));
-        $returnCourier = (float) ($payload['return_courier_amount'] ?? $payload['return_charge'] ?? $this->assumption($business, ['return_courier_fee', 'return_fee'], 'Return courier cost', 0));
+        $delivery = $courier['delivery'];
+        $returnCourier = $courier['return'];
         $returnPackaging = (float) ($payload['return_packaging_amount'] ?? $this->assumption($business, ['return_packaging_fee'], 'Return packaging cost', 0));
-        $resendCourier = (float) ($payload['resend_courier_amount'] ?? $payload['resend_charge'] ?? $this->assumption($business, ['resend_courier_fee', 'resend_fee'], 'Resend courier cost', 0));
+        $resendCourier = $courier['resend'];
         $resendPackaging = (float) ($payload['resend_packaging_amount'] ?? $this->assumption($business, ['resend_packaging_fee'], 'Resend packaging cost', 0));
         $verification = (float) ($payload['verification_amount'] ?? $this->assumption($business, 'verification_cost', 'Verification cost', 0));
         $restockable = $this->bool($payload['restockable'] ?? $payload['return_stock'] ?? $payload['restock'] ?? false);
@@ -55,6 +56,7 @@ class OperationalImpactCalculator
                     'courier_amount' => 0.0,
                     'actual_courier_cost_amount' => 0.0,
                     'delivery_charge_pending' => $delivery,
+                    'delivery_cost_source' => $courier['delivery_source'],
                     ...$selling,
                     'delivery_charge_margin_amount' => round($selling['customer_delivery_charge_amount'] - $delivery, 2),
                 ],
@@ -70,6 +72,7 @@ class OperationalImpactCalculator
                     'product_cost_skipped' => $skipProductCost,
                     'courier_amount' => $delivery,
                     'actual_courier_cost_amount' => $delivery,
+                    'delivery_cost_source' => $courier['delivery_source'],
                     ...$selling,
                     'delivery_charge_margin_amount' => round($selling['customer_delivery_charge_amount'] - $delivery, 2),
                 ],
@@ -83,6 +86,7 @@ class OperationalImpactCalculator
                 'economics' => [
                     'courier_amount' => $delivery,
                     'actual_courier_cost_amount' => $delivery,
+                    'delivery_cost_source' => $courier['delivery_source'],
                     ...$selling,
                     'delivery_charge_margin_amount' => round($selling['customer_delivery_charge_amount'] - $delivery, 2),
                 ],
@@ -95,6 +99,7 @@ class OperationalImpactCalculator
                 'recovery_amount' => (float) ($payload['recovery_amount'] ?? $restockRecovery),
                 'economics' => [
                     'return_courier_amount' => $returnCourier,
+                    'return_courier_cost_source' => $courier['return_source'],
                     'return_packaging_amount' => $returnPackaging,
                     'damage_amount' => (float) ($payload['damage_cost'] ?? 0),
                     'recovery_amount' => (float) ($payload['recovery_amount'] ?? $restockRecovery),
@@ -109,6 +114,7 @@ class OperationalImpactCalculator
                 'recovery_amount' => 0,
                 'economics' => [
                     'resend_courier_amount' => $resendCourier,
+                    'resend_courier_cost_source' => $courier['resend_source'],
                     'resend_packaging_amount' => $resendPackaging,
                 ],
             ],
@@ -122,6 +128,8 @@ class OperationalImpactCalculator
                     'verification_amount' => $verification,
                     'forward_courier_amount' => $delivery,
                     'return_courier_amount' => $returnCourier,
+                    'delivery_cost_source' => $courier['delivery_source'],
+                    'return_courier_cost_source' => $courier['return_source'],
                     'return_packaging_amount' => $returnPackaging,
                     'handling_amount' => (float) ($payload['handling_cost'] ?? 0),
                 ],
@@ -135,6 +143,67 @@ class OperationalImpactCalculator
                 'economics' => $selling,
             ],
         };
+    }
+
+    /**
+     * @return array{delivery:float,return:float,resend:float,delivery_source:string,return_source:string,resend_source:string}
+     */
+    private function courierCosts(Business $business, array $payload): array
+    {
+        $rate = app(CourierRateService::class)->rateForBusiness($business->id, $payload['courier_name'] ?? null)
+            ?? app(CourierRateService::class)->defaultRateForBusiness($business->id);
+
+        [$delivery, $deliverySource] = $this->courierAmount(
+            $payload,
+            ['transport_cost_amount', 'delivery_amount', 'courier_amount'],
+            $rate?->delivery_charge,
+            fn (): float => $this->assumption($business, ['delivery_fee'], 'Delivery cost', 0),
+            'delivery'
+        );
+
+        [$return, $returnSource] = $this->courierAmount(
+            $payload,
+            ['return_courier_amount', 'return_charge'],
+            $rate?->return_charge,
+            fn (): float => $this->assumption($business, ['return_courier_fee', 'return_fee'], 'Return courier cost', 0),
+            'return'
+        );
+
+        [$resend, $resendSource] = $this->courierAmount(
+            $payload,
+            ['resend_courier_amount', 'resend_charge'],
+            $rate?->resend_charge,
+            fn (): float => $this->assumption($business, ['resend_courier_fee', 'resend_fee'], 'Resend courier cost', 0),
+            'resend'
+        );
+
+        return [
+            'delivery' => $delivery,
+            'return' => $return,
+            'resend' => $resend,
+            'delivery_source' => $deliverySource,
+            'return_source' => $returnSource,
+            'resend_source' => $resendSource,
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $keys
+     * @return array{0:float,1:string}
+     */
+    private function courierAmount(array $payload, array $keys, mixed $rateAmount, callable $fallback, string $kind): array
+    {
+        foreach ($keys as $key) {
+            if (isset($payload[$key]) && is_numeric($payload[$key]) && (float) $payload[$key] > 0) {
+                return [round((float) $payload[$key], 2), 'payload'];
+            }
+        }
+
+        if ($rateAmount !== null) {
+            return [round((float) $rateAmount, 2), 'courier_rate'];
+        }
+
+        return [round((float) $fallback(), 2), $kind.'_assumption'];
     }
 
     private function findSku(Business $business, array $payload): ?Sku

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Domains\FinancialClarity\Services\CourierRateService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\OperationalEvent;
@@ -218,7 +219,7 @@ class SalesInsights extends Page
 
         $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
-        $dispatchMovement = $this->dispatchMovement($periodEvents);
+        $dispatchMovement = $this->dispatchMovement($business, $periodEvents);
         $stockAppDispatchSignals = $this->stockAppDispatchSignals($business, $start, $end);
         $dispatchSnapshot = $this->dispatchSnapshot($business, $end);
         $pendingValue = (float) ($dispatchSnapshot['signal_value'] ?? 0);
@@ -232,6 +233,10 @@ class SalesInsights extends Page
             'dispatch_moved_count' => (int) ($dispatchMovement['verified_count'] ?? 0),
             'dispatch_moved_hidden_value' => round((float) ($dispatchMovement['unverified_value'] ?? 0), 2),
             'dispatch_moved_hidden_count' => (int) ($dispatchMovement['unverified_count'] ?? 0),
+            'dispatch_potential_profit' => round((float) ($dispatchMovement['potential_profit'] ?? 0), 2),
+            'dispatch_expected_delivery_cost' => round((float) ($dispatchMovement['expected_delivery_cost'] ?? 0), 2),
+            'dispatch_product_cost' => round((float) ($dispatchMovement['product_cost'] ?? 0), 2),
+            'dispatch_missing_delivery_cost_count' => (int) ($dispatchMovement['missing_delivery_cost_count'] ?? 0),
             'stock_app_dispatch_value' => round((float) ($stockAppDispatchSignals['value'] ?? 0), 2),
             'stock_app_dispatch_count' => (int) ($stockAppDispatchSignals['count'] ?? 0),
             'dispatch_signal_value' => round((float) ($dispatchSnapshot['signal_value'] ?? 0), 2),
@@ -293,7 +298,7 @@ class SalesInsights extends Page
     /**
      * @return array{verified_value: float, verified_count: int, unverified_value: float, unverified_count: int}
      */
-    private function dispatchMovement(Collection $periodEvents): array
+    private function dispatchMovement(Business $business, Collection $periodEvents): array
     {
         $dispatchEvents = $periodEvents
             ->whereIn('event_type', [
@@ -312,13 +317,67 @@ class SalesInsights extends Page
 
         $verified = $dispatchEvents->filter(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
         $unverified = $dispatchEvents->reject(fn (OperationalEvent $event): bool => $this->isVerifiedDispatchEvent($event));
+        $potential = $this->dispatchPotential($business, $verified);
 
         return [
             'verified_value' => (float) $verified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
             'verified_count' => $verified->count(),
             'unverified_value' => (float) $unverified->sum(fn (OperationalEvent $event): float => $this->saleAmount($event)),
             'unverified_count' => $unverified->count(),
+            ...$potential,
         ];
+    }
+
+    /**
+     * @return array{potential_profit: float, expected_delivery_cost: float, product_cost: float, missing_delivery_cost_count: int}
+     */
+    private function dispatchPotential(Business $business, Collection $verifiedDispatchEvents): array
+    {
+        $expectedDeliveryCost = 0.0;
+        $productCost = 0.0;
+        $missingDeliveryCost = 0;
+
+        foreach ($verifiedDispatchEvents as $event) {
+            $eventProductCost = (float) $event->direct_cost_amount;
+            $eventDeliveryCost = 0.0;
+
+            if ($event->event_type === OperationalEvent::TRACKING_NUMBER_ADDED) {
+                $eventDeliveryCost = $this->expectedDeliveryCost($business, $event);
+
+                if ($eventDeliveryCost <= 0) {
+                    $missingDeliveryCost++;
+                }
+            }
+
+            $productCost += $eventProductCost;
+            $expectedDeliveryCost += $eventDeliveryCost;
+        }
+
+        $value = (float) $verifiedDispatchEvents->sum(fn (OperationalEvent $event): float => $this->saleAmount($event));
+
+        return [
+            'potential_profit' => round($value - $productCost - $expectedDeliveryCost, 2),
+            'expected_delivery_cost' => round($expectedDeliveryCost, 2),
+            'product_cost' => round($productCost, 2),
+            'missing_delivery_cost_count' => $missingDeliveryCost,
+        ];
+    }
+
+    private function expectedDeliveryCost(Business $business, OperationalEvent $event): float
+    {
+        $payload = $this->eventPayload($event);
+        $economics = (array) ($payload['economics'] ?? []);
+
+        foreach (['actual_courier_cost_amount', 'delivery_charge_pending', 'courier_amount'] as $key) {
+            if (isset($economics[$key]) && is_numeric($economics[$key]) && (float) $economics[$key] > 0) {
+                return (float) $economics[$key];
+            }
+        }
+
+        $rate = app(CourierRateService::class)->rateForBusiness($business->id, $payload['courier_name'] ?? null)
+            ?? app(CourierRateService::class)->defaultRateForBusiness($business->id);
+
+        return $rate ? (float) $rate->delivery_charge : 0.0;
     }
 
     /**
@@ -669,6 +728,10 @@ class SalesInsights extends Page
             'dispatch_moved_count' => 0,
             'dispatch_moved_hidden_value' => 0.0,
             'dispatch_moved_hidden_count' => 0,
+            'dispatch_potential_profit' => 0.0,
+            'dispatch_expected_delivery_cost' => 0.0,
+            'dispatch_product_cost' => 0.0,
+            'dispatch_missing_delivery_cost_count' => 0,
             'stock_app_dispatch_value' => 0.0,
             'stock_app_dispatch_count' => 0,
             'dispatch_signal_value' => 0.0,
