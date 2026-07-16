@@ -49,10 +49,13 @@ class SalesInsights extends Page
             $previousDate = $selectedDate->copy()->subDay();
             $weekStart = $selectedDate->copy()->startOfWeek();
             $weekEnd = $selectedDate->copy()->endOfWeek();
+            $monthStart = $selectedDate->copy()->startOfMonth();
             $pageWarning = null;
             $today = $this->emptyStats();
             $yesterday = $this->emptyStats();
             $week = $this->emptyStats();
+            $monthToDate = $this->emptyStats();
+            $allTime = $this->emptyStats();
             $topProducts = collect();
             $missingProductLinks = 0;
 
@@ -61,6 +64,8 @@ class SalesInsights extends Page
                     $today = $this->periodStats($business, $selectedDate);
                     $yesterday = $this->periodStats($business, $previousDate);
                     $week = $this->rangeStats($business, $weekStart, $weekEnd);
+                    $monthToDate = $this->rangeStats($business, $monthStart, $selectedDate->copy()->endOfDay());
+                    $allTime = $this->rangeStats($business, $this->firstSalesDate($business, $selectedDate), $selectedDate->copy()->endOfDay());
                     $topProducts = $this->topProducts($business);
                     $missingProductLinks = $this->missingProductLinks($business);
                 } catch (Throwable $exception) {
@@ -77,6 +82,8 @@ class SalesInsights extends Page
                 'todayLabel' => $selectedDate->format('M j, Y'),
                 'yesterdayLabel' => $previousDate->format('M j, Y'),
                 'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
+                'monthLabel' => $monthStart->format('M j').' - '.$selectedDate->format('M j, Y'),
+                'allTimeLabel' => 'Up to '.$selectedDate->format('M j, Y'),
                 'weekDates' => collect(range(0, 6))
                     ->map(fn (int $offset): array => [
                         'date' => $weekStart->copy()->addDays($offset)->toDateString(),
@@ -87,6 +94,8 @@ class SalesInsights extends Page
                 'today' => $today,
                 'yesterday' => $yesterday,
                 'week' => $week,
+                'monthToDate' => $monthToDate,
+                'allTime' => $allTime,
                 'topProducts' => $topProducts,
                 'missingProductLinks' => $missingProductLinks,
             ];
@@ -105,6 +114,8 @@ class SalesInsights extends Page
                 'todayLabel' => $selectedDate->format('M j, Y'),
                 'yesterdayLabel' => $previousDate->format('M j, Y'),
                 'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
+                'monthLabel' => $selectedDate->copy()->startOfMonth()->format('M j').' - '.$selectedDate->format('M j, Y'),
+                'allTimeLabel' => 'Up to '.$selectedDate->format('M j, Y'),
                 'weekDates' => collect(range(0, 6))
                     ->map(fn (int $offset): array => [
                         'date' => $weekStart->copy()->addDays($offset)->toDateString(),
@@ -115,6 +126,8 @@ class SalesInsights extends Page
                 'today' => $this->emptyStats(),
                 'yesterday' => $this->emptyStats(),
                 'week' => $this->emptyStats(),
+                'monthToDate' => $this->emptyStats(),
+                'allTime' => $this->emptyStats(),
                 'topProducts' => collect(),
                 'missingProductLinks' => 0,
             ];
@@ -256,6 +269,25 @@ class SalesInsights extends Page
             'profit_after_direct_costs' => round($profitAfterDirectCosts, 2),
             'profit_after_marketing' => round($profitAfterDirectCosts - $marketingSpend, 2),
         ];
+    }
+
+    private function firstSalesDate(Business $business, Carbon $fallback): Carbon
+    {
+        $first = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->whereNotNull('occurred_at')
+            ->oldest('occurred_at')
+            ->value('occurred_at');
+
+        if (! $first) {
+            return $fallback->copy()->startOfDay();
+        }
+
+        try {
+            return Carbon::parse($first)->startOfDay();
+        } catch (Throwable) {
+            return $fallback->copy()->startOfDay();
+        }
     }
 
     /**
