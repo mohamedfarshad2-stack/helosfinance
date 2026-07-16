@@ -135,7 +135,7 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Selected day dispatched, not sales yet')
+            ->assertSee('Dispatched on selected day')
             ->assertSee('Needs date check')
             ->assertSee('Parcels in dispatch status')
             ->assertSee('LKR 1,740.00')
@@ -509,7 +509,7 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Selected day dispatched, not sales yet')
+            ->assertSee('Dispatched on selected day')
             ->assertSee('2 parcel(s) sent on this date')
             ->assertSee('LKR 4,000.00')
             ->assertSee('3 waiting result')
@@ -568,7 +568,7 @@ class SalesInsightsTest extends TestCase
         $this->actingAs($owner)
             ->get(SalesInsights::getUrl())
             ->assertOk()
-            ->assertSee("Possible profit if selected day's dispatch delivers", false)
+            ->assertSee("Best case if dispatch delivers", false)
             ->assertSee('LKR 1,375.00')
             ->assertSee('Product cost: LKR 700.00')
             ->assertSee('Expected courier: LKR 425.00');
@@ -619,7 +619,7 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Selected day dispatched, not sales yet')
+            ->assertSee('Dispatched on selected day')
             ->assertSee('1 parcel(s) sent on this date')
             ->assertSee('LKR 2,500.00')
             ->assertSee('Stock App dispatch value')
@@ -670,7 +670,7 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Selected day dispatched, not sales yet')
+            ->assertSee('Dispatched on selected day')
             ->assertSee('1 parcel(s) sent on this date')
             ->assertSee('LKR 2,500.00')
             ->assertSee('Stock App dispatch value')
@@ -741,7 +741,7 @@ class SalesInsightsTest extends TestCase
         $response = $this->actingAs($owner)->get(SalesInsights::getUrl());
 
         $response->assertOk()
-            ->assertSee('Selected day dispatched, not sales yet')
+            ->assertSee('Dispatched on selected day')
             ->assertSee('1 parcel(s) sent on this date')
             ->assertSee('LKR 2,400.00');
     }

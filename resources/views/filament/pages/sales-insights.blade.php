@@ -65,26 +65,42 @@
             $dispatchPotentialTone = (float) $today['dispatch_potential_profit'] >= 0 ? 'border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100' : 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100';
         @endphp
 
+        <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+            <div class="text-xs uppercase tracking-wide text-gray-500">Owner answer for {{ $todayLabel }}</div>
+            <div class="mt-2 text-lg font-semibold text-gray-950 dark:text-white">
+                Delivered sales were LKR {{ number_format((float) $today['delivered_revenue'], 2) }} before costs.
+                Estimated result after recorded costs is LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}.
+            </div>
+            <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }} was dispatched on this date, but it is not sales yet. It becomes real sales only after delivery.
+            </div>
+        </div>
+
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Selected day delivered sales</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Gross delivered sales</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['delivered_revenue'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['delivered_count'] }} delivered parcel(s)</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['delivered_count'] }} delivered parcel(s). Before product, courier, return, resend, and marketing costs.</div>
             </div>
 
             <div class="rounded-lg border p-4 {{ $todayProfitTone }}">
-                <div class="text-xs uppercase tracking-wide opacity-70">Selected day actual profit</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Estimated result after recorded costs</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">Delivered revenue minus recorded direct cost, returns, resends, and marketing.</div>
+                <div class="mt-1 text-xs opacity-80">
+                    Gross sales - direct costs LKR {{ number_format((float) $today['recorded_direct_costs'], 2) }}
+                    - leakage LKR {{ number_format((float) $today['recorded_leakage'], 2) }}
+                    + recovery LKR {{ number_format((float) $today['recorded_recovery'], 2) }}
+                    - marketing LKR {{ number_format((float) $today['marketing_spend'], 2) }}.
+                </div>
             </div>
 
             <div class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                <div class="text-xs uppercase tracking-wide opacity-70">Selected day dispatched, not sales yet</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Dispatched on selected day</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }}</div>
-                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_moved_count'] }} parcel(s) sent on this date. This becomes sales only after delivery.</div>
+                <div class="mt-1 text-sm opacity-80">{{ (int) $today['dispatch_moved_count'] }} parcel(s) sent on this date. Not included in delivered sales.</div>
                 @if ((int) ($today['dispatch_moved_hidden_count'] ?? 0) > 0)
                     <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
                         <div class="font-semibold uppercase tracking-wide">Needs date check</div>
@@ -94,11 +110,11 @@
             </div>
 
             <div class="rounded-lg border p-4 {{ $dispatchPotentialTone }}">
-                <div class="text-xs uppercase tracking-wide opacity-70">Possible profit if selected day's dispatch delivers</div>
+                <div class="text-xs uppercase tracking-wide opacity-70">Best case if dispatch delivers</div>
                 <div class="mt-1 text-xs opacity-70">{{ $todayLabel }}</div>
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['dispatch_potential_profit'], 2) }}</div>
                 <div class="mt-2 text-xs opacity-80">
-                    Assumes all {{ (int) $today['dispatch_moved_count'] }} dispatched parcel(s) are delivered.
+                    Not real profit yet. Assumes all {{ (int) $today['dispatch_moved_count'] }} dispatched parcel(s) are delivered.
                     Product cost: LKR {{ number_format((float) $today['dispatch_product_cost'], 2) }}.
                     Expected courier: LKR {{ number_format((float) $today['dispatch_expected_delivery_cost'], 2) }}.
                 </div>
@@ -110,60 +126,59 @@
             </div>
         </div>
 
-        <div class="grid gap-4 xl:grid-cols-2">
+        <div class="grid gap-4">
             <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
                 <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <div class="text-xs uppercase tracking-wide text-gray-500">This month so far</div>
+                        <div class="text-xs uppercase tracking-wide text-gray-500">Main month view</div>
                         <h2 class="text-lg font-semibold text-gray-950 dark:text-white">{{ $monthLabel }}</h2>
                     </div>
-                    <div class="text-xs text-gray-500">Month-to-date, not whole history</div>
+                    <div class="text-xs text-gray-500">Month-to-date only</div>
                 </div>
-                <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="mt-4 grid gap-3 lg:grid-cols-3">
                     <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Delivered sales</div>
+                        <div class="text-xs uppercase tracking-wide opacity-70">Gross delivered sales this month</div>
                         <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $monthToDate['delivered_revenue'], 2) }}</div>
-                        <div class="text-xs opacity-80">{{ (int) $monthToDate['delivered_count'] }} parcel(s)</div>
+                        <div class="text-xs opacity-80">{{ (int) $monthToDate['delivered_count'] }} delivered parcel(s), before costs</div>
                     </div>
                     <div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Dispatched, not sales</div>
+                        <div class="text-xs uppercase tracking-wide opacity-70">Dispatched this month, not sales</div>
                         <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $monthToDate['dispatch_moved_value'], 2) }}</div>
-                        <div class="text-xs opacity-80">{{ (int) $monthToDate['dispatch_moved_count'] }} parcel(s)</div>
+                        <div class="text-xs opacity-80">{{ (int) $monthToDate['dispatch_moved_count'] }} parcel(s) still need delivered or returned result</div>
                     </div>
                     <div class="rounded-lg border p-3 {{ (float) $monthToDate['profit_after_marketing'] >= 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : 'border-red-200 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100' }}">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Actual profit</div>
+                        <div class="text-xs uppercase tracking-wide opacity-70">Estimated result this month</div>
                         <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $monthToDate['profit_after_marketing'], 2) }}</div>
-                        <div class="text-xs opacity-80">After recorded direct + marketing</div>
+                        <div class="text-xs opacity-80">
+                            After recorded costs and marketing. Direct costs: LKR {{ number_format((float) $monthToDate['recorded_direct_costs'], 2) }}.
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-                <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <div class="text-xs uppercase tracking-wide text-gray-500">All data so far</div>
-                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">{{ $allTimeLabel }}</h2>
-                    </div>
-                    <div class="text-xs text-gray-500">Every HELOS row up to this date</div>
-                </div>
-                <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <details class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+                <summary class="cursor-pointer text-sm font-semibold text-gray-950 dark:text-white">
+                    All data reference only: {{ $allTimeLabel }}
+                    <span class="ml-2 text-xs font-normal text-gray-500">Open only when checking lifetime totals</span>
+                </summary>
+                <div class="mt-4 grid gap-3 lg:grid-cols-3">
                     <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Delivered sales</div>
+                        <div class="text-xs uppercase tracking-wide opacity-70">Lifetime gross delivered sales</div>
                         <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $allTime['delivered_revenue'], 2) }}</div>
-                        <div class="text-xs opacity-80">{{ (int) $allTime['delivered_count'] }} parcel(s)</div>
+                        <div class="text-xs opacity-80">{{ (int) $allTime['delivered_count'] }} delivered parcel(s), before costs</div>
                     </div>
                     <div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Dispatched, not sales</div>
+                        <div class="text-xs uppercase tracking-wide opacity-70">Lifetime dispatched, not sales</div>
                         <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $allTime['dispatch_moved_value'], 2) }}</div>
                         <div class="text-xs opacity-80">{{ (int) $allTime['dispatch_moved_count'] }} parcel(s)</div>
                     </div>
                     <div class="rounded-lg border p-3 {{ (float) $allTime['profit_after_marketing'] >= 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : 'border-red-200 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100' }}">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Actual profit</div>
+                        <div class="text-xs uppercase tracking-wide opacity-70">Lifetime estimated result</div>
                         <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $allTime['profit_after_marketing'], 2) }}</div>
-                        <div class="text-xs opacity-80">After recorded direct + marketing</div>
+                        <div class="text-xs opacity-80">After recorded costs and marketing</div>
                     </div>
                 </div>
-            </div>
+            </details>
         </div>
 
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">

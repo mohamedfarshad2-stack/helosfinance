@@ -242,6 +242,9 @@ class SalesInsights extends Page
         return [
             'delivered_revenue' => round((float) $delivered->sum('revenue_amount'), 2),
             'delivered_count' => $delivered->count(),
+            'recorded_direct_costs' => round((float) $periodEvents->sum('direct_cost_amount'), 2),
+            'recorded_leakage' => round((float) $periodEvents->sum('leakage_amount'), 2),
+            'recorded_recovery' => round((float) $periodEvents->sum('recovery_amount'), 2),
             'dispatch_moved_value' => round((float) ($dispatchMovement['verified_value'] ?? 0), 2),
             'dispatch_moved_count' => (int) ($dispatchMovement['verified_count'] ?? 0),
             'dispatch_moved_hidden_value' => round((float) ($dispatchMovement['unverified_value'] ?? 0), 2),
@@ -756,6 +759,9 @@ class SalesInsights extends Page
         return [
             'delivered_revenue' => 0.0,
             'delivered_count' => 0,
+            'recorded_direct_costs' => 0.0,
+            'recorded_leakage' => 0.0,
+            'recorded_recovery' => 0.0,
             'dispatch_moved_value' => 0.0,
             'dispatch_moved_count' => 0,
             'dispatch_moved_hidden_value' => 0.0,
