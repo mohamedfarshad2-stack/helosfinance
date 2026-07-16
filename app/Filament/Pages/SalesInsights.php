@@ -237,12 +237,17 @@ class SalesInsights extends Page
         $dispatchSnapshot = $this->dispatchSnapshot($business, $end);
         $pendingValue = (float) ($dispatchSnapshot['signal_value'] ?? 0);
         $marketingSpend = $this->marketingSpend($business, $start, $end);
-        $profitAfterDirectCosts = (float) ($delivered->sum('revenue_amount') - $periodEvents->sum('direct_cost_amount') - $periodEvents->sum('leakage_amount') + $periodEvents->sum('recovery_amount'));
+        $deliveredCosts = $this->deliveredParcelCosts($business, $delivered, $end);
+        $periodExtraDirectCosts = $this->periodExtraDirectCosts($periodEvents);
+        $recordedDirectCosts = $deliveredCosts + $periodExtraDirectCosts;
+        $profitAfterDirectCosts = (float) ($delivered->sum('revenue_amount') - $recordedDirectCosts - $periodEvents->sum('leakage_amount') + $periodEvents->sum('recovery_amount'));
 
         return [
             'delivered_revenue' => round((float) $delivered->sum('revenue_amount'), 2),
             'delivered_count' => $delivered->count(),
-            'recorded_direct_costs' => round((float) $periodEvents->sum('direct_cost_amount'), 2),
+            'recorded_direct_costs' => round($recordedDirectCosts, 2),
+            'delivered_parcel_costs' => round($deliveredCosts, 2),
+            'period_extra_direct_costs' => round($periodExtraDirectCosts, 2),
             'recorded_leakage' => round((float) $periodEvents->sum('leakage_amount'), 2),
             'recorded_recovery' => round((float) $periodEvents->sum('recovery_amount'), 2),
             'dispatch_moved_value' => round((float) ($dispatchMovement['verified_value'] ?? 0), 2),
@@ -291,6 +296,43 @@ class SalesInsights extends Page
         } catch (Throwable) {
             return $fallback->copy()->startOfDay();
         }
+    }
+
+    private function deliveredParcelCosts(Business $business, Collection $deliveredEvents, Carbon $end): float
+    {
+        $parcelKeys = $deliveredEvents
+            ->map(fn (OperationalEvent $event): string => $this->parcelKey($event))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($parcelKeys->isEmpty()) {
+            return 0.0;
+        }
+
+        $wanted = array_fill_keys($parcelKeys->all(), true);
+        $cost = 0.0;
+
+        foreach ($this->salesEventsCursorUpTo($business, $end) as $event) {
+            $parcelKey = $this->parcelKey($event);
+
+            if (! isset($wanted[$parcelKey])) {
+                continue;
+            }
+
+            $cost += (float) $event->direct_cost_amount;
+        }
+
+        return $cost;
+    }
+
+    private function periodExtraDirectCosts(Collection $periodEvents): float
+    {
+        return (float) $periodEvents
+            ->filter(fn (OperationalEvent $event): bool => in_array($event->event_type, [
+                OperationalEvent::ORDER_RESENT,
+            ], true))
+            ->sum('direct_cost_amount');
     }
 
     /**
@@ -760,6 +802,8 @@ class SalesInsights extends Page
             'delivered_revenue' => 0.0,
             'delivered_count' => 0,
             'recorded_direct_costs' => 0.0,
+            'delivered_parcel_costs' => 0.0,
+            'period_extra_direct_costs' => 0.0,
             'recorded_leakage' => 0.0,
             'recorded_recovery' => 0.0,
             'dispatch_moved_value' => 0.0,

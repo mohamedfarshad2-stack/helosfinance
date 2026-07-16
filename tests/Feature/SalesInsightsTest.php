@@ -746,6 +746,94 @@ class SalesInsightsTest extends TestCase
             ->assertSee('LKR 2,400.00');
     }
 
+    public function test_sales_insights_does_not_subtract_waiting_dispatch_costs_from_delivered_result(): void
+    {
+        Carbon::setTestNow('2026-07-11 12:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner-waiting@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-DELIVERED-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 3000,
+                'tracking_number' => 'TRK-DELIVERED',
+                'order_id' => 'ORDER-DELIVERED',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 09:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'DELIVERED-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 3000,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 3000,
+                'tracking_number' => 'TRK-DELIVERED',
+                'order_id' => 'ORDER-DELIVERED',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 11:00:00'),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'TRACKING-WAITING-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 1000,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 5000,
+                'tracking_number' => 'TRK-WAITING',
+                'order_id' => 'ORDER-WAITING',
+                'stage_occurred_at_source' => 'stock_app',
+            ],
+            'occurred_at' => Carbon::parse('2026-07-11 12:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(SalesInsights::getUrl())
+            ->assertOk()
+            ->assertSee('Gross sales - direct costs LKR 425.00')
+            ->assertSee('LKR 2,575.00')
+            ->assertDontSee('LKR 1,575.00');
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();

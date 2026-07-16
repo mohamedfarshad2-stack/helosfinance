@@ -69,7 +69,7 @@
             <div class="text-xs uppercase tracking-wide text-gray-500">Owner answer for {{ $todayLabel }}</div>
             <div class="mt-2 text-lg font-semibold text-gray-950 dark:text-white">
                 Delivered sales were LKR {{ number_format((float) $today['delivered_revenue'], 2) }} before costs.
-                Estimated result after recorded costs is LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}.
+                Estimated delivered result after recorded delivered-parcel costs is LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}.
             </div>
             <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">
                 LKR {{ number_format((float) $today['dispatch_moved_value'], 2) }} was dispatched on this date, but it is not sales yet. It becomes real sales only after delivery.
@@ -90,6 +90,8 @@
                 <div class="mt-2 text-2xl font-semibold">LKR {{ number_format((float) $today['profit_after_marketing'], 2) }}</div>
                 <div class="mt-1 text-xs opacity-80">
                     Gross sales - direct costs LKR {{ number_format((float) $today['recorded_direct_costs'], 2) }}
+                    - delivered parcel costs LKR {{ number_format((float) $today['delivered_parcel_costs'], 2) }}
+                    - extra resend costs LKR {{ number_format((float) $today['period_extra_direct_costs'], 2) }}
                     - leakage LKR {{ number_format((float) $today['recorded_leakage'], 2) }}
                     + recovery LKR {{ number_format((float) $today['recorded_recovery'], 2) }}
                     - marketing LKR {{ number_format((float) $today['marketing_spend'], 2) }}.
@@ -150,7 +152,7 @@
                         <div class="text-xs uppercase tracking-wide opacity-70">Estimated result this month</div>
                         <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $monthToDate['profit_after_marketing'], 2) }}</div>
                         <div class="text-xs opacity-80">
-                            After recorded costs and marketing. Direct costs: LKR {{ number_format((float) $monthToDate['recorded_direct_costs'], 2) }}.
+                            After delivered-parcel costs, resend costs, leakage, recovery, and marketing. Delivered parcel costs: LKR {{ number_format((float) $monthToDate['delivered_parcel_costs'], 2) }}.
                         </div>
                     </div>
                 </div>
