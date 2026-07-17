@@ -17,7 +17,7 @@ trait RespectsBusinessModules
         }
 
         return Business::query()
-            ->whereIn('id', $user->accessibleBusinessIds())
+            ->whereIn('id', static::businessScopeIds())
             ->get()
             ->contains(fn (Business $business): bool => (bool) $callback($business));
     }
@@ -27,7 +27,7 @@ trait RespectsBusinessModules
         $user = Auth::user();
 
         return Business::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', static::businessScopeIds()))
             ->orderBy('name')
             ->get()
             ->filter(fn (Business $business): bool => (bool) $callback($business))
@@ -38,12 +38,27 @@ trait RespectsBusinessModules
     private static function scopeToAccessibleBusinessesMatching(Builder $query, callable $callback): Builder
     {
         $ids = Business::query()
-            ->whereIn('id', Auth::user()?->accessibleBusinessIds() ?? [])
+            ->whereIn('id', static::businessScopeIds())
             ->get()
             ->filter(fn (Business $business): bool => (bool) $callback($business))
             ->pluck('id')
             ->all();
 
         return $query->whereIn('business_id', $ids);
+    }
+
+    private static function businessScopeIds(): array
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return [];
+        }
+
+        if ($user->isStaff() && method_exists(static::class, 'businessScopeResponsibilities')) {
+            return $user->accessibleBusinessIdsForResponsibility(static::businessScopeResponsibilities());
+        }
+
+        return $user->accessibleBusinessIds();
     }
 }

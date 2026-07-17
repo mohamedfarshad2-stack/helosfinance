@@ -31,6 +31,11 @@ class MaterialComponentResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
+    protected static function businessScopeResponsibilities(): array
+    {
+        return ['material_stock', 'supervisor_review'];
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([

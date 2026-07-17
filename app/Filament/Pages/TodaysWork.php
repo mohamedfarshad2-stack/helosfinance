@@ -3,15 +3,18 @@
 namespace App\Filament\Pages;
 
 use App\Domains\Shared\Models\Business;
-use App\Domains\Shared\Services\WorkQueueService;
+use App\Domains\Shared\Models\Mission;
+use App\Domains\Shared\Services\MissionGeneratorService;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class TodaysWork extends Page
 {
     protected static ?string $slug = 'todays-work';
     protected static ?string $navigationGroup = 'Work';
-    protected static ?string $navigationLabel = "Today's Work";
+    protected static ?string $navigationLabel = "Today's work";
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?int $navigationSort = 0;
     protected static string $view = 'filament.pages.todays-work';
@@ -20,11 +23,11 @@ class TodaysWork extends Page
 
     public array $workQueue = [];
 
-    public function mount(WorkQueueService $workQueue): void
+    public function mount(MissionGeneratorService $missions): void
     {
         $businessId = Auth::user()?->business_id;
         $this->business = $businessId ? Business::query()->find($businessId) : null;
-        $this->workQueue = $this->business ? $this->employeeWorkQueue($workQueue->forBusiness($this->business)) : [];
+        $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
     }
 
     protected function getViewData(): array
@@ -45,20 +48,89 @@ class TodaysWork extends Page
         return Auth::check() && (Auth::user()?->isStaff() ?? false);
     }
 
-    private function employeeWorkQueue(array $workQueue): array
+    public function startMission(int $missionId, MissionGeneratorService $missions): void
     {
-        $tasks = collect($workQueue['tasks'] ?? [])
-            ->filter(fn (array $task): bool => $this->taskVisibleToEmployee($task))
+        $mission = Mission::query()->findOrFail($missionId);
+        $user = Auth::user();
+
+        if (! $user || ! $missions->canUserAccessMission($user, $mission)) {
+            abort(403);
+        }
+
+        $mission->start($user);
+        $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser($user));
+
+        Notification::make()->title('Mission started')->success()->send();
+    }
+
+    public function completeMission(int $missionId, MissionGeneratorService $missions): void
+    {
+        $mission = Mission::query()->findOrFail($missionId);
+        $user = Auth::user();
+
+        if (! $user || ! $missions->canUserAccessMission($user, $mission)) {
+            abort(403);
+        }
+
+        $mission->complete($user);
+        $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser($user));
+
+        Notification::make()->title('Mission completed')->success()->send();
+    }
+
+    public function blockMission(int $missionId, MissionGeneratorService $missions): void
+    {
+        $mission = Mission::query()->findOrFail($missionId);
+        $user = Auth::user();
+
+        if (! $user || ! $missions->canUserAccessMission($user, $mission)) {
+            abort(403);
+        }
+
+        $mission->block($user, 'Blocked by staff from Today\'s Work.');
+        $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser($user));
+
+        Notification::make()->title('Mission marked blocked')->warning()->send();
+    }
+
+    public function escalateMission(int $missionId, MissionGeneratorService $missions): void
+    {
+        $mission = Mission::query()->findOrFail($missionId);
+        $user = Auth::user();
+
+        if (! $user || ! $missions->canUserAccessMission($user, $mission)) {
+            abort(403);
+        }
+
+        $mission->escalate($user, 'Escalated from Today\'s Work.');
+        $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser($user));
+
+        Notification::make()->title('Mission escalated')->warning()->send();
+    }
+
+    private function employeeWorkQueue(Collection $missions): array
+    {
+        $tasks = $missions
+            ->map(fn (Mission $mission): array => $this->missionTask($mission))
             ->values();
 
         $sections = [
-            'due_today' => collect($workQueue['sections']['due_today'] ?? [])->filter(fn (array $task): bool => $this->taskVisibleToEmployee($task))->values()->all(),
-            'high_priority' => collect($workQueue['sections']['high_priority'] ?? [])->filter(fn (array $task): bool => $this->taskVisibleToEmployee($task))->values()->all(),
-            'waiting_review' => collect($workQueue['sections']['waiting_review'] ?? [])->filter(fn (array $task): bool => $this->taskVisibleToEmployee($task))->values()->all(),
-            'completed_today' => collect($workQueue['sections']['completed_today'] ?? [])->filter(fn (array $task): bool => $this->taskVisibleToEmployee($task))->values()->all(),
+            'due_today' => $tasks->filter(fn (array $task): bool => filled($task['due_on']) && \Illuminate\Support\Carbon::parse($task['due_on'])->lessThanOrEqualTo(today()) && $task['state'] !== 'completed')->values()->all(),
+            'high_priority' => $tasks->filter(fn (array $task): bool => in_array($task['priority'], ['critical', 'high'], true) && $task['state'] !== 'completed')->values()->all(),
+            'waiting_review' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['waiting_review', 'escalated', 'blocked'], true))->values()->all(),
+            'completed_today' => $tasks->filter(fn (array $task): bool => $task['state'] === 'completed' && filled($task['completed_at']) && \Illuminate\Support\Carbon::parse($task['completed_at'])->isToday())->values()->all(),
         ];
 
-        $openTasks = $tasks->where('state', 'open')->values();
+        $openTasks = $tasks
+            ->whereIn('state', [
+                Mission::STATUS_OPEN,
+                Mission::STATUS_IN_PROGRESS,
+                Mission::STATUS_BLOCKED,
+                Mission::STATUS_WAITING_REVIEW,
+                Mission::STATUS_ESCALATED,
+                Mission::STATUS_REOPENED,
+            ])
+            ->values();
         $completedToday = $tasks
             ->where('state', 'completed')
             ->filter(fn (array $task): bool => filled($task['completed_at']) && Auth::user() && \Illuminate\Support\Carbon::parse($task['completed_at'])->isToday())
@@ -106,7 +178,9 @@ class TodaysWork extends Page
             ->values();
 
         return [
-            ...$workQueue,
+            'headline' => $openTasks->isEmpty()
+                ? 'Your missions are clear right now.'
+                : 'Start with the mission that protects the most money or removes the biggest blocker.',
             'summary' => [
                 'Tasks due today' => $dueToday->count(),
                 'High priority' => $highPriority->count(),
@@ -126,24 +200,31 @@ class TodaysWork extends Page
         ];
     }
 
-    private function taskVisibleToEmployee(array $task): bool
+    private function missionTask(Mission $mission): array
     {
-        $user = Auth::user();
-        $responsibility = $this->taskResponsibility($task);
+        $metadata = is_array($mission->metadata) ? $mission->metadata : [];
 
-        if (! $user?->isStaff()) {
-            return false;
-        }
-
-        if ($responsibility === null) {
-            return true;
-        }
-
-        if ($user->canAccessFullStaff()) {
-            return true;
-        }
-
-        return $user->hasStaffResponsibility($responsibility);
+        return [
+            'id' => $mission->id,
+            'queue' => $mission->status === Mission::STATUS_WAITING_REVIEW ? 'review' : 'mission',
+            'state' => $mission->status,
+            'priority' => $mission->priority,
+            'title' => $mission->title,
+            'why_it_matters' => $mission->summary,
+            'recommended_action' => $metadata['recommended_action'] ?? 'Open the related record and finish the next real step.',
+            'related_record' => $metadata['related_record'] ?? null,
+            'assigned_team' => $metadata['assigned_team'] ?? 'Assigned team',
+            'assigned_user' => $metadata['assigned_user_label'] ?? optional($mission->assignedUser)->name ?? 'Assigned staff',
+            'created_at' => optional($mission->created_at)->toDateString(),
+            'due_on' => optional($mission->due_at)->toDateString(),
+            'completed_at' => optional($mission->completed_at)->toDateString(),
+            'status_label' => $this->missionStatusLabel($mission),
+            'work_type' => $mission->mission_type,
+            'responsibility_code' => $mission->responsibility_code,
+            'impact_type' => $mission->impact_type,
+            'estimated_impact' => $mission->estimated_impact,
+            'confidence' => $mission->confidence,
+        ];
     }
 
     private function taskResponsibility(array $task): ?string
@@ -170,6 +251,35 @@ class TodaysWork extends Page
     private function responsibilityLabel(string $responsibility): string
     {
         return \App\Models\User::staffResponsibilityOptions()[$responsibility] ?? 'General work';
+    }
+
+    private function missionStatusLabel(Mission $mission): string
+    {
+        if ($mission->status === Mission::STATUS_COMPLETED) {
+            return 'Completed';
+        }
+
+        if ($mission->status === Mission::STATUS_BLOCKED) {
+            return 'Blocked';
+        }
+
+        if ($mission->status === Mission::STATUS_ESCALATED) {
+            return 'Escalated';
+        }
+
+        if ($mission->status === Mission::STATUS_WAITING_REVIEW) {
+            return 'Waiting review';
+        }
+
+        if ($mission->due_at?->isPast()) {
+            return 'Overdue';
+        }
+
+        if ($mission->due_at?->isToday()) {
+            return 'Due today';
+        }
+
+        return 'Open';
     }
 
     private function myResponsibilityLabels(): array

@@ -6,10 +6,12 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\ClientGroup;
+use App\Domains\Shared\Models\StaffResponsibilityAssignment;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -81,6 +83,16 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(ClientGroup::class);
     }
 
+    public function staffResponsibilityAssignments(): HasMany
+    {
+        return $this->hasMany(StaffResponsibilityAssignment::class);
+    }
+
+    public function activeStaffResponsibilityAssignments(): HasMany
+    {
+        return $this->staffResponsibilityAssignments()->activeNow();
+    }
+
     public function seesAllBusinesses(): bool
     {
         return $this->is_platform_admin;
@@ -118,6 +130,25 @@ class User extends Authenticatable implements FilamentUser
             return Business::query()->pluck('id')->all();
         }
 
+        if ($this->isStaff() && (bool) $this->responsibilities_configured) {
+            $assignedBusinessIds = $this->activeStaffResponsibilityAssignments()
+                ->distinct()
+                ->pluck('business_id')
+                ->map(fn (mixed $id): int => (int) $id)
+                ->values()
+                ->all();
+
+            if ($assignedBusinessIds !== []) {
+                return $assignedBusinessIds;
+            }
+
+            if ($this->staffResponsibilities() !== [] && filled($this->business_id)) {
+                return [(int) $this->business_id];
+            }
+
+            return [];
+        }
+
         if (filled($this->client_group_id) && ! $this->isStaff()) {
             return Business::query()
                 ->where('client_group_id', $this->client_group_id)
@@ -127,6 +158,41 @@ class User extends Authenticatable implements FilamentUser
         }
 
         return filled($this->business_id) ? [(int) $this->business_id] : [];
+    }
+
+    public function accessibleBusinessIdsForResponsibility(string|array $responsibilities): array
+    {
+        if (! $this->isStaff()) {
+            return $this->accessibleBusinessIds();
+        }
+
+        if (! (bool) $this->responsibilities_configured) {
+            return $this->hasStaffResponsibility($responsibilities) && filled($this->business_id)
+                ? [(int) $this->business_id]
+                : [];
+        }
+
+        $assignedBusinessIds = $this->activeStaffResponsibilityAssignments()
+            ->whereIn('responsibility_code', (array) $responsibilities)
+            ->distinct()
+            ->pluck('business_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->values()
+            ->all();
+
+        if ($assignedBusinessIds !== []) {
+            return $assignedBusinessIds;
+        }
+
+        if ($this->hasStaffResponsibility($responsibilities) && filled($this->business_id)) {
+            return [(int) $this->business_id];
+        }
+
+        if (in_array('supervisor_review', (array) $responsibilities, true) && (bool) $this->is_staff_supervisor && filled($this->business_id)) {
+            return [(int) $this->business_id];
+        }
+
+        return [];
     }
 
     public function isStaff(): bool
@@ -217,10 +283,27 @@ class User extends Authenticatable implements FilamentUser
         $this->attributes['responsibilities_configured'] = true;
     }
 
-    public function staffResponsibilities(): array
+    public function staffResponsibilities(?int $businessId = null): array
     {
         if (! $this->isStaff()) {
             return [];
+        }
+
+        $assignmentQuery = $this->activeStaffResponsibilityAssignments();
+
+        if (filled($businessId)) {
+            $assignmentQuery->where('business_id', (int) $businessId);
+        }
+
+        $assignedResponsibilities = $assignmentQuery
+            ->pluck('responsibility_code')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($assignedResponsibilities !== []) {
+            return array_values(array_intersect($assignedResponsibilities, array_keys(static::staffResponsibilityOptions())));
         }
 
         $responsibilities = array_values(array_filter((array) ($this->staff_responsibilities ?? [])));
@@ -240,52 +323,52 @@ class User extends Authenticatable implements FilamentUser
         };
     }
 
-    public function hasStaffResponsibility(string|array $responsibilities): bool
+    public function hasStaffResponsibility(string|array $responsibilities, ?int $businessId = null): bool
     {
         if (! $this->isStaff()) {
             return false;
         }
 
-        return count(array_intersect((array) $responsibilities, $this->staffResponsibilities())) > 0;
+        return count(array_intersect((array) $responsibilities, $this->staffResponsibilities($businessId))) > 0;
     }
 
-    public function canAccessOrderWork(): bool
+    public function canAccessOrderWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility(['order_confirmation', 'dispatch', 'return_recovery']);
+        return $this->hasStaffResponsibility(['order_confirmation', 'dispatch', 'return_recovery'], $businessId);
     }
 
-    public function canAccessProductionWork(): bool
+    public function canAccessProductionWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility('production');
+        return $this->hasStaffResponsibility('production', $businessId);
     }
 
-    public function canAccessMaterialWork(): bool
+    public function canAccessMaterialWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility('material_stock');
+        return $this->hasStaffResponsibility('material_stock', $businessId);
     }
 
-    public function canAccessExpenseWork(): bool
+    public function canAccessExpenseWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility('expense_recording');
+        return $this->hasStaffResponsibility('expense_recording', $businessId);
     }
 
-    public function canAccessCollectionsWork(): bool
+    public function canAccessCollectionsWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility('collections');
+        return $this->hasStaffResponsibility('collections', $businessId);
     }
 
-    public function canAccessBankExceptionWork(): bool
+    public function canAccessBankExceptionWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility('bank_exceptions');
+        return $this->hasStaffResponsibility('bank_exceptions', $businessId);
     }
 
-    public function canAccessProductRepairWork(): bool
+    public function canAccessProductRepairWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility('product_repair');
+        return $this->hasStaffResponsibility('product_repair', $businessId);
     }
 
-    public function canAccessSupervisorReview(): bool
+    public function canAccessSupervisorReview(?int $businessId = null): bool
     {
-        return $this->isStaff() && ((bool) $this->is_staff_supervisor || $this->hasStaffResponsibility('supervisor_review'));
+        return $this->isStaff() && ((bool) $this->is_staff_supervisor || $this->hasStaffResponsibility('supervisor_review', $businessId));
     }
 }

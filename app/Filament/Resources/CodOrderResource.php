@@ -44,6 +44,11 @@ class CodOrderResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-truck';
     protected static ?int $navigationSort = 1;
 
+    protected static function businessScopeResponsibilities(): array
+    {
+        return ['order_confirmation', 'dispatch', 'return_recovery'];
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -471,7 +476,7 @@ class CodOrderResource extends Resource
     private static function courierOptionsForAccessibleBusinesses(): array
     {
         return CourierRate::query()
-            ->whereIn('business_id', Auth::user()?->accessibleBusinessIds() ?? [])
+            ->whereIn('business_id', array_keys(static::businessOptions()))
             ->where('active', true)
             ->orderBy('courier_name')
             ->pluck('courier_name', 'courier_name')

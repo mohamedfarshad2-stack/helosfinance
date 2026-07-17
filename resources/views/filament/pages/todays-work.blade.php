@@ -3,7 +3,7 @@
         <x-filament::section>
             <div class="grid gap-4 lg:grid-cols-[1.3fr_0.7fr] lg:items-start">
                 <div>
-                    <div class="text-xs uppercase tracking-wide text-gray-500">Today&apos;s work</div>
+                    <div class="text-xs uppercase tracking-wide text-gray-500">Today's work</div>
                     <div class="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">
                         {{ $workQueue['headline'] ?? 'Today\'s work is ready.' }}
                     </div>
@@ -34,16 +34,20 @@
         @php
             $taskTone = function (string $priority): string {
                 return match ($priority) {
+                    'critical' => 'border-red-300 bg-red-100 dark:border-red-900 dark:bg-red-950/40',
                     'high' => 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30',
                     'medium' => 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30',
+                    'normal' => 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30',
                     default => 'border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/30',
                 };
             };
 
             $taskValue = function (string $priority): string {
                 return match ($priority) {
+                    'critical' => 'text-red-700',
                     'high' => 'text-red-600',
                     'medium' => 'text-amber-600',
+                    'normal' => 'text-amber-600',
                     default => 'text-gray-600',
                 };
             };
@@ -79,10 +83,34 @@
                     </div>
 
                     <div class="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                        @if (($task['state'] ?? 'open') === 'open')
+                            <x-filament::button wire:click="startMission({{ (int) $task['id'] }})" color="gray" size="sm" icon="heroicon-o-play">
+                                Start
+                            </x-filament::button>
+                        @endif
+                        @if (($task['state'] ?? 'open') !== 'completed')
+                            <x-filament::button wire:click="completeMission({{ (int) $task['id'] }})" color="success" size="sm" icon="heroicon-o-check-circle">
+                                Complete
+                            </x-filament::button>
+                            <x-filament::button wire:click="blockMission({{ (int) $task['id'] }})" color="warning" size="sm" icon="heroicon-o-exclamation-triangle">
+                                Blocked
+                            </x-filament::button>
+                            <x-filament::button wire:click="escalateMission({{ (int) $task['id'] }})" color="danger" size="sm" icon="heroicon-o-arrow-up-circle">
+                                Escalate
+                            </x-filament::button>
+                        @endif
                         @if ($hasLink)
                             <x-filament::button tag="a" href="{{ $related['url'] }}" color="gray" size="sm" icon="heroicon-o-arrow-top-right-on-square">
                                 Open record
                             </x-filament::button>
+                        @endif
+                        @if (filled($task['impact_type'] ?? null))
+                            <div class="text-gray-500 dark:text-gray-400">
+                                Impact: {{ str_replace('_', ' ', $task['impact_type']) }}
+                                @if (filled($task['estimated_impact'] ?? null))
+                                    / LKR {{ number_format((float) $task['estimated_impact'], 2) }}
+                                @endif
+                            </div>
                         @endif
                         @if (is_array($related))
                             <div class="text-gray-500 dark:text-gray-400">

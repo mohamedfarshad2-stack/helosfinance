@@ -552,14 +552,14 @@ class ExpenseResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
+            ->when(! $user?->seesAllBusinesses(), fn (Builder $query) => $query->whereIn('id', static::expenseBusinessIds()))
             ->pluck('name', 'id')
             ->all();
     }
 
     private static function categoryOptions(): array
     {
-        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
+        $businessIds = static::expenseBusinessIds();
 
         $defaultCategories = collect([
             'Fuel',
@@ -596,7 +596,7 @@ class ExpenseResource extends Resource
 
     private static function payeeOptions(): array
     {
-        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
+        $businessIds = static::expenseBusinessIds();
 
         return Expense::query()
             ->when($businessIds !== [], fn (Builder $query) => $query->whereIn('business_id', $businessIds))
@@ -610,7 +610,7 @@ class ExpenseResource extends Resource
 
     private static function departmentOptions(): array
     {
-        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
+        $businessIds = static::expenseBusinessIds();
 
         $defaultDepartments = collect([
             'Operations',
@@ -647,7 +647,7 @@ class ExpenseResource extends Resource
 
     private static function employeeOptions(): array
     {
-        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
+        $businessIds = static::expenseBusinessIds();
 
         return Employee::query()
             ->when($businessIds !== [], fn (Builder $query) => $query->whereIn('business_id', $businessIds))
@@ -665,6 +665,19 @@ class ExpenseResource extends Resource
             return $query;
         }
 
-        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
+        return $query->whereIn('business_id', static::expenseBusinessIds());
+    }
+
+    private static function expenseBusinessIds(): array
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return [];
+        }
+
+        return $user->isStaff()
+            ? $user->accessibleBusinessIdsForResponsibility('expense_recording')
+            : $user->accessibleBusinessIds();
     }
 }

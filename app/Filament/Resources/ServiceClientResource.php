@@ -29,6 +29,11 @@ class ServiceClientResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-users';
     protected static ?int $navigationSort = 1;
 
+    protected static function businessScopeResponsibilities(): array
+    {
+        return ['collections'];
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([

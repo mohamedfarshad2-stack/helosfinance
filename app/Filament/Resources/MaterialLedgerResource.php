@@ -30,6 +30,11 @@ class MaterialLedgerResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
     protected static ?int $navigationSort = 5;
 
+    protected static function businessScopeResponsibilities(): array
+    {
+        return ['material_stock'];
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([

@@ -33,6 +33,11 @@ class ProductionWorkStepResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-wrench-screwdriver';
 
+    protected static function businessScopeResponsibilities(): array
+    {
+        return ['production', 'supervisor_review'];
+    }
+
     protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form

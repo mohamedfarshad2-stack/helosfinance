@@ -368,7 +368,7 @@ class BankTransactionResource extends Resource
         $user = Auth::user();
 
         return Business::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', $user?->accessibleBusinessIds() ?? []))
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('id', static::bankBusinessIds()))
             ->pluck('name', 'id')
             ->all();
     }
@@ -378,7 +378,7 @@ class BankTransactionResource extends Resource
         $user = Auth::user();
 
         $existing = BankTransaction::query()
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []))
+            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('business_id', static::bankBusinessIds()))
             ->whereNotNull('money_container')
             ->where('money_container', '!=', '')
             ->distinct()
@@ -397,7 +397,20 @@ class BankTransactionResource extends Resource
             return $query;
         }
 
-        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
+        return $query->whereIn('business_id', static::bankBusinessIds());
+    }
+
+    private static function bankBusinessIds(): array
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return [];
+        }
+
+        return $user->isStaff()
+            ? $user->accessibleBusinessIdsForResponsibility('bank_exceptions')
+            : $user->accessibleBusinessIds();
     }
 
     private static function statusOptions(bool $includeMatched = true): array

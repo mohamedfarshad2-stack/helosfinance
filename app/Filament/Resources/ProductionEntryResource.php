@@ -35,6 +35,11 @@ class ProductionEntryResource extends Resource
     protected static ?string $navigationLabel = 'Production & Piece Pay';
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
+    protected static function businessScopeResponsibilities(): array
+    {
+        return ['production'];
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([
