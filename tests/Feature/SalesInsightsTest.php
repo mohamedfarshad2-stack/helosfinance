@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class SalesInsightsTest extends TestCase
@@ -832,6 +833,41 @@ class SalesInsightsTest extends TestCase
             ->assertSee('Gross sales - direct costs LKR 425.00')
             ->assertSee('LKR 2,575.00')
             ->assertDontSee('LKR 1,575.00');
+    }
+
+    public function test_sales_insights_date_navigation_updates_the_selected_date(): void
+    {
+        Carbon::setTestNow('2026-07-17 09:00:00');
+
+        $business = Business::query()->create([
+            'name' => 'Insight Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_3,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Insight Owner',
+            'email' => 'insight-owner-navigation@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $this->actingAs($owner);
+
+        Livewire::test(SalesInsights::class)
+            ->assertSet('selectedDate', '2026-07-17')
+            ->call('moveDay', -1)
+            ->assertSet('selectedDate', '2026-07-16')
+            ->assertSee('Jul 16, 2026')
+            ->call('moveDay', 1)
+            ->assertSet('selectedDate', '2026-07-17')
+            ->call('selectDate', '2026-07-15')
+            ->assertSet('selectedDate', '2026-07-15')
+            ->assertSee('Jul 15, 2026');
     }
 
     protected function tearDown(): void

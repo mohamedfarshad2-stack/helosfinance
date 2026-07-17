@@ -55,7 +55,6 @@ class SalesInsights extends Page
             $yesterday = $this->emptyStats();
             $week = $this->emptyStats();
             $monthToDate = $this->emptyStats();
-            $allTime = $this->emptyStats();
             $topProducts = collect();
             $missingProductLinks = 0;
 
@@ -63,9 +62,8 @@ class SalesInsights extends Page
                 try {
                     $today = $this->periodStats($business, $selectedDate);
                     $yesterday = $this->periodStats($business, $previousDate);
-                    $week = $this->rangeStats($business, $weekStart, $weekEnd);
-                    $monthToDate = $this->rangeStats($business, $monthStart, $selectedDate->copy()->endOfDay());
-                    $allTime = $this->rangeStats($business, $this->firstSalesDate($business, $selectedDate), $selectedDate->copy()->endOfDay());
+                    $week = $this->rangeStats($business, $weekStart, $weekEnd, includeSnapshot: false);
+                    $monthToDate = $this->rangeStats($business, $monthStart, $selectedDate->copy()->endOfDay(), includeSnapshot: false);
                     $topProducts = $this->topProducts($business);
                     $missingProductLinks = $this->missingProductLinks($business);
                 } catch (Throwable $exception) {
@@ -83,7 +81,6 @@ class SalesInsights extends Page
                 'yesterdayLabel' => $previousDate->format('M j, Y'),
                 'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
                 'monthLabel' => $monthStart->format('M j').' - '.$selectedDate->format('M j, Y'),
-                'allTimeLabel' => 'Up to '.$selectedDate->format('M j, Y'),
                 'weekDates' => collect(range(0, 6))
                     ->map(fn (int $offset): array => [
                         'date' => $weekStart->copy()->addDays($offset)->toDateString(),
@@ -95,7 +92,6 @@ class SalesInsights extends Page
                 'yesterday' => $yesterday,
                 'week' => $week,
                 'monthToDate' => $monthToDate,
-                'allTime' => $allTime,
                 'topProducts' => $topProducts,
                 'missingProductLinks' => $missingProductLinks,
             ];
@@ -115,7 +111,6 @@ class SalesInsights extends Page
                 'yesterdayLabel' => $previousDate->format('M j, Y'),
                 'weekLabel' => $weekStart->format('M j').' - '.$weekEnd->format('M j, Y'),
                 'monthLabel' => $selectedDate->copy()->startOfMonth()->format('M j').' - '.$selectedDate->format('M j, Y'),
-                'allTimeLabel' => 'Up to '.$selectedDate->format('M j, Y'),
                 'weekDates' => collect(range(0, 6))
                     ->map(fn (int $offset): array => [
                         'date' => $weekStart->copy()->addDays($offset)->toDateString(),
@@ -127,7 +122,6 @@ class SalesInsights extends Page
                 'yesterday' => $this->emptyStats(),
                 'week' => $this->emptyStats(),
                 'monthToDate' => $this->emptyStats(),
-                'allTime' => $this->emptyStats(),
                 'topProducts' => collect(),
                 'missingProductLinks' => 0,
             ];
@@ -226,15 +220,24 @@ class SalesInsights extends Page
     /**
      * @return array<string, mixed>
      */
-    private function rangeStats(Business $business, Carbon $start, Carbon $end): array
+    private function rangeStats(Business $business, Carbon $start, Carbon $end, bool $includeSnapshot = true): array
     {
         $periodEvents = $this->salesEventsBetween($business, $start, $end);
 
         $delivered = $periodEvents->where('event_type', OperationalEvent::ORDER_DELIVERED);
         $returned = $periodEvents->where('event_type', OperationalEvent::ORDER_RETURNED);
         $dispatchMovement = $this->dispatchMovement($business, $periodEvents);
-        $stockAppDispatchSignals = $this->stockAppDispatchSignals($business, $start, $end);
-        $dispatchSnapshot = $this->dispatchSnapshot($business, $end);
+        $stockAppDispatchSignals = $includeSnapshot ? $this->stockAppDispatchSignals($business, $start, $end) : ['value' => 0.0, 'count' => 0];
+        $dispatchSnapshot = $includeSnapshot ? $this->dispatchSnapshot($business, $end) : [
+            'signal_value' => 0.0,
+            'signal_count' => 0,
+            'verified_value' => 0.0,
+            'verified_count' => 0,
+            'unverified_value' => 0.0,
+            'unverified_count' => 0,
+            'order_day_value' => 0.0,
+            'order_day_count' => 0,
+        ];
         $pendingValue = (float) ($dispatchSnapshot['signal_value'] ?? 0);
         $marketingSpend = $this->marketingSpend($business, $start, $end);
         $deliveredCosts = $this->deliveredParcelCosts($business, $delivered, $end);
@@ -277,25 +280,6 @@ class SalesInsights extends Page
             'profit_after_direct_costs' => round($profitAfterDirectCosts, 2),
             'profit_after_marketing' => round($profitAfterDirectCosts - $marketingSpend, 2),
         ];
-    }
-
-    private function firstSalesDate(Business $business, Carbon $fallback): Carbon
-    {
-        $first = OperationalEvent::query()
-            ->where('business_id', $business->id)
-            ->whereNotNull('occurred_at')
-            ->oldest('occurred_at')
-            ->value('occurred_at');
-
-        if (! $first) {
-            return $fallback->copy()->startOfDay();
-        }
-
-        try {
-            return Carbon::parse($first)->startOfDay();
-        } catch (Throwable) {
-            return $fallback->copy()->startOfDay();
-        }
     }
 
     private function deliveredParcelCosts(Business $business, Collection $deliveredEvents, Carbon $end): float

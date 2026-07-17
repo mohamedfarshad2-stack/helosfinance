@@ -158,29 +158,9 @@
                 </div>
             </div>
 
-            <details class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-                <summary class="cursor-pointer text-sm font-semibold text-gray-950 dark:text-white">
-                    All data reference only: {{ $allTimeLabel }}
-                    <span class="ml-2 text-xs font-normal text-gray-500">Open only when checking lifetime totals</span>
-                </summary>
-                <div class="mt-4 grid gap-3 lg:grid-cols-3">
-                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Lifetime gross delivered sales</div>
-                        <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $allTime['delivered_revenue'], 2) }}</div>
-                        <div class="text-xs opacity-80">{{ (int) $allTime['delivered_count'] }} delivered parcel(s), before costs</div>
-                    </div>
-                    <div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Lifetime dispatched, not sales</div>
-                        <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $allTime['dispatch_moved_value'], 2) }}</div>
-                        <div class="text-xs opacity-80">{{ (int) $allTime['dispatch_moved_count'] }} parcel(s)</div>
-                    </div>
-                    <div class="rounded-lg border p-3 {{ (float) $allTime['profit_after_marketing'] >= 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : 'border-red-200 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100' }}">
-                        <div class="text-xs uppercase tracking-wide opacity-70">Lifetime estimated result</div>
-                        <div class="mt-1 text-lg font-semibold">LKR {{ number_format((float) $allTime['profit_after_marketing'], 2) }}</div>
-                        <div class="text-xs opacity-80">After recorded costs and marketing</div>
-                    </div>
-                </div>
-            </details>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
+                Lifetime totals are not recalculated on this daily work page so previous/next date stays fast. Use this page for selected-day and month-to-date decisions.
+            </div>
         </div>
 
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
@@ -317,8 +297,8 @@
                             <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['delivered_revenue'], 2) }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
-                            <span class="text-sm text-gray-500">Pipeline value</span>
-                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['dispatch_signal_value'], 2) }}</span>
+                            <span class="text-sm text-gray-500">Dispatched this week, not sales</span>
+                            <span class="font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) $week['dispatch_moved_value'], 2) }}</span>
                         </div>
                         <div class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-800">
                             <span class="text-sm text-gray-500">Returns</span>
