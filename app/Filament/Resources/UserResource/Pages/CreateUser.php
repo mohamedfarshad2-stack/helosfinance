@@ -40,6 +40,10 @@ class CreateUser extends CreateRecord
         $data['is_platform_admin'] = false;
         $data['is_employee'] = ! $isClientOwner;
         $data['employee_access_profile'] = $data['employee_access_profile'] ?? 'operations';
+        $hasResponsibilityInput = array_key_exists('staff_responsibilities', $data);
+        $data['staff_responsibilities'] = $isClientOwner ? null : ($data['staff_responsibilities'] ?? null);
+        $data['responsibilities_configured'] = $isClientOwner ? false : $hasResponsibilityInput;
+        $data['is_staff_supervisor'] = $isClientOwner ? false : (bool) ($data['is_staff_supervisor'] ?? false);
         $data['client_group_id'] = $data['client_group_id'] ?? $business?->client_group_id;
 
         return $data;

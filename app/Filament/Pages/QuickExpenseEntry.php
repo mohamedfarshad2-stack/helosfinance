@@ -305,13 +305,13 @@ class QuickExpenseEntry extends Page implements HasForms
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessExpenseWork() ?? false));
     }
 
     public static function canAccess(): bool
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessFinanceOperations() ?? false));
+        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false) || ($user?->canAccessExpenseWork() ?? false));
     }
 }

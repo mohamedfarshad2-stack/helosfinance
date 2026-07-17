@@ -95,6 +95,50 @@
             };
         @endphp
 
+        <div class="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
+            <x-filament::section>
+                <div class="grid gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">My Responsibilities</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">HELOS only shows work connected to these areas.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        @forelse (($workQueue['my_responsibilities'] ?? []) as $responsibility)
+                            <span class="rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                                {{ $responsibility }}
+                            </span>
+                        @empty
+                            <span class="text-sm text-gray-500 dark:text-gray-400">No responsibility areas assigned yet.</span>
+                        @endforelse
+                    </div>
+                </div>
+            </x-filament::section>
+
+            <x-filament::section>
+                <div class="grid gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Mission Areas</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Start with the area that has the most urgent open work.</p>
+                    </div>
+                    <div class="grid gap-3 md:grid-cols-2">
+                        @forelse (($workQueue['responsibility_groups'] ?? []) as $group)
+                            <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                                <div class="text-sm font-semibold text-gray-950 dark:text-white">{{ $group['label'] }}</div>
+                                <div class="mt-2 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+                                    <span>{{ $group['count'] }} open</span>
+                                    <span>{{ $group['high_priority'] }} high priority</span>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
+                                No open mission areas right now.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </x-filament::section>
+        </div>
+
         <x-filament::section>
             <div class="grid gap-4">
                 <div>

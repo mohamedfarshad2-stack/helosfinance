@@ -93,6 +93,18 @@ class TodaysWork extends Page
             ->sortByDesc('count')
             ->values();
 
+        $responsibilityGroups = $openTasks
+            ->groupBy(fn (array $task): string => $this->taskResponsibility($task) ?? 'general')
+            ->map(fn (\Illuminate\Support\Collection $group, string $responsibility): array => [
+                'key' => $responsibility,
+                'label' => $this->responsibilityLabel($responsibility),
+                'count' => $group->count(),
+                'high_priority' => $group->where('priority', 'high')->count(),
+                'tasks' => $group->sortBy(fn (array $task): string => $this->taskSortKey($task))->values()->all(),
+            ])
+            ->sortByDesc('count')
+            ->values();
+
         return [
             ...$workQueue,
             'summary' => [
@@ -106,6 +118,8 @@ class TodaysWork extends Page
             'sections' => $sections,
             'tasks' => $tasks->all(),
             'team_workload' => $teamWorkload->all(),
+            'responsibility_groups' => $responsibilityGroups->all(),
+            'my_responsibilities' => $this->myResponsibilityLabels(),
             'open_count' => $openTasks->count(),
             'blocked_count' => $blockedWork->count(),
             'completed_today_count' => $completedToday->count(),
@@ -115,38 +129,61 @@ class TodaysWork extends Page
     private function taskVisibleToEmployee(array $task): bool
     {
         $user = Auth::user();
-        $profile = $user?->employeeAccessProfileValue() ?? 'operations';
-        $workType = (string) ($task['work_type'] ?? 'general');
+        $responsibility = $this->taskResponsibility($task);
 
-        return match ($profile) {
-            'work_only' => in_array($workType, [
-                'order_tracking',
-                'return_action',
-                'resend_follow_up',
-                'fake_order_check',
-                'tracking_added',
-                'order_delivery',
-                'missing_material_sku',
-                'production_waste',
-                'stock_movement',
-                'general',
-            ], true),
-            'operations' => in_array($workType, [
-                'order_tracking',
-                'return_action',
-                'resend_follow_up',
-                'fake_order_check',
-                'tracking_added',
-                'order_delivery',
-                'production_payout',
-                'missing_material_sku',
-                'production_waste',
-                'stock_movement',
-                'general',
-            ], true),
-            'finance_ops', 'full_staff' => true,
-            default => true,
+        if (! $user?->isStaff()) {
+            return false;
+        }
+
+        if ($responsibility === null) {
+            return true;
+        }
+
+        if ($user->canAccessFullStaff()) {
+            return true;
+        }
+
+        return $user->hasStaffResponsibility($responsibility);
+    }
+
+    private function taskResponsibility(array $task): ?string
+    {
+        return match ((string) ($task['work_type'] ?? 'general')) {
+            'order_tracking', 'tracking_added', 'order_delivery' => 'dispatch',
+            'return_action', 'resend_follow_up' => 'return_recovery',
+            'fake_order_check' => 'order_confirmation',
+            'wholesale_collection', 'service_collection' => 'collections',
+            'bank_account_review',
+            'bank_review',
+            'bank_transaction_type',
+            'bank_business_assignment',
+            'bank_transfer_destination',
+            'bank_transfer_confirmation' => 'bank_exceptions',
+            'expense_settlement' => 'expense_recording',
+            'production_payout', 'production_waste' => 'production',
+            'missing_material_sku', 'stock_movement' => 'material_stock',
+            'missing_product_links' => 'product_repair',
+            default => null,
         };
+    }
+
+    private function responsibilityLabel(string $responsibility): string
+    {
+        return \App\Models\User::staffResponsibilityOptions()[$responsibility] ?? 'General work';
+    }
+
+    private function myResponsibilityLabels(): array
+    {
+        $user = Auth::user();
+
+        if (! $user?->isStaff()) {
+            return [];
+        }
+
+        return collect($user->staffResponsibilities())
+            ->map(fn (string $responsibility): string => $this->responsibilityLabel($responsibility))
+            ->values()
+            ->all();
     }
 
     private function taskSortKey(array $task): string

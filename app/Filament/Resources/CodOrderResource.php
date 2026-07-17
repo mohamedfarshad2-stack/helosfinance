@@ -299,8 +299,7 @@ class CodOrderResource extends Resource
         return Auth::check()
             && (($user?->isOwner() ?? false)
                 || ($user?->isInternalAdmin() ?? false)
-                || ($user?->canAccessOperationalTasks() ?? false)
-                || ($user?->canAccessFinanceOperations() ?? false))
+                || ($user?->canAccessOrderWork() ?? false))
             && static::hasInternalCodBusiness();
     }
 

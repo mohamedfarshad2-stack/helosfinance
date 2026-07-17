@@ -5,8 +5,17 @@ namespace Tests\Feature;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\ClientGroup;
 use App\Filament\Pages\QuickExpenseEntry;
+use App\Filament\Pages\BankStatementImport;
+use App\Filament\Pages\ClientHealthReport;
+use App\Filament\Pages\MissingSkuMapping;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
+use App\Filament\Resources\CodOrderResource;
+use App\Filament\Resources\ExpenseResource;
+use App\Filament\Resources\MaterialLedgerResource;
+use App\Filament\Resources\ProductionEntryResource;
+use App\Filament\Resources\ServiceBillingResource;
+use App\Filament\Resources\ServiceClientResource;
 use App\Filament\Resources\UserResource;
 use App\Filament\Resources\UserResource\Pages\CreateUser;
 use App\Models\User;
@@ -420,6 +429,244 @@ class UserResourceTest extends TestCase
         $this->assertTrue(QuickExpenseEntry::canAccess());
         $this->assertTrue(BankTransactionResource::canAccess());
         $this->assertSame('finance_ops', $finance->employeeAccessProfileValue());
+    }
+
+    public function test_staff_responsibilities_split_bank_and_expense_access(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Responsibility Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $bankStaff = User::query()->create([
+            'name' => 'Bank Exception Staff',
+            'email' => 'bank-exception@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'employee_access_profile' => 'work_only',
+            'staff_responsibilities' => ['bank_exceptions'],
+        ]);
+
+        $expenseStaff = User::query()->create([
+            'name' => 'Expense Staff',
+            'email' => 'expense-staff@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'employee_access_profile' => 'work_only',
+            'staff_responsibilities' => ['expense_recording'],
+        ]);
+
+        $this->actingAs($bankStaff);
+        $this->assertTrue(BankTransactionResource::canAccess());
+        $this->assertFalse(ExpenseResource::canAccess());
+        $this->assertFalse(QuickExpenseEntry::canAccess());
+
+        $this->actingAs($expenseStaff);
+        $this->assertFalse(BankTransactionResource::canAccess());
+        $this->assertTrue(ExpenseResource::canAccess());
+        $this->assertTrue(QuickExpenseEntry::canAccess());
+    }
+
+    public function test_owner_can_assign_responsibilities_and_empty_means_no_staff_work(): void
+    {
+        $group = ClientGroup::query()->create(['name' => 'Responsibility Owner Group']);
+        $business = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'Responsibility Owner Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Client Owner',
+            'email' => 'responsibility-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $this->actingAs($owner);
+
+        $assigned = $this->mutateCreateUserData([
+            'name' => 'Dispatch Staff',
+            'email' => 'dispatch-assigned@example.com',
+            'password' => 'password',
+            'business_id' => $business->id,
+            'employee_access_profile' => 'work_only',
+            'staff_responsibilities' => ['dispatch'],
+        ]);
+
+        $this->assertTrue($assigned['responsibilities_configured']);
+        $this->assertSame(['dispatch'], $assigned['staff_responsibilities']);
+
+        $empty = $this->mutateCreateUserData([
+            'name' => 'No Work Staff',
+            'email' => 'no-work@example.com',
+            'password' => 'password',
+            'business_id' => $business->id,
+            'employee_access_profile' => 'full_staff',
+            'staff_responsibilities' => [],
+        ]);
+
+        $this->assertTrue($empty['responsibilities_configured']);
+        $this->assertSame([], $empty['staff_responsibilities']);
+    }
+
+    public function test_invalid_responsibility_codes_are_rejected(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Invalid Responsibility Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        User::query()->create([
+            'name' => 'Invalid Staff',
+            'email' => 'invalid-responsibility@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'staff_responsibilities' => ['not_real_work'],
+        ]);
+    }
+
+    public function test_legacy_fallback_only_applies_until_responsibilities_are_configured(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Legacy Fallback Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $legacyFinance = User::query()->create([
+            'name' => 'Legacy Finance',
+            'email' => 'legacy-finance@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'employee_access_profile' => 'finance_ops',
+            'responsibilities_configured' => false,
+        ]);
+
+        $this->actingAs($legacyFinance);
+        $this->assertTrue(BankTransactionResource::canAccess());
+        $this->assertTrue(ExpenseResource::canAccess());
+
+        $legacyFinance->update([
+            'staff_responsibilities' => [],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($legacyFinance->fresh());
+        $this->assertFalse(BankTransactionResource::canAccess());
+        $this->assertFalse(ExpenseResource::canAccess());
+    }
+
+    public function test_responsibility_combinations_and_direct_url_access_are_enforced(): void
+    {
+        $serviceBusiness = Business::query()->create([
+            'name' => 'Service Responsibility Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $manufacturingBusiness = Business::query()->create([
+            'name' => 'Factory Responsibility Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $dispatchOnly = User::query()->create([
+            'name' => 'Dispatch Only',
+            'email' => 'dispatch-only@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $serviceBusiness->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'staff_responsibilities' => ['dispatch'],
+        ]);
+
+        $productionMaterial = User::query()->create([
+            'name' => 'Production Material',
+            'email' => 'production-material@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $manufacturingBusiness->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'staff_responsibilities' => ['production', 'material_stock'],
+        ]);
+
+        $collectionsBank = User::query()->create([
+            'name' => 'Collections Bank',
+            'email' => 'collections-bank@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $serviceBusiness->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'staff_responsibilities' => ['collections', 'bank_exceptions'],
+        ]);
+
+        $supervisor = User::query()->create([
+            'name' => 'Supervisor',
+            'email' => 'supervisor-review@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $manufacturingBusiness->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'staff_responsibilities' => ['supervisor_review'],
+            'is_staff_supervisor' => true,
+        ]);
+
+        $this->actingAs($dispatchOnly);
+        $this->assertFalse(BankTransactionResource::canAccess());
+        $this->assertFalse(ExpenseResource::canAccess());
+        $this->assertFalse(ProductionEntryResource::canAccess());
+        $this->assertFalse(ServiceBillingResource::canAccess());
+        $this->assertFalse(ClientHealthReport::canAccess());
+
+        $this->actingAs($productionMaterial);
+        $this->assertTrue(ProductionEntryResource::canAccess());
+        $this->assertTrue(MaterialLedgerResource::canAccess());
+        $this->assertFalse(ServiceBillingResource::canAccess());
+        $this->assertFalse(BankTransactionResource::canAccess());
+        $this->assertFalse(ClientHealthReport::canAccess());
+
+        $this->actingAs($collectionsBank);
+        $this->assertTrue(BankTransactionResource::canAccess());
+        $this->assertTrue(BankStatementImport::canAccess());
+        $this->assertTrue(ServiceClientResource::canAccess());
+        $this->assertTrue(ServiceBillingResource::canAccess());
+        $this->assertFalse(ProductionEntryResource::canAccess());
+        $this->assertFalse(ClientHealthReport::canAccess());
+
+        $this->actingAs($supervisor);
+        $this->assertTrue($supervisor->canAccessSupervisorReview());
+        $this->assertFalse(ClientHealthReport::canAccess());
+        $this->assertFalse(BankTransactionResource::canAccess());
+        $this->assertFalse(ServiceBillingResource::canAccess());
     }
 
     private function mutateCreateUserData(array $data): array

@@ -18,7 +18,7 @@ class MissingProductLinkRepairController extends Controller
     {
         $user = Auth::user();
 
-        abort_unless($user && (($user->isOwner() ?? false) || ($user->isInternalAdmin() ?? false) || ($user->canAccessOperationalTasks() ?? false)), 403);
+        abort_unless($user && (($user->isOwner() ?? false) || ($user->isInternalAdmin() ?? false) || ($user->canAccessProductRepairWork() ?? false)), 403);
 
         $data = $request->validate([
             'business_id' => ['required', 'integer'],

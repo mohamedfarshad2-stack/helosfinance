@@ -32,6 +32,9 @@ class User extends Authenticatable implements FilamentUser
         'is_platform_admin',
         'is_employee',
         'employee_access_profile',
+        'staff_responsibilities',
+        'responsibilities_configured',
+        'is_staff_supervisor',
     ];
 
     /**
@@ -57,6 +60,9 @@ class User extends Authenticatable implements FilamentUser
             'is_platform_admin' => 'boolean',
             'is_employee' => 'boolean',
             'employee_access_profile' => 'string',
+            'staff_responsibilities' => 'array',
+            'responsibilities_configured' => 'boolean',
+            'is_staff_supervisor' => 'boolean',
         ];
     }
 
@@ -148,6 +154,22 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
+    public static function staffResponsibilityOptions(): array
+    {
+        return [
+            'order_confirmation' => 'Order confirmation',
+            'dispatch' => 'Dispatch',
+            'return_recovery' => 'Returns and resends',
+            'production' => 'Production and piece pay',
+            'material_stock' => 'Material stock',
+            'expense_recording' => 'Expenses and supplier dues',
+            'collections' => 'Collections and service income',
+            'bank_exceptions' => 'Bank exceptions',
+            'product_repair' => 'Product/SKU repair',
+            'supervisor_review' => 'Supervisor review',
+        ];
+    }
+
     public function employeeAccessProfileValue(): string
     {
         $profile = trim((string) ($this->employee_access_profile ?? 'operations'));
@@ -173,5 +195,97 @@ class User extends Authenticatable implements FilamentUser
     public function canAccessFullStaff(): bool
     {
         return $this->isStaff() && $this->employeeAccessProfileValue() === 'full_staff';
+    }
+
+    public function setStaffResponsibilitiesAttribute(mixed $value): void
+    {
+        if ($value === null) {
+            $this->attributes['staff_responsibilities'] = null;
+
+            return;
+        }
+
+        $responsibilities = array_values(array_filter((array) $value, fn (mixed $responsibility): bool => filled($responsibility)));
+        $valid = array_keys(static::staffResponsibilityOptions());
+        $invalid = array_diff($responsibilities, $valid);
+
+        if ($invalid !== []) {
+            throw new \InvalidArgumentException('Invalid staff responsibility: '.implode(', ', $invalid));
+        }
+
+        $this->attributes['staff_responsibilities'] = json_encode($responsibilities);
+        $this->attributes['responsibilities_configured'] = true;
+    }
+
+    public function staffResponsibilities(): array
+    {
+        if (! $this->isStaff()) {
+            return [];
+        }
+
+        $responsibilities = array_values(array_filter((array) ($this->staff_responsibilities ?? [])));
+        $valid = array_keys(static::staffResponsibilityOptions());
+        $responsibilities = array_values(array_intersect($responsibilities, $valid));
+
+        if ((bool) $this->responsibilities_configured) {
+            return $responsibilities;
+        }
+
+        return match ($this->employeeAccessProfileValue()) {
+            'work_only' => ['order_confirmation', 'dispatch', 'return_recovery'],
+            'operations' => ['order_confirmation', 'dispatch', 'return_recovery', 'production', 'material_stock', 'product_repair'],
+            'finance_ops' => ['expense_recording', 'collections', 'bank_exceptions', 'product_repair'],
+            'full_staff' => array_values(array_diff($valid, ['supervisor_review'])),
+            default => ['order_confirmation', 'dispatch', 'return_recovery'],
+        };
+    }
+
+    public function hasStaffResponsibility(string|array $responsibilities): bool
+    {
+        if (! $this->isStaff()) {
+            return false;
+        }
+
+        return count(array_intersect((array) $responsibilities, $this->staffResponsibilities())) > 0;
+    }
+
+    public function canAccessOrderWork(): bool
+    {
+        return $this->hasStaffResponsibility(['order_confirmation', 'dispatch', 'return_recovery']);
+    }
+
+    public function canAccessProductionWork(): bool
+    {
+        return $this->hasStaffResponsibility('production');
+    }
+
+    public function canAccessMaterialWork(): bool
+    {
+        return $this->hasStaffResponsibility('material_stock');
+    }
+
+    public function canAccessExpenseWork(): bool
+    {
+        return $this->hasStaffResponsibility('expense_recording');
+    }
+
+    public function canAccessCollectionsWork(): bool
+    {
+        return $this->hasStaffResponsibility('collections');
+    }
+
+    public function canAccessBankExceptionWork(): bool
+    {
+        return $this->hasStaffResponsibility('bank_exceptions');
+    }
+
+    public function canAccessProductRepairWork(): bool
+    {
+        return $this->hasStaffResponsibility('product_repair');
+    }
+
+    public function canAccessSupervisorReview(): bool
+    {
+        return $this->isStaff() && ((bool) $this->is_staff_supervisor || $this->hasStaffResponsibility('supervisor_review'));
     }
 }

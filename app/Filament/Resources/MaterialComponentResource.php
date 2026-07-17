@@ -138,8 +138,8 @@ class MaterialComponentResource extends Resource
 
         return Auth::check() && (($user?->isOwner() ?? false)
             || ($user?->isInternalAdmin() ?? false)
-            || ($user?->canAccessOperationalTasks() ?? false)
-            || ($user?->canAccessFinanceOperations() ?? false))
+            || ($user?->canAccessMaterialWork() ?? false)
+            || ($user?->canAccessSupervisorReview() ?? false))
             && static::currentBusinessSupportsManufacturingSetup();
     }
 

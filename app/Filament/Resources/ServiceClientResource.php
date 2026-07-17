@@ -146,7 +146,7 @@ class ServiceClientResource extends Resource
 
         return Auth::check() && (($user?->isOwner() ?? false)
             || ($user?->isInternalAdmin() ?? false)
-            || ($user?->canAccessFinanceOperations() ?? false))
+            || ($user?->canAccessCollectionsWork() ?? false))
             && static::hasAccessibleServiceBusiness();
     }
 

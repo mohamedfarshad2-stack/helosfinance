@@ -372,6 +372,7 @@ class WorkQueueIntelligenceTest extends TestCase
             'is_employee' => true,
             'is_platform_admin' => false,
             'employee_access_profile' => 'finance_ops',
+            'staff_responsibilities' => ['bank_exceptions', 'expense_recording', 'dispatch'],
         ]);
 
         BankTransaction::query()->create([
@@ -475,6 +476,7 @@ class WorkQueueIntelligenceTest extends TestCase
             'is_employee' => true,
             'is_platform_admin' => false,
             'employee_access_profile' => 'finance_ops',
+            'staff_responsibilities' => ['bank_exceptions', 'expense_recording', 'production', 'material_stock'],
         ]);
 
         $this->actingAs($employee)

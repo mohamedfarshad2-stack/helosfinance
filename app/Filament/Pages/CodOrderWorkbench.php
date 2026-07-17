@@ -145,7 +145,7 @@ class CodOrderWorkbench extends Page
             return false;
         }
 
-        if (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false) || ($user?->canAccessOperationalTasks() ?? false) || ($user?->canAccessFinanceOperations() ?? false)) {
+        if (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false) || ($user?->canAccessOrderWork() ?? false)) {
             return Business::query()
                 ->whereIn('id', $user?->accessibleBusinessIds() ?? [])
                 ->get()

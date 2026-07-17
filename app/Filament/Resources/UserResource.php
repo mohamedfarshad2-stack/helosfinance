@@ -8,6 +8,7 @@ use App\Filament\Resources\UserResource\Pages;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Resources\Resource;
@@ -76,6 +77,20 @@ class UserResource extends Resource
                 ->visible(fn (Get $get): bool => (Auth::user()?->isOwner() ?? false)
                     || ((Auth::user()?->isInternalAdmin() ?? false) && ($get('account_role') ?? 'staff') === 'staff'))
                 ->helperText('Choose what this staff member can see inside HELOS. Owners automatically get owner visibility.'),
+            Select::make('staff_responsibilities')
+                ->label('What work can this staff member do?')
+                ->options(fn (): array => User::staffResponsibilityOptions())
+                ->multiple()
+                ->searchable()
+                ->preload()
+                ->visible(fn (Get $get): bool => (Auth::user()?->isOwner() ?? false)
+                    || ((Auth::user()?->isInternalAdmin() ?? false) && ($get('account_role') ?? 'staff') === 'staff'))
+                ->helperText('Use this to give only the work areas the staff member needs. Leave blank to use the staff access default.'),
+            Toggle::make('is_staff_supervisor')
+                ->label('Can review team work')
+                ->visible(fn (Get $get): bool => (Auth::user()?->isOwner() ?? false)
+                    || ((Auth::user()?->isInternalAdmin() ?? false) && ($get('account_role') ?? 'staff') === 'staff'))
+                ->helperText('Supervisor can see review-style work without owner financial guidance.'),
             TextInput::make('password')
                 ->password()
                 ->revealable()
@@ -104,6 +119,17 @@ class UserResource extends Resource
                 ->badge()
                 ->placeholder('-')
                 ->formatStateUsing(fn (?string $state): string => User::employeeAccessProfileOptions()[$state ?? 'operations'] ?? 'Operations'),
+            Tables\Columns\TextColumn::make('staff_responsibilities')
+                ->label('Responsibilities')
+                ->badge()
+                ->separator(',')
+                ->placeholder('Profile default')
+                ->formatStateUsing(fn (string $state): string => User::staffResponsibilityOptions()[$state] ?? $state)
+                ->toggleable(),
+            Tables\Columns\IconColumn::make('is_staff_supervisor')
+                ->label('Supervisor')
+                ->boolean()
+                ->toggleable(),
             Tables\Columns\IconColumn::make('is_employee')->label('Employee')->boolean(),
         ])
             ->actions([
