@@ -174,7 +174,7 @@ class MaterialLedgerResource extends Resource
         $user = Auth::user();
 
         return Auth::check()
-            && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessMaterialWork() ?? false))
+            && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false))
             && static::currentBusinessSupportsManufacturing();
     }
 

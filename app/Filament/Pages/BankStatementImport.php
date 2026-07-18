@@ -145,7 +145,7 @@ class BankStatementImport extends Page implements HasForms
     {
         $user = Auth::user();
 
-        return Auth::check() && ((Auth::user()?->isOwner() ?? false) || ($user?->canAccessBankExceptionWork() ?? false));
+        return Auth::check() && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false));
     }
 
     public static function canAccess(): bool

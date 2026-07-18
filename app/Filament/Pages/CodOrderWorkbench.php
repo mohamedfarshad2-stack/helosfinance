@@ -134,7 +134,9 @@ class CodOrderWorkbench extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess();
+        $user = Auth::user();
+
+        return Auth::check() && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false)) && static::canAccess();
     }
 
     public static function canAccess(): bool

@@ -142,7 +142,9 @@ class ServiceClientResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess() && static::hasAccessibleServiceBusiness();
+        $user = Auth::user();
+
+        return Auth::check() && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false)) && static::hasAccessibleServiceBusiness();
     }
 
     public static function canAccess(): bool

@@ -73,7 +73,7 @@ class MissingSkuMapping extends Page
     {
         $user = Auth::user();
 
-        return Auth::check() && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false) || ($user?->canAccessProductRepairWork() ?? false));
+        return Auth::check() && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false));
     }
 
     public static function canAccess(): bool
