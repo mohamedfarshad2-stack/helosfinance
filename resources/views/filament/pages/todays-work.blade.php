@@ -52,6 +52,84 @@
                 };
             };
 
+            $renderTask = function (array $task) use ($taskTone, $taskValue): string {
+                $tone = $taskTone($task['priority'] ?? 'medium');
+                $value = $taskValue($task['priority'] ?? 'medium');
+                $related = $task['related_record'] ?? null;
+                $hasLink = is_array($related) && ! empty($related['url']);
+                $id = (int) ($task['id'] ?? 0);
+                $state = (string) ($task['state'] ?? 'open');
+
+                $status = e($task['status_label'] ?? 'Waiting');
+                $title = e($task['title'] ?? 'Work item');
+                $why = e($task['why_it_matters'] ?? '');
+                $priority = e(ucfirst((string) ($task['priority'] ?? 'medium')));
+                $action = e($task['recommended_action'] ?? 'Open the item and finish the next step.');
+                $assigned = e($task['assigned_user'] ?? 'Unassigned');
+
+                $startButton = $state === 'open'
+                    ? '<button type="button" wire:click="startMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Start</button>'
+                    : '';
+
+                $actionButtons = $state !== 'completed'
+                    ? '<button type="button" wire:click="openMissionAction('.$id.')" class="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-500">Do action</button>
+                        <button type="button" wire:click="completeMission('.$id.')" class="inline-flex items-center justify-center rounded-md bg-success-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-success-500">Check complete</button>
+                        <button type="button" wire:click="blockMission('.$id.')" class="inline-flex items-center justify-center rounded-md bg-warning-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-warning-400">Blocked</button>
+                        <button type="button" wire:click="escalateMission('.$id.')" class="inline-flex items-center justify-center rounded-md bg-danger-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-danger-500">Escalate</button>'
+                    : '';
+
+                $recordLink = $hasLink
+                    ? '<a href="'.e($related['url']).'" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Open record</a>'
+                    : '';
+
+                $impact = '';
+                if (filled($task['impact_type'] ?? null)) {
+                    $impactAmount = filled($task['estimated_impact'] ?? null)
+                        ? ' / LKR '.e(number_format((float) $task['estimated_impact'], 2))
+                        : '';
+                    $impact = '<div class="text-gray-500 dark:text-gray-400">Impact: '.e(str_replace('_', ' ', $task['impact_type'])).$impactAmount.'</div>';
+                }
+
+                $relatedLabel = is_array($related)
+                    ? '<div class="text-gray-500 dark:text-gray-400">'.e($related['label'] ?? 'Related record').'</div>'
+                    : '';
+
+                return <<<HTML
+                <div class="rounded-lg border p-4 dark:border-gray-800 {$tone}">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-gray-500">{$status}</div>
+                            <div class="mt-1 text-base font-semibold text-gray-950 dark:text-white">{$title}</div>
+                            <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">{$why}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs uppercase tracking-wide text-gray-500">Priority</div>
+                            <div class="mt-1 text-sm font-semibold {$value}">{$priority}</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-3 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-gray-500">What to do</div>
+                            <div class="mt-1">{$action}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-gray-500">Who should take it</div>
+                            <div class="mt-1">{$assigned}</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                        {$startButton}
+                        {$actionButtons}
+                        {$recordLink}
+                        {$impact}
+                        {$relatedLabel}
+                    </div>
+                </div>
+HTML;
+            };
+
         @endphp
 
         @if (! empty($workQueue['todays_priority']))
@@ -62,7 +140,7 @@
                         <h2 class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">Do this first</h2>
                         <p class="text-sm text-gray-500 dark:text-gray-400">HELOS ranked this mission first using priority, due date, and trusted impact where available.</p>
                     </div>
-                    @include('filament.pages.partials.todays-work-task-card', ['task' => $workQueue['todays_priority'], 'taskTone' => $taskTone, 'taskValue' => $taskValue])
+                    {!! $renderTask($workQueue['todays_priority']) !!}
                 </div>
             </x-filament::section>
         @endif
@@ -121,7 +199,7 @@
 
                 <div class="grid gap-4">
                     @forelse (($workQueue['ranked_missions'] ?? []) as $task)
-                        @include('filament.pages.partials.todays-work-task-card', ['task' => $task, 'taskTone' => $taskTone, 'taskValue' => $taskValue])
+                        {!! $renderTask($task) !!}
                     @empty
                         <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
                             No open missions right now.
@@ -141,7 +219,7 @@
                     </div>
                     <div class="grid gap-4">
                         @forelse (($workQueue['sections']['problems'] ?? []) as $task)
-                            @include('filament.pages.partials.todays-work-task-card', ['task' => $task, 'taskTone' => $taskTone, 'taskValue' => $taskValue])
+                            {!! $renderTask($task) !!}
                         @empty
                             <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
                                 No blocked or escalated problems right now.
@@ -159,7 +237,7 @@
                     </div>
                     <div class="grid gap-4">
                         @forelse (($workQueue['sections']['missing_information'] ?? []) as $task)
-                            @include('filament.pages.partials.todays-work-task-card', ['task' => $task, 'taskTone' => $taskTone, 'taskValue' => $taskValue])
+                            {!! $renderTask($task) !!}
                         @empty
                             <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
                                 No missing-information missions right now.
@@ -178,7 +256,7 @@
                 </div>
                 <div class="grid gap-4">
                     @forelse (($workQueue['sections']['waiting_review'] ?? []) as $task)
-                        @include('filament.pages.partials.todays-work-task-card', ['task' => $task, 'taskTone' => $taskTone, 'taskValue' => $taskValue])
+                        {!! $renderTask($task) !!}
                     @empty
                         <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
                             No review work waiting right now.
@@ -196,7 +274,7 @@
                 </div>
                 <div class="grid gap-4">
                     @forelse (($workQueue['sections']['completed_today'] ?? []) as $task)
-                        @include('filament.pages.partials.todays-work-task-card', ['task' => $task, 'taskTone' => $taskTone, 'taskValue' => $taskValue])
+                        {!! $renderTask($task) !!}
                     @empty
                         <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
                             Nothing has been completed today yet.
