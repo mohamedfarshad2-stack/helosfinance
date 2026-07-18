@@ -35,6 +35,8 @@ class EditUser extends EditRecord
         unset($data['account_role']);
 
         if ($user?->isOwner()) {
+            abort_unless($this->record->isStaff(), 403);
+
             $allowedBusinessIds = $user->accessibleBusinessIds();
             $targetBusinessId = in_array($targetBusinessId, $allowedBusinessIds, true) ? $targetBusinessId : (int) $user->defaultBusinessId();
             $data['business_id'] = $targetBusinessId;

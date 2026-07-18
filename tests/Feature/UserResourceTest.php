@@ -348,6 +348,61 @@ class UserResourceTest extends TestCase
             ->assertDontSee('Other Staff');
     }
 
+    public function test_client_owner_team_access_does_not_manage_owner_accounts(): void
+    {
+        $group = ClientGroup::query()->create(['name' => 'Protected Owner Group']);
+        $business = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'Protected Owner Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Actual Owner Account',
+            'email' => 'actual-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $otherOwner = User::query()->create([
+            'name' => 'Hidden Partner Owner',
+            'email' => 'hidden-partner-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $staff = User::query()->create([
+            'name' => 'Visible Staff Account',
+            'email' => 'visible-staff-account@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(UserResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('Visible Staff Account')
+            ->assertDontSee('Hidden Partner Owner')
+            ->assertDontSee('hidden-partner-owner@example.com');
+
+        $this->actingAs($owner);
+        $this->assertFalse(UserResource::canEdit($owner));
+        $this->assertFalse(UserResource::canEdit($otherOwner));
+        $this->assertTrue(UserResource::canEdit($staff));
+    }
+
     public function test_business_can_track_employee_seat_limit_and_usage(): void
     {
         $business = Business::query()->create([

@@ -74,8 +74,7 @@ class UserResource extends Resource
                 ->options(fn (): array => User::employeeAccessProfileOptions())
                 ->default('operations')
                 ->required(fn (Get $get): bool => ($get('account_role') ?? 'staff') === 'staff')
-                ->visible(fn (Get $get): bool => (Auth::user()?->isOwner() ?? false)
-                    || ((Auth::user()?->isInternalAdmin() ?? false) && ($get('account_role') ?? 'staff') === 'staff'))
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
                 ->helperText('Choose what this staff member can see inside HELOS. Owners automatically get owner visibility.'),
             Select::make('staff_responsibilities')
                 ->label('What work can this staff member do?')
@@ -83,13 +82,11 @@ class UserResource extends Resource
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->visible(fn (Get $get): bool => (Auth::user()?->isOwner() ?? false)
-                    || ((Auth::user()?->isInternalAdmin() ?? false) && ($get('account_role') ?? 'staff') === 'staff'))
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
                 ->helperText('Use this to give only the work areas the staff member needs. Leave blank to use the staff access default.'),
             Toggle::make('is_staff_supervisor')
                 ->label('Can review team work')
-                ->visible(fn (Get $get): bool => (Auth::user()?->isOwner() ?? false)
-                    || ((Auth::user()?->isInternalAdmin() ?? false) && ($get('account_role') ?? 'staff') === 'staff'))
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
                 ->helperText('Supervisor can see review-style work without owner financial guidance.'),
             TextInput::make('password')
                 ->password()
@@ -171,6 +168,21 @@ class UserResource extends Resource
             && $record->id !== $user->id;
     }
 
+    public static function canEdit(Model $record): bool
+    {
+        $user = Auth::user();
+
+        if (! $record instanceof User || ! $user) {
+            return false;
+        }
+
+        if ($user->isInternalAdmin()) {
+            return ! $record->isInternalAdmin() || $record->id === $user->id;
+        }
+
+        return $user->isOwner() && static::ownerCanManageStaffRecord($record, $user);
+    }
+
     private static function businessOptions(): array
     {
         $user = Auth::user();
@@ -190,7 +202,46 @@ class UserResource extends Resource
             return $query;
         }
 
-        return $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
+        if (! ($user?->isOwner() ?? false)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $businessIds = $user->accessibleBusinessIds();
+        $clientGroupId = $user->client_group_id;
+
+        return $query
+            ->where('is_employee', true)
+            ->where(function (Builder $query) use ($businessIds, $clientGroupId): void {
+                $query->whereIn('business_id', $businessIds);
+
+                if (filled($clientGroupId)) {
+                    $query->orWhere('client_group_id', $clientGroupId);
+                }
+            });
+    }
+
+    private static function staffFieldsVisible(Get $get, ?User $record): bool
+    {
+        $user = Auth::user();
+
+        if ($user?->isOwner()) {
+            return ! $record || $record->isStaff();
+        }
+
+        return ($user?->isInternalAdmin() ?? false)
+            && ($get('account_role') ?? ($record?->is_employee ? 'staff' : 'owner')) === 'staff';
+    }
+
+    private static function ownerCanManageStaffRecord(User $record, User $owner): bool
+    {
+        if (! $record->isStaff()) {
+            return false;
+        }
+
+        $businessIds = $owner->accessibleBusinessIds();
+
+        return (filled($record->business_id) && in_array((int) $record->business_id, $businessIds, true))
+            || (filled($owner->client_group_id) && (int) $record->client_group_id === (int) $owner->client_group_id);
     }
 
     private static function seatUsageContent(mixed $businessId): string
