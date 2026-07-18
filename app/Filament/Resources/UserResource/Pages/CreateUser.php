@@ -24,6 +24,8 @@ class CreateUser extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $data = UserResource::applyStaffRolePresetToData($data);
+
         $user = Auth::user();
         $businessId = $data['business_id'] ?? $user?->defaultBusinessId();
         $isClientOwner = ($user?->isInternalAdmin() ?? false) && (($data['account_role'] ?? 'staff') === 'owner');

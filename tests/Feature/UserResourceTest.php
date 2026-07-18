@@ -578,6 +578,56 @@ class UserResourceTest extends TestCase
         $this->assertSame([], $empty['staff_responsibilities']);
     }
 
+    public function test_owner_can_use_simple_employee_role_presets(): void
+    {
+        $group = ClientGroup::query()->create(['name' => 'Simple Role Group']);
+        $business = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'Simple Role Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_1,
+            'onboarding_status' => 'setup',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Simple Role Owner',
+            'email' => 'simple-role-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+
+        $this->actingAs($owner);
+
+        $moneyAdmin = $this->mutateCreateUserData([
+            'name' => 'Money Admin',
+            'email' => 'money-admin@example.com',
+            'password' => 'password',
+            'business_id' => $business->id,
+            'staff_role_preset' => 'money_admin',
+        ]);
+
+        $this->assertSame('finance_ops', $moneyAdmin['employee_access_profile']);
+        $this->assertSame(['expense_recording', 'collections', 'bank_exceptions'], $moneyAdmin['staff_responsibilities']);
+        $this->assertFalse($moneyAdmin['is_staff_supervisor']);
+        $this->assertTrue($moneyAdmin['responsibilities_configured']);
+
+        $supervisor = $this->mutateCreateUserData([
+            'name' => 'Supervisor',
+            'email' => 'simple-supervisor@example.com',
+            'password' => 'password',
+            'business_id' => $business->id,
+            'staff_role_preset' => 'supervisor',
+        ]);
+
+        $this->assertSame('full_staff', $supervisor['employee_access_profile']);
+        $this->assertSame(['supervisor_review'], $supervisor['staff_responsibilities']);
+        $this->assertTrue($supervisor['is_staff_supervisor']);
+    }
+
     public function test_invalid_responsibility_codes_are_rejected(): void
     {
         $business = Business::query()->create([

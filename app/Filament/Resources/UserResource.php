@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -69,24 +70,35 @@ class UserResource extends Resource
                 ->content(fn (): string => Auth::user()?->isInternalAdmin()
                     ? 'Create the client owner login or staff accounts for the selected business.'
                     : 'This screen creates staff accounts for your business. Owner access stays protected.'),
+            Select::make('staff_role_preset')
+                ->label('Employee role')
+                ->options(fn (): array => static::staffRolePresetOptions())
+                ->default('daily_operations')
+                ->live()
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
+                ->afterStateHydrated(function (Select $component, ?User $record): void {
+                    $component->state(static::staffRolePresetForRecord($record));
+                })
+                ->afterStateUpdated(fn (?string $state, Set $set): mixed => static::applyStaffRolePresetToForm($state, $set))
+                ->helperText('Choose the closest real job. Use Custom only when one person needs an unusual mix.'),
             Select::make('employee_access_profile')
-                ->label('Staff access')
+                ->label('Advanced access profile')
                 ->options(fn (): array => User::employeeAccessProfileOptions())
                 ->default('operations')
                 ->required(fn (Get $get): bool => ($get('account_role') ?? 'staff') === 'staff')
-                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
-                ->helperText('Choose what this staff member can see inside HELOS. Owners automatically get owner visibility.'),
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record) && ($get('staff_role_preset') ?? 'daily_operations') === 'custom')
+                ->helperText('Only use this for unusual employees. Normal staff should use Employee role above.'),
             Select::make('staff_responsibilities')
-                ->label('What work can this staff member do?')
+                ->label('Custom work areas')
                 ->options(fn (): array => User::staffResponsibilityOptions())
                 ->multiple()
                 ->searchable()
                 ->preload()
-                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
-                ->helperText('Use this to give only the work areas the staff member needs. Leave blank to use the staff access default.'),
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record) && ($get('staff_role_preset') ?? 'daily_operations') === 'custom')
+                ->helperText('Only use this if the simple Employee role does not fit.'),
             Toggle::make('is_staff_supervisor')
                 ->label('Can review team work')
-                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record) && in_array($get('staff_role_preset') ?? 'daily_operations', ['supervisor', 'custom'], true))
                 ->helperText('Supervisor can see review-style work without owner financial guidance.'),
             TextInput::make('password')
                 ->password()
@@ -183,6 +195,35 @@ class UserResource extends Resource
         return $user->isOwner() && static::ownerCanManageStaffRecord($record, $user);
     }
 
+    public static function staffRolePresetOptions(): array
+    {
+        return [
+            'daily_operations' => 'Daily operations - orders, dispatch, returns',
+            'production_store' => 'Production and stock',
+            'money_admin' => 'Money admin - expenses, collections, bank exceptions',
+            'supervisor' => 'Supervisor - review team work',
+            'no_work' => 'No HELOS work yet',
+            'custom' => 'Custom',
+        ];
+    }
+
+    public static function applyStaffRolePresetToData(array $data): array
+    {
+        $preset = $data['staff_role_preset'] ?? null;
+
+        unset($data['staff_role_preset']);
+
+        if (! $preset || $preset === 'custom') {
+            return $data;
+        }
+
+        $data['employee_access_profile'] = static::staffRolePresetConfig($preset)['employee_access_profile'];
+        $data['staff_responsibilities'] = static::staffRolePresetConfig($preset)['staff_responsibilities'];
+        $data['is_staff_supervisor'] = static::staffRolePresetConfig($preset)['is_staff_supervisor'];
+
+        return $data;
+    }
+
     private static function businessOptions(): array
     {
         $user = Auth::user();
@@ -230,6 +271,80 @@ class UserResource extends Resource
 
         return ($user?->isInternalAdmin() ?? false)
             && ($get('account_role') ?? ($record?->is_employee ? 'staff' : 'owner')) === 'staff';
+    }
+
+    private static function applyStaffRolePresetToForm(?string $preset, Set $set): void
+    {
+        if (! $preset || $preset === 'custom') {
+            return;
+        }
+
+        $config = static::staffRolePresetConfig($preset);
+
+        $set('employee_access_profile', $config['employee_access_profile']);
+        $set('staff_responsibilities', $config['staff_responsibilities']);
+        $set('is_staff_supervisor', $config['is_staff_supervisor']);
+    }
+
+    private static function staffRolePresetForRecord(?User $record): string
+    {
+        if (! $record || ! $record->isStaff()) {
+            return 'daily_operations';
+        }
+
+        $responsibilities = array_values(array_filter((array) ($record->staff_responsibilities ?? [])));
+        sort($responsibilities);
+
+        foreach (array_keys(static::staffRolePresetOptions()) as $preset) {
+            if ($preset === 'custom') {
+                continue;
+            }
+
+            $config = static::staffRolePresetConfig($preset);
+            $presetResponsibilities = $config['staff_responsibilities'];
+            sort($presetResponsibilities);
+
+            if (
+                $record->employeeAccessProfileValue() === $config['employee_access_profile']
+                && $responsibilities === $presetResponsibilities
+                && (bool) $record->is_staff_supervisor === $config['is_staff_supervisor']
+            ) {
+                return $preset;
+            }
+        }
+
+        return 'custom';
+    }
+
+    private static function staffRolePresetConfig(string $preset): array
+    {
+        return match ($preset) {
+            'production_store' => [
+                'employee_access_profile' => 'operations',
+                'staff_responsibilities' => ['production', 'material_stock', 'product_repair'],
+                'is_staff_supervisor' => false,
+            ],
+            'money_admin' => [
+                'employee_access_profile' => 'finance_ops',
+                'staff_responsibilities' => ['expense_recording', 'collections', 'bank_exceptions'],
+                'is_staff_supervisor' => false,
+            ],
+            'supervisor' => [
+                'employee_access_profile' => 'full_staff',
+                'staff_responsibilities' => ['supervisor_review'],
+                'is_staff_supervisor' => true,
+            ],
+            'no_work' => [
+                'employee_access_profile' => 'work_only',
+                'staff_responsibilities' => [],
+                'is_staff_supervisor' => false,
+            ],
+            default => [
+                'employee_access_profile' => 'operations',
+                'staff_responsibilities' => ['order_confirmation', 'dispatch', 'return_recovery', 'product_repair'],
+                'is_staff_supervisor' => false,
+            ],
+        };
     }
 
     private static function ownerCanManageStaffRecord(User $record, User $owner): bool

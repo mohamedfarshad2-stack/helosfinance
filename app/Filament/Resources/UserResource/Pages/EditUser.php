@@ -24,6 +24,8 @@ class EditUser extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $data = UserResource::applyStaffRolePresetToData($data);
+
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
