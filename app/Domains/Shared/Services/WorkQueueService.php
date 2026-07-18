@@ -325,6 +325,7 @@ class WorkQueueService
                 'due_on' => optional($expense->due_on ?? $expense->spent_on)->toDateString() ?? now()->toDateString(),
                 'status_label' => $this->expenseStatusLabel($expense),
                 'work_type' => 'expense_settlement',
+                'amount' => max((float) $expense->amount - (float) $expense->paid_amount, 0),
             ]))->all(),
             ...$completedRows->map(fn (Expense $expense): array => $this->makeTask([
                 'id' => 'expense-settled-'.$expense->id,
@@ -436,7 +437,7 @@ class WorkQueueService
             $label = $this->orderLabel($latest);
             $createdAt = optional($first->occurred_at)->toDateString() ?? now()->toDateString();
             $latestDate = optional($latest->occurred_at)->toDateString() ?? now()->toDateString();
-            $related = $this->relatedRecord('order', $latest->external_id ?: $latest->id, $label, OperationalEventResource::getUrl('index'));
+            $related = $this->relatedRecord('operational_event', $latest->id, $label, OperationalEventResource::getUrl('index'));
 
             if (in_array($latest->event_type, [OperationalEvent::ORDER_CREATED, OperationalEvent::ORDER_CONFIRMED], true)) {
                 $tasks[] = $this->makeTask([

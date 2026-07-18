@@ -16,7 +16,7 @@ use Throwable;
 class SalesInsights extends Page
 {
     protected static ?string $slug = 'sales-insights';
-    protected static ?string $navigationGroup = 'Sales & Work';
+    protected static ?string $navigationGroup = 'Reports';
     protected static ?string $navigationLabel = 'Sales Insights';
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
     protected static ?int $navigationSort = 1;

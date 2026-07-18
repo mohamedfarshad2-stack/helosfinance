@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Auth;
 class MissionResource extends Resource
 {
     protected static ?string $model = Mission::class;
-    protected static ?string $navigationGroup = 'Work';
+    protected static ?string $navigationGroup = 'Team Work';
     protected static ?string $navigationLabel = 'Mission Review';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
 
@@ -66,15 +66,61 @@ class MissionResource extends Resource
                 Tables\Columns\TextColumn::make('due_at')->label('Due')->dateTime()->placeholder('-')->sortable(),
                 Tables\Columns\TextColumn::make('estimated_impact')->label('Impact')->money('LKR')->placeholder('-')->toggleable(),
             ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('status')
+                    ->options([
+                        Mission::STATUS_OPEN => 'Open',
+                        Mission::STATUS_IN_PROGRESS => 'In progress',
+                        Mission::STATUS_BLOCKED => 'Blocked',
+                        Mission::STATUS_WAITING_REVIEW => 'Waiting review',
+                        Mission::STATUS_COMPLETED => 'Completed',
+                        Mission::STATUS_ESCALATED => 'Escalated',
+                        Mission::STATUS_CANCELLED => 'Cancelled',
+                        Mission::STATUS_REOPENED => 'Reopened',
+                    ]),
+                Tables\Filters\SelectFilter::make('responsibility_code')
+                    ->label('Area')
+                    ->options(User::staffResponsibilityOptions()),
+            ])
             ->actions([
+                Action::make('reassign')
+                    ->label('Reassign')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('gray')
+                    ->form([
+                        Select::make('assigned_user_id')
+                            ->label('Assigned employee')
+                            ->options(fn (Mission $record): array => static::staffOptions($record))
+                            ->searchable()
+                            ->required(),
+                        Textarea::make('note')
+                            ->label('Reason')
+                            ->rows(2),
+                    ])
+                    ->action(function (Mission $record, array $data): void {
+                        $previous = $record->only(['assigned_user_id', 'status']);
+
+                        $record->forceFill([
+                            'assigned_user_id' => $data['assigned_user_id'],
+                            'assigned_by' => Auth::id(),
+                            'status' => Mission::STATUS_OPEN,
+                        ])->save();
+
+                        $record->recordEvent('reassigned', Auth::user(), $data['note'] ?? 'Reassigned from Mission Review.', $previous, $record->only(['assigned_user_id', 'status']));
+                    }),
                 Tables\Actions\EditAction::make(),
                 Action::make('returnForCorrection')
                     ->label('Return')
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->color('warning')
-                    ->requiresConfirmation()
-                    ->action(function (Mission $record): void {
-                        $record->transition(Mission::STATUS_REOPENED, Auth::user(), 'returned_for_correction', 'Returned by supervisor/owner.');
+                    ->form([
+                        Textarea::make('note')
+                            ->label('Correction needed')
+                            ->required()
+                            ->rows(3),
+                    ])
+                    ->action(function (Mission $record, array $data): void {
+                        $record->transition(Mission::STATUS_REOPENED, Auth::user(), 'returned_for_correction', $data['note']);
                     }),
                 Action::make('approve')
                     ->label('Approve')
@@ -88,9 +134,13 @@ class MissionResource extends Resource
                     ->label('Escalate')
                     ->icon('heroicon-o-arrow-up-circle')
                     ->color('danger')
-                    ->requiresConfirmation()
-                    ->action(function (Mission $record): void {
-                        $record->escalate(Auth::user(), 'Escalated from Mission Review.');
+                    ->form([
+                        Textarea::make('note')
+                            ->label('Why owner is needed')
+                            ->rows(3),
+                    ])
+                    ->action(function (Mission $record, array $data): void {
+                        $record->escalate(Auth::user(), $data['note'] ?? 'Escalated from Mission Review.');
                     }),
             ]);
     }

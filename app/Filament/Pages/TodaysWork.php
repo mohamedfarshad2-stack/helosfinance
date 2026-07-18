@@ -5,15 +5,18 @@ namespace App\Filament\Pages;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Mission;
 use App\Domains\Shared\Services\MissionGeneratorService;
+use App\Domains\Shared\Services\MissionSourceActionService;
+use App\Models\User;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class TodaysWork extends Page
 {
     protected static ?string $slug = 'todays-work';
-    protected static ?string $navigationGroup = 'Work';
+    protected static ?string $navigationGroup = 'My Work';
     protected static ?string $navigationLabel = "Today's work";
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?int $navigationSort = 0;
@@ -22,6 +25,12 @@ class TodaysWork extends Page
     public ?Business $business = null;
 
     public array $workQueue = [];
+
+    public ?int $activeMissionId = null;
+
+    public array $missionActionData = [];
+
+    public ?string $missionActionError = null;
 
     public function mount(MissionGeneratorService $missions): void
     {
@@ -35,6 +44,8 @@ class TodaysWork extends Page
         return [
             'business' => $this->business,
             'workQueue' => $this->workQueue,
+            'activeMission' => $this->activeMission(),
+            'actionOptions' => $this->actionOptions(),
         ];
     }
 
@@ -63,7 +74,7 @@ class TodaysWork extends Page
         Notification::make()->title('Mission started')->success()->send();
     }
 
-    public function completeMission(int $missionId, MissionGeneratorService $missions): void
+    public function completeMission(int $missionId, MissionGeneratorService $missions, MissionSourceActionService $actions): void
     {
         $mission = Mission::query()->findOrFail($missionId);
         $user = Auth::user();
@@ -72,7 +83,16 @@ class TodaysWork extends Page
             abort(403);
         }
 
-        $mission->complete($user);
+        if (! $actions->completeIfResolved($mission, $user)) {
+            Notification::make()
+                ->title('Finish the source action first')
+                ->body('This mission stays open until the real bank, expense, product, production, order, or collection record is fixed.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser($user));
 
         Notification::make()->title('Mission completed')->success()->send();
@@ -108,6 +128,54 @@ class TodaysWork extends Page
         Notification::make()->title('Mission escalated')->warning()->send();
     }
 
+    public function openMissionAction(int $missionId, MissionGeneratorService $missions, MissionSourceActionService $actions): void
+    {
+        $mission = Mission::query()->findOrFail($missionId);
+        $user = Auth::user();
+
+        if (! $user || ! $missions->canUserAccessMission($user, $mission)) {
+            abort(403);
+        }
+
+        $this->activeMissionId = $mission->id;
+        $this->missionActionData = $actions->defaultData($mission);
+        $this->missionActionError = null;
+    }
+
+    public function closeMissionAction(): void
+    {
+        $this->activeMissionId = null;
+        $this->missionActionData = [];
+        $this->missionActionError = null;
+    }
+
+    public function saveMissionAction(MissionGeneratorService $missions, MissionSourceActionService $actions): void
+    {
+        $mission = Mission::query()->findOrFail($this->activeMissionId);
+        $user = Auth::user();
+
+        if (! $user || ! $missions->canUserAccessMission($user, $mission)) {
+            abort(403);
+        }
+
+        try {
+            $mission = $actions->apply($mission, $user, $this->missionActionData);
+        } catch (ValidationException $exception) {
+            $this->missionActionError = collect($exception->errors())->flatten()->first();
+
+            return;
+        }
+
+        $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser($user));
+        $this->closeMissionAction();
+
+        Notification::make()
+            ->title($mission->status === Mission::STATUS_COMPLETED ? 'Mission completed' : 'Mission updated')
+            ->body($mission->status === Mission::STATUS_COMPLETED ? 'The source record is fixed, so HELOS closed the mission.' : 'The source record was updated. HELOS kept the mission open because more work or review is needed.')
+            ->success()
+            ->send();
+    }
+
     private function employeeWorkQueue(Collection $missions): array
     {
         $tasks = $missions
@@ -119,6 +187,8 @@ class TodaysWork extends Page
             'high_priority' => $tasks->filter(fn (array $task): bool => in_array($task['priority'], ['critical', 'high'], true) && $task['state'] !== 'completed')->values()->all(),
             'waiting_review' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['waiting_review', 'escalated', 'blocked'], true))->values()->all(),
             'completed_today' => $tasks->filter(fn (array $task): bool => $task['state'] === 'completed' && filled($task['completed_at']) && \Illuminate\Support\Carbon::parse($task['completed_at'])->isToday())->values()->all(),
+            'problems' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['blocked', 'escalated'], true))->values()->all(),
+            'missing_information' => $tasks->filter(fn (array $task): bool => in_array($task['responsibility_code'] ?? '', ['bank_exceptions', 'product_repair', 'material_stock'], true) && $task['state'] !== 'completed')->values()->all(),
         ];
 
         $openTasks = $tasks
@@ -190,6 +260,8 @@ class TodaysWork extends Page
                 'Completion rate' => $this->employeeCompletionRate($openTasks->count(), $completedToday->count()),
             ],
             'sections' => $sections,
+            'todays_priority' => $openTasks->sortBy(fn (array $task): string => $this->taskSortKey($task))->first(),
+            'ranked_missions' => $openTasks->sortBy(fn (array $task): string => $this->taskSortKey($task))->values()->all(),
             'tasks' => $tasks->all(),
             'team_workload' => $teamWorkload->all(),
             'responsibility_groups' => $responsibilityGroups->all(),
@@ -299,12 +371,15 @@ class TodaysWork extends Page
     private function taskSortKey(array $task): string
     {
         $priorityWeight = match ($task['priority'] ?? 'medium') {
+            'critical' => '0',
             'high' => '1',
-            'medium' => '2',
+            'medium', 'normal' => '2',
             default => '3',
         };
 
-        return $priorityWeight.'|'.($task['due_on'] ?? '9999-12-31').'|'.($task['created_at'] ?? '9999-12-31').'|'.($task['id'] ?? '');
+        $impact = filled($task['estimated_impact'] ?? null) ? str_pad((string) (999999999 - (int) $task['estimated_impact']), 12, '0', STR_PAD_LEFT) : '999999999999';
+
+        return $priorityWeight.'|'.$impact.'|'.($task['due_on'] ?? '9999-12-31').'|'.($task['created_at'] ?? '9999-12-31').'|'.($task['id'] ?? '');
     }
 
     private function employeeCompletionRate(int $openCount, int $completedToday): string
@@ -316,5 +391,32 @@ class TodaysWork extends Page
         }
 
         return number_format(($completedToday / $total) * 100, 0).'%' ;
+    }
+
+    private function activeMission(): ?Mission
+    {
+        return $this->activeMissionId ? Mission::query()->find($this->activeMissionId) : null;
+    }
+
+    private function actionOptions(): array
+    {
+        $user = Auth::user();
+
+        return [
+            'classifications' => \App\Domains\Shared\Models\BankTransaction::classificationOptions(),
+            'transactionTypes' => \App\Domains\Shared\Models\BankTransaction::transactionTypeOptions(),
+            'businesses' => Business::query()
+                ->whereIn('id', $user?->accessibleBusinessIds() ?? [])
+                ->orderBy('name')
+                ->pluck('name', 'id')
+                ->all(),
+            'skus' => \App\Domains\Shared\Models\Sku::query()
+                ->when($user instanceof User && ! $user->isInternalAdmin(), fn ($query) => $query->whereIn('business_id', $user->accessibleBusinessIds()))
+                ->orderBy('code')
+                ->limit(500)
+                ->get()
+                ->mapWithKeys(fn ($sku): array => [$sku->id => $sku->code.' - '.$sku->name])
+                ->all(),
+        ];
     }
 }

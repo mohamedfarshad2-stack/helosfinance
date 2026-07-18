@@ -39,10 +39,10 @@ class MissionGeneratorService
                         'source_id' => filled($related['id'] ?? null) ? (string) $related['id'] : null,
                         'title' => (string) ($task['title'] ?? 'Work item'),
                         'summary' => (string) ($task['why_it_matters'] ?? ''),
-                        'priority' => $this->missionPriority((string) ($task['priority'] ?? 'medium')),
+                        'priority' => $this->missionPriority($task),
                         'impact_type' => $this->impactTypeForResponsibility($responsibility),
                         'estimated_impact' => filled($task['amount'] ?? null) ? (float) $task['amount'] : null,
-                        'confidence' => filled($task['amount'] ?? null) ? 'estimated' : 'incomplete',
+                        'confidence' => filled($task['amount'] ?? null) ? 'trusted_source_value' : 'incomplete',
                         'due_at' => filled($task['due_on'] ?? null) ? now()->parse($task['due_on'])->endOfDay() : null,
                         'assigned_user_id' => $this->assignedUserId($business, $responsibility),
                         'status' => $status,
@@ -133,6 +133,19 @@ class MissionGeneratorService
         return $user->hasStaffResponsibility((string) $mission->responsibility_code, (int) $mission->business_id);
     }
 
+    public function canUserCompleteMission(User $user, Mission $mission): bool
+    {
+        if ($user->isOwner() || $user->isInternalAdmin()) {
+            return $this->canUserAccessMission($user, $mission);
+        }
+
+        return $user->activeStaffResponsibilityAssignments()
+            ->where('business_id', $mission->business_id)
+            ->where('responsibility_code', $mission->responsibility_code)
+            ->where('can_complete', true)
+            ->exists();
+    }
+
     private function responsibilityForTask(array $task): ?string
     {
         return match ((string) ($task['work_type'] ?? 'general')) {
@@ -167,13 +180,25 @@ class MissionGeneratorService
         return Mission::STATUS_OPEN;
     }
 
-    private function missionPriority(string $priority): string
+    private function missionPriority(array $task): string
     {
-        return match ($priority) {
-            'high' => 'high',
-            'low' => 'low',
-            default => 'normal',
-        };
+        $priority = (string) ($task['priority'] ?? 'medium');
+        $amount = filled($task['amount'] ?? null) ? (float) $task['amount'] : null;
+        $dueOn = filled($task['due_on'] ?? null) ? now()->parse($task['due_on']) : null;
+
+        if ($priority === 'high' && $amount !== null && $amount >= 50000) {
+            return 'critical';
+        }
+
+        if ($amount !== null && $amount >= 100000) {
+            return 'critical';
+        }
+
+        if ($priority === 'high' || ($amount !== null && $amount >= 25000) || ($dueOn?->isPast() ?? false)) {
+            return 'high';
+        }
+
+        return $priority === 'low' ? 'low' : 'normal';
     }
 
     private function impactTypeForResponsibility(?string $responsibility): ?string

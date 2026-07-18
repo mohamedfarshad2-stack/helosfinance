@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Auth;
 class ManagerWorkQueue extends Page
 {
     protected static ?string $slug = 'work-queue';
-    protected static ?string $navigationGroup = 'Work';
+    protected static ?string $navigationGroup = 'Team Work';
     protected static ?string $navigationLabel = 'Owner Work Queue';
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?int $navigationSort = 1;

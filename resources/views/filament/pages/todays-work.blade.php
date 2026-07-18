@@ -8,7 +8,7 @@
                         {{ $workQueue['headline'] ?? 'Today\'s work is ready.' }}
                     </div>
                     <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                        This screen is for action, not reports. Start with the first task, open the record, do the work, then come back here for the next item.
+                        This screen is for action, not reports. Start with today&apos;s priority, complete the source action here, then move to the next mission.
                     </div>
                     <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300 sm:grid-cols-3">
                         <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900">1. Open the task</div>
@@ -89,8 +89,11 @@
                             </x-filament::button>
                         @endif
                         @if (($task['state'] ?? 'open') !== 'completed')
+                            <x-filament::button wire:click="openMissionAction({{ (int) $task['id'] }})" color="primary" size="sm" icon="heroicon-o-pencil-square">
+                                Do action
+                            </x-filament::button>
                             <x-filament::button wire:click="completeMission({{ (int) $task['id'] }})" color="success" size="sm" icon="heroicon-o-check-circle">
-                                Complete
+                                Check complete
                             </x-filament::button>
                             <x-filament::button wire:click="blockMission({{ (int) $task['id'] }})" color="warning" size="sm" icon="heroicon-o-exclamation-triangle">
                                 Blocked
@@ -122,6 +125,19 @@
                 <?php
             };
         @endphp
+
+        @if (! empty($workQueue['todays_priority']))
+            <x-filament::section>
+                <div class="grid gap-4">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-gray-500">Today's Priority</div>
+                        <h2 class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">Do this first</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">HELOS ranked this mission first using priority, due date, and trusted impact where available.</p>
+                    </div>
+                    {!! $renderTask($workQueue['todays_priority']) !!}
+                </div>
+            </x-filament::section>
+        @endif
 
         <div class="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
             <x-filament::section>
@@ -170,16 +186,17 @@
         <x-filament::section>
             <div class="grid gap-4">
                 <div>
-                    <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Tasks Due Today</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Finish these first so nothing important gets delayed.</p>
+                    <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Today's Missions</h2>
+                    <span class="sr-only">Tasks Due Today</span>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Ranked work for today. Use the action button so HELOS updates the real source record.</p>
                 </div>
 
                 <div class="grid gap-4">
-                    @forelse (($workQueue['sections']['due_today'] ?? []) as $task)
+                    @forelse (($workQueue['ranked_missions'] ?? []) as $task)
                         {!! $renderTask($task) !!}
                     @empty
                         <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
-                            No tasks are due today.
+                            No open missions right now.
                         </div>
                     @endforelse
                 </div>
@@ -190,15 +207,16 @@
             <x-filament::section>
                 <div class="grid gap-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">High Priority</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">These tasks should not wait.</p>
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Problems</h2>
+                        <span class="sr-only">High Priority</span>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Blocked or escalated work that needs attention.</p>
                     </div>
                     <div class="grid gap-4">
-                        @forelse (($workQueue['sections']['high_priority'] ?? []) as $task)
+                        @forelse (($workQueue['sections']['problems'] ?? []) as $task)
                             {!! $renderTask($task) !!}
                         @empty
                             <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
-                                No high-priority tasks right now.
+                                No blocked or escalated problems right now.
                             </div>
                         @endforelse
                     </div>
@@ -208,21 +226,39 @@
             <x-filament::section>
                 <div class="grid gap-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Waiting For Review</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">These items need a person to look at them and finish the next step.</p>
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Missing Information</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">These items block trusted numbers until the missing source truth is supplied.</p>
                     </div>
                     <div class="grid gap-4">
-                        @forelse (($workQueue['sections']['waiting_review'] ?? []) as $task)
+                        @forelse (($workQueue['sections']['missing_information'] ?? []) as $task)
                             {!! $renderTask($task) !!}
                         @empty
                             <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
-                                No review work waiting right now.
+                                No missing-information missions right now.
                             </div>
                         @endforelse
                     </div>
                 </div>
             </x-filament::section>
         </div>
+
+        <x-filament::section>
+            <div class="grid gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Waiting For Review</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Submitted work waiting for a supervisor or owner decision.</p>
+                </div>
+                <div class="grid gap-4">
+                    @forelse (($workQueue['sections']['waiting_review'] ?? []) as $task)
+                        {!! $renderTask($task) !!}
+                    @empty
+                        <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
+                            No review work waiting right now.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </x-filament::section>
 
         <x-filament::section>
             <div class="grid gap-4">
@@ -241,5 +277,189 @@
                 </div>
             </div>
         </x-filament::section>
+
+        @if ($activeMission)
+            @php
+                $sourceType = (string) $activeMission->source_type;
+                $missionType = (string) $activeMission->mission_type;
+            @endphp
+            <div class="fixed inset-0 z-50 grid place-items-center bg-gray-950/50 p-4">
+                <div class="w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl ring-1 ring-gray-950/10 dark:bg-gray-900 dark:ring-white/10">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <div class="text-xs uppercase tracking-wide text-gray-500">Mission action</div>
+                            <h2 class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ $activeMission->title }}</h2>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $activeMission->summary }}</p>
+                        </div>
+                        <button type="button" wire:click="closeMissionAction" class="rounded-md px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">Close</button>
+                    </div>
+
+                    @if ($missionActionError)
+                        <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                            {{ $missionActionError }}
+                        </div>
+                    @endif
+
+                    <div class="mt-5 grid gap-4 md:grid-cols-2">
+                        @if ($sourceType === 'bank_transaction')
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">What happened?</span>
+                                <select wire:model.defer="missionActionData.classification" class="rounded-lg border-gray-300">
+                                    @foreach (($actionOptions['classifications'] ?? []) as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Money effect</span>
+                                <select wire:model.defer="missionActionData.transaction_type" class="rounded-lg border-gray-300">
+                                    <option value="">Let HELOS infer</option>
+                                    @foreach (($actionOptions['transactionTypes'] ?? []) as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Business</span>
+                                <select wire:model.defer="missionActionData.allocated_business_id" class="rounded-lg border-gray-300">
+                                    <option value="">Shared / unallocated</option>
+                                    @foreach (($actionOptions['businesses'] ?? []) as $id => $name)
+                                        <option value="{{ $id }}">{{ $name }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Bank or cash box</span>
+                                <input wire:model.defer="missionActionData.money_container" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Transfer destination</span>
+                                <input wire:model.defer="missionActionData.counter_money_container" class="rounded-lg border-gray-300" />
+                            </label>
+                        @elseif ($sourceType === 'expense')
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Supplier / payee</span>
+                                <input wire:model.defer="missionActionData.payee" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Due date</span>
+                                <input type="date" wire:model.defer="missionActionData.due_on" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Paid amount</span>
+                                <input type="number" step="0.01" wire:model.defer="missionActionData.paid_amount" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Payment status</span>
+                                <select wire:model.defer="missionActionData.payment_status" class="rounded-lg border-gray-300">
+                                    <option value="unpaid">Unpaid</option>
+                                    <option value="partial">Part paid</option>
+                                    <option value="credit_due">Credit due</option>
+                                    <option value="cheque_pending">Cheque pending</option>
+                                    <option value="paid">Paid</option>
+                                    <option value="settled">Settled</option>
+                                </select>
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Payment method</span>
+                                <input wire:model.defer="missionActionData.payment_method" class="rounded-lg border-gray-300" />
+                            </label>
+                        @elseif ($sourceType === 'service_billing_record')
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Paid amount</span>
+                                <input type="number" step="0.01" wire:model.defer="missionActionData.paid_amount" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Payment status</span>
+                                <select wire:model.defer="missionActionData.payment_status" class="rounded-lg border-gray-300">
+                                    <option value="unpaid">Unpaid</option>
+                                    <option value="partial">Part paid</option>
+                                    <option value="paid">Paid</option>
+                                    <option value="overdue">Overdue</option>
+                                </select>
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Payment method</span>
+                                <input wire:model.defer="missionActionData.payment_method" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Reference</span>
+                                <input wire:model.defer="missionActionData.reference" class="rounded-lg border-gray-300" />
+                            </label>
+                        @elseif ($sourceType === 'production_entry')
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Payment status</span>
+                                <select wire:model.defer="missionActionData.payment_status" class="rounded-lg border-gray-300">
+                                    <option value="pending">Pending</option>
+                                    <option value="paid">Paid</option>
+                                    <option value="settled">Settled</option>
+                                </select>
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Paid date</span>
+                                <input type="date" wire:model.defer="missionActionData.paid_on" class="rounded-lg border-gray-300" />
+                            </label>
+                        @elseif (in_array($sourceType, ['material_ledger_entry', 'operational_event'], true) || $missionType === 'missing_product_links')
+                            <label class="grid gap-1 text-sm md:col-span-2">
+                                <span class="font-medium">Correct product / SKU</span>
+                                <select wire:model.defer="missionActionData.sku_id" class="rounded-lg border-gray-300">
+                                    <option value="">Choose SKU</option>
+                                    @foreach (($actionOptions['skus'] ?? []) as $id => $label)
+                                        <option value="{{ $id }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            @if ($sourceType === 'operational_event')
+                                <label class="grid gap-1 text-sm">
+                                    <span class="font-medium">Return outcome</span>
+                                    <select wire:model.defer="missionActionData.return_outcome" class="rounded-lg border-gray-300">
+                                        <option value="">Choose if relevant</option>
+                                        <option value="restock">Restock</option>
+                                        <option value="damaged">Damaged</option>
+                                        <option value="resend">Resend</option>
+                                        <option value="unresolved">Unresolved</option>
+                                    </select>
+                                </label>
+                                <label class="grid gap-1 text-sm">
+                                    <span class="font-medium">Return reason / follow up</span>
+                                    <input wire:model.defer="missionActionData.return_reason" class="rounded-lg border-gray-300" />
+                                </label>
+                            @endif
+                        @elseif ($sourceType === 'cod_order')
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Tracking number</span>
+                                <input wire:model.defer="missionActionData.tracking_number" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Courier</span>
+                                <input wire:model.defer="missionActionData.courier_name" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Status</span>
+                                <input wire:model.defer="missionActionData.status" class="rounded-lg border-gray-300" />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                <span class="font-medium">Return / resend reason</span>
+                                <input wire:model.defer="missionActionData.return_reason" class="rounded-lg border-gray-300" />
+                            </label>
+                        @else
+                            <div class="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                This mission still needs the full record page. Use Open record if more fields are required.
+                            </div>
+                        @endif
+
+                        <label class="grid gap-1 text-sm md:col-span-2">
+                            <span class="font-medium">Note</span>
+                            <textarea wire:model.defer="missionActionData.note" rows="3" class="rounded-lg border-gray-300"></textarea>
+                        </label>
+                    </div>
+
+                    <div class="mt-6 flex flex-wrap justify-end gap-3">
+                        <x-filament::button wire:click="closeMissionAction" color="gray">Cancel</x-filament::button>
+                        <x-filament::button wire:click="saveMissionAction" color="success" icon="heroicon-o-check-circle">Save source action</x-filament::button>
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 </x-filament-panels::page>

@@ -1,8 +1,8 @@
 ﻿# HELOS Page And Navigation Consolidation
 
 Status: Partially implemented
-Date: 2026-07-17
-Code changes: Responsibility-scoped access, persistent missions, supervisor mission review, and owner responsibility audit pages implemented
+Date: 2026-07-18
+Code changes: Responsibility-scoped access, persistent missions, inline source actions, supervisor mission review, legacy migration status, and owner responsibility audit pages implemented
 Database changes: Responsibility assignment, responsibility audit, mission, and mission event tables added
 Deployment: Not verified in this document
 
@@ -23,20 +23,27 @@ Implemented:
 - Owner/internal-admin responsibility access history.
 - Supervisor/owner mission review resource.
 - Query scoping for key resources by responsibility-specific business access.
+- Focused inline mission actions for HELOS-owned source records.
+- Auto-completion only after the source condition is resolved.
+- Owner-only protection for sensitive bank decisions.
+- Legacy Migration Status page for owner/internal admin.
+- Mission Review reassignment, return, approval, escalation, and filters.
+- Mission priority ranking using available trusted source amounts.
 
 Partially implemented:
 
-- Direct mission actions. Staff can start, complete, block, escalate, and open related records. Full focused per-record modal actions are still future work.
-- Navigation consolidation. Staff work is mission-first, but all legacy navigation groups have not yet been fully regrouped or hidden.
+- Direct mission actions. Staff can update core HELOS-owned source records from mission flow. External Stock App truth is not changed from HELOS.
+- Navigation consolidation. Staff work is mission-first, but all legacy navigation groups have not yet been fully hidden because production transition safety requires fallback pages.
 - Supervisor workspace. Mission review exists, but a full Team Work / Reviews / Escalations workspace is not yet complete.
+- Legacy fallback retirement. Per-employee safe retirement exists; global fallback shutdown is not implemented.
 
 Not implemented yet:
 
 - Full owner Command Centre navigation regrouping.
 - Employee-only My Work / My Responsibilities / Help navigation rewrite.
 - Separation-of-duty conflict warnings.
-- Legacy fallback retirement status screen.
-- Auto-completion of missions after every underlying source record is fixed.
+- Global legacy fallback shutdown switch.
+- Inline source creation where no source record exists yet.
 
 ## Purpose
 

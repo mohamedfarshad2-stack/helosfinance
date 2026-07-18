@@ -1,277 +1,199 @@
-﻿# HELOS Complete Responsibility Mission System
+# HELOS Complete Responsibility Mission System
 
-Status: Implemented foundation with documented limits
-Date: 2026-07-17
+Status: Implemented with known limitations
+Date: 2026-07-18
 Branch: `helosfinance`
 
-## 1. Architecture
+## Completed
 
-HELOS now has a persistent responsibility and mission layer on top of the existing business logic.
+### Responsibility Access
 
-The implementation keeps existing financial engines, Stock App sync, operational event calculations, expense calculations, bank calculations, production calculations, and owner dashboards unchanged.
+- Business-scoped staff responsibilities are implemented.
+- Temporary access is supported with expiry.
+- Explicit no-access is supported by `responsibilities_configured = true` and no active responsibilities.
+- Expired assignments stop granting access.
+- Responsibility changes are audited.
+- Legacy profile fallback remains only for staff not yet explicitly configured.
 
-Flow:
+### Persistent Missions
 
-Business condition -> WorkQueueService task -> MissionGeneratorService -> Mission -> assigned responsibility -> assigned employee -> Today&apos;s work -> mission event history -> supervisor/owner review.
+- Missions are generated from real HELOS work conditions through `WorkQueueService`.
+- Missions are persisted with source key, source type, source id, business, responsibility, priority, status, impact, and confidence.
+- Mission lifecycle events are recorded for generation, start, source action, completion, blocking, escalation, reassignment, approval, and return for correction.
+- Duplicate unresolved missions are prevented by `source_key`.
+- Source conditions disappearing cancel active missions.
 
-## 2. Responsibility Model
+### Inline Source Actions
 
-Responsibilities are still defined centrally through `App\Models\User::staffResponsibilityOptions()`.
+Implemented source actions update real HELOS-owned records:
 
-The new table `staff_responsibility_assignments` allows the owner to assign:
+- Bank exceptions: classification, money effect, business allocation, container, transfer destination, note.
+- Service collections: paid amount, payment status, method, reference, note.
+- Expenses: supplier/payee, due date, paid amount, payment status, method, note.
+- Production payouts: payment status, paid date, note.
+- Material stock repair: SKU link, note.
+- Product/SKU repair on operational events: SKU link and event recalculation through existing recalculation service.
+- Return/resend operational notes: return outcome, reason, follow-up note.
+- Internal COD order fields: tracking, courier, status, return/resend reason, note.
 
-- staff member
-- business
-- responsibility
-- view/create/edit/complete/review/approve flags
-- own-record/team-record flags
-- active status
-- optional start date
-- optional expiry date
-- assignment note
+Source-action behavior:
 
-Existing JSON-based staff responsibilities remain as a legacy fallback for users not fully migrated.
+- The source record is updated first.
+- A mission event is recorded.
+- HELOS re-checks whether the mission is resolved.
+- Mission is auto-completed only when the source condition is resolved.
+- Otherwise the mission remains open/in progress or goes to waiting review.
 
-## 3. Business Scoping
+### Protected Decisions
 
-Business scoping is enforced through `User::accessibleBusinessIdsForResponsibility()` and resource query filters.
+- Staff cannot approve owner-only bank classifications such as owner withdrawals, owner contributions, and loans.
+- Owner-only bank decisions are submitted to waiting review.
+- Manual mission completion is blocked when the source condition is still unresolved.
 
-Staff access can now be limited to one business for one responsibility. Example: a user can have expense work for Horns England without receiving expense work for COD Returns Lanka.
+### Today’s Work
 
-Resources updated to use responsibility-aware business scopes include:
+Today’s Work now includes:
 
-- COD orders
-- service clients
-- service billing
-- production entries
-- material ledger
-- material components
-- production work steps
-- bank transactions
-- expenses
+- Today’s Priority.
+- Today’s Missions.
+- Problems.
+- Missing Information.
+- Waiting Review.
+- Completed Today.
+- Business impact on each mission.
 
-Owner and platform admin access remains broad according to the existing access model.
+Employees can start, do source action, check completion, block, escalate, or open the full source record when needed.
 
-## 4. Mission Model
+### Supervisor Workflow
 
-The `missions` table stores persistent work items generated from real HELOS conditions.
+Mission Review supports:
 
-Mission states:
+- Filtering by status and responsibility.
+- Reassigning missions.
+- Returning missions for correction with a reason.
+- Approving missions.
+- Escalating missions to the owner.
 
-- open
-- in progress
-- blocked
-- waiting review
-- completed
-- escalated
-- cancelled
-- reopened
+Supervisor actions write mission events.
 
-Each mission stores source type/id, business, responsibility, priority, impact type, estimated impact, confidence, due date, assigned user, and metadata.
+### Legacy Migration Status
 
-Duplicate missions are prevented with a unique `source_key`.
+Owner/internal admin can see:
 
-## 5. Mission Generators
+- Explicitly configured staff.
+- Not configured staff.
+- Staff using legacy fallback.
+- Explicit no-access staff.
+- Temporary access active.
+- Temporary access expiring soon.
+- Temporary access expired.
+- Supervisor enabled.
+- Broad legacy profile still active.
 
-`MissionGeneratorService` currently converts existing `WorkQueueService` tasks into persistent missions.
+Owner actions:
 
-This means the new system is based on existing real HELOS conditions such as:
+- Remove legacy fallback for one employee.
+- Assign explicit no-access.
+- Extend temporary access by seven days.
+- Open responsibility manager.
+- Open access audit history.
 
-- order tracking problems
-- returns/resends
-- service collections
-- bank exceptions
-- expense settlement
-- production payout
-- material/stock issues
-- missing product links
+### Navigation
 
-The generator also assigns missions to the first active staff responsibility assignment for that business and responsibility.
+Navigation is partially consolidated:
 
-## 6. Direct Mission Actions
+- Staff mission work is under `My Work`.
+- Supervisor mission review is under `Team Work`.
+- Responsibility setup and audit history are under `Team`.
+- Sales Insights and Operational Event History are under `Reports`.
 
-Implemented:
+Existing resources were not deleted, to avoid blocking production work during transition.
 
-- start mission
-- complete mission
-- mark blocked
-- escalate
-- open related record through existing resource URL
+### Profit-Impact Priority
 
-Not fully implemented yet:
+Mission ranking now uses trusted source values where available:
 
-- focused slide-over/modal editing for every mission type
-- automatic completion when the underlying source record is fixed
-- direct inline tracking/courier/expense/payment/product-mapping forms inside Today&apos;s Work
+- Expense balance.
+- Service billing balance.
+- Wholesale collection balance.
+- Other work-queue amounts already emitted by HELOS.
 
-The current implementation intentionally reuses existing resources for source-record editing to avoid creating a second source of truth.
+HELOS does not fabricate values when source impact is missing. Missing impact is marked as incomplete.
 
-## 7. Completion History
+## Partial Or Pending
 
-The `mission_events` table records:
+- Full dispatch action for Stock App orders remains partial because HELOS must not mutate Stock App truth from inside HELOS.
+- Full production output creation from a mission is not implemented where no source production row exists yet.
+- Full material purchase creation from a mission is not implemented where no source ledger row exists yet.
+- Full employee-only navigation rewrite is partial; legacy resources remain available where existing authorization permits them.
+- Global fallback retirement setting is not implemented. Current safe retirement is per employee.
+- Browser-based production smoke verification was not performed in this document.
 
-- status transitions
-- who changed the mission
-- previous values
-- new values
-- notes
-- timestamps
+## Security
 
-Mission completion, block, escalation, approval, reopening, and manual edits create history.
+Implemented protections:
 
-## 8. Supervisor Workflow
+- Mission actions check business scope.
+- Staff source actions require matching active responsibility with `can_complete`.
+- Owner/internal admin retain full access.
+- Supervisor review does not grant owner financial pages by itself.
+- Explicit no-access staff do not receive legacy fallback.
 
-`MissionResource` provides a supervisor/owner review surface.
+Remaining security work:
 
-Supervisors with the `supervisor_review` responsibility can access mission review for their scoped businesses without automatically receiving owner financial guidance.
+- Broader direct-URL tests for every legacy resource.
+- Final production role smoke testing with real staff accounts.
 
-Available supervisor actions:
+## Tests
 
-- edit mission
-- approve/complete
-- return/reopen
-- escalate
-- refresh generated missions
+Focused coverage added for:
 
-## 9. Owner Workflow
+- Collection action updates billing and completes mission.
+- Staff cannot approve owner-only bank money type.
+- Unresolved mission cannot be completed by button click.
+- Legacy migration page identifies fallback and explicit no-access users.
+- Higher trusted impact ranks first.
 
-Owner-only responsibility management is available through:
+Focused test command:
 
-- `StaffResponsibilityAssignmentResource`
-- `StaffResponsibilityAuditResource`
+```bash
+php artisan test --filter=ResponsibilityMissionSystemTest
+```
 
-The owner can assign, remove, scope, expire, and audit employee responsibility access.
+Latest focused result:
 
-## 10. Navigation Structure
+- 11 tests passed.
+- 35 assertions passed.
 
-Implemented foundation:
+## Deployment
 
-- staff continue landing on Today&apos;s Work
-- staff see work based on responsibility scope
-- responsibility manager appears under Admin for owner/internal admin
-- mission review appears under Work for owner/internal admin/supervisor
-- existing owner pages remain accessible
+Repository deployment workflow:
 
-Not fully completed:
+- Pushes to `helosfinance` run GitHub Actions.
+- Checks run PHP tests, npm audit, and frontend build.
+- On successful push, the deploy job SSHes to Lightsail and runs:
 
-- full owner navigation regrouping into Command Centre / Operations / Finance Control / Team / Configuration / Reports
-- full employee-only navigation reduction across every legacy page
-- visual legacy migration status screen
+```bash
+sudo deploy-helosfinance helosfinance
+```
 
-## 11. Page Consolidation Map
+Production deployment must be verified from GitHub Actions and the hosted site after push.
 
-The implementation preserves existing pages and begins consolidation through access scope rather than deleting pages.
+## Rollback
 
-Current state:
+Low-risk rollback:
 
-- Today&apos;s Work is the primary employee mission layer.
-- Existing resources remain the source-action pages.
-- Mission Review is the supervisor/owner review surface.
-- Responsibility and Access History are owner/internal-admin setup/audit pages.
+- Revert the mission action/navigation commits.
+- Run deployment workflow again.
 
-No legacy page was deleted.
+Data rollback:
 
-## 12. Priority Scoring
+- Responsibility and mission tables are additive.
+- Mission source actions change source records. If a production source action is wrong, use mission event history to identify the source row, user, timestamp, and before/after values.
 
-Implemented:
+## Known Limitations
 
-- mission priority from existing Work Queue priority
-- impact categories:
-  - revenue protected
-  - revenue recoverable
-  - cash collectible
-  - cost avoidable
-  - financial truth blocked
-
-Not fully implemented:
-
-- detailed trusted-profit impact scoring for every mission
-- owner-visible priority formula
-- confidence downgrade rules for every mission type
-
-## 13. Security Controls
-
-Implemented and tested:
-
-- business-scoped responsibility access
-- expired responsibility stops access
-- responsibility audit history
-- staff cannot manage responsibilities
-- supervisor can review missions without owner finance access
-- owner/internal admin access preserved
-- query scopes for responsibility-aware resources
-
-Security principle: navigation hiding is not trusted by itself. Query-level and page-level access are used.
-
-## 14. Legacy Migration
-
-Existing staff responsibility JSON remains as fallback for users who are not fully migrated.
-
-Configured staff with no responsibilities get no work access.
-
-Future step: create owner-visible migration status before disabling legacy fallback globally.
-
-## 15. Tests
-
-New tests:
-
-- business-scoped responsibility limits resource query scope
-- temporary responsibility expiry removes access
-- assignment changes are audited
-- missions generate from real conditions
-- missions respect staff scope
-- mission completion writes history
-- supervisor can review missions without owner finance access
-- staff cannot access responsibility manager
-
-Regression tests also confirm existing user-resource and work-queue behavior.
-
-## 16. Deployment Steps
-
-Recommended production steps:
-
-1. Pull/push deployed branch.
-2. Back up production database.
-3. Run `php artisan migrate`.
-4. Run `php artisan optimize:clear`.
-5. Verify owner can open Responsibilities and Access History.
-6. Verify staff Today&apos;s Work still opens.
-7. Assign one test responsibility to one test staff user for one business.
-8. Confirm direct URLs are denied outside that business/responsibility.
-
-## 17. Rollback Steps
-
-Code rollback:
-
-- revert the responsibility/mission commit.
-
-Database rollback:
-
-- restore production backup if mission/assignment tables have production data.
-- avoid blindly rolling back after owner has created live assignments unless the backup is confirmed.
-
-Low-risk rollback path:
-
-- leave new tables in place but remove navigation/access to new resources.
-- existing legacy responsibility behavior remains available.
-
-## 18. Known Limitations
-
-- Mission completion marks the mission complete; it does not yet always update the underlying source record.
-- If the unresolved source condition still exists, mission generation may recreate or reopen work in a later sync.
-- Direct source actions are currently links plus mission status actions, not full inline mission workflows.
-- Separation-of-duty warnings are not fully implemented.
-- Owner navigation is not fully regrouped yet.
-- Legacy fallback retirement status screen is not implemented yet.
-- Full production browser verification was not completed in this document.
-
-## 19. Future Improvements
-
-Next implementation steps:
-
-1. Build direct mission action forms for the highest-volume tasks: tracking/courier, bank exception, expense settlement, service payment, product mapping.
-2. Auto-complete missions when the source condition is truly resolved.
-3. Add owner-visible legacy migration status.
-4. Add separation-of-duty warnings.
-5. Complete navigation regrouping after mission actions cover daily work.
-6. Add production smoke-test checklist to deployment process.
+- HELOS-owned source records can be updated inline.
+- External Stock App order truth is not directly changed from HELOS.
+- Some mission actions still need the full source record page for uncommon fields.
+- Production browser verification remains required.

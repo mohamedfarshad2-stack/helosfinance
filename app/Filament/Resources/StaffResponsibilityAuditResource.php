@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Auth;
 class StaffResponsibilityAuditResource extends Resource
 {
     protected static ?string $model = StaffResponsibilityAudit::class;
-    protected static ?string $navigationGroup = 'Admin';
+    protected static ?string $navigationGroup = 'Team';
     protected static ?string $navigationLabel = 'Access History';
     protected static ?string $navigationIcon = 'heroicon-o-clock';
 

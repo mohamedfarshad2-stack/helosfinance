@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Auth;
 class StaffResponsibilityAssignmentResource extends Resource
 {
     protected static ?string $model = StaffResponsibilityAssignment::class;
-    protected static ?string $navigationGroup = 'Admin';
+    protected static ?string $navigationGroup = 'Team';
     protected static ?string $navigationLabel = 'Responsibilities';
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 

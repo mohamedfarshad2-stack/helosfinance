@@ -3,12 +3,16 @@
 namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\Mission;
+use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\StaffResponsibilityAssignment;
 use App\Domains\Shared\Models\StaffResponsibilityAudit;
 use App\Domains\Shared\Services\MissionGeneratorService;
+use App\Domains\Shared\Services\MissionSourceActionService;
 use App\Filament\Pages\ClientHealthReport;
+use App\Filament\Pages\LegacyAccessMigrationStatus;
 use App\Filament\Pages\TodaysWork;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MissionResource;
@@ -242,6 +246,243 @@ class ResponsibilityMissionSystemTest extends TestCase
         $this->actingAs($staff);
         $this->assertFalse(StaffResponsibilityAssignmentResource::canAccess());
         $this->get(StaffResponsibilityAssignmentResource::getUrl('index'))->assertStatus(302);
+    }
+
+    public function test_collection_mission_action_updates_source_and_completes(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        $staff = $this->staff($horns, [
+            'staff_responsibilities' => [],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($owner);
+
+        StaffResponsibilityAssignment::query()->create([
+            'user_id' => $staff->id,
+            'business_id' => $horns->id,
+            'responsibility_code' => 'collections',
+            'can_view' => true,
+            'can_edit' => true,
+            'can_complete' => true,
+            'is_active' => true,
+        ]);
+
+        $billing = ServiceBillingRecord::query()->create([
+            'business_id' => $horns->id,
+            'client_name' => 'Service Client',
+            'billing_type' => ServiceBillingRecord::TYPE_SUBSCRIPTION,
+            'amount_due' => 10000,
+            'paid_amount' => 0,
+            'payment_status' => 'unpaid',
+            'due_on' => today()->subDay(),
+        ]);
+
+        $mission = Mission::query()->create([
+            'source_key' => $horns->id.':service-billing-'.$billing->id,
+            'mission_type' => 'service_collection',
+            'responsibility_code' => 'collections',
+            'business_id' => $horns->id,
+            'source_type' => 'service_billing_record',
+            'source_id' => (string) $billing->id,
+            'title' => 'Collect service money',
+            'summary' => 'Service money is due.',
+            'status' => Mission::STATUS_OPEN,
+        ]);
+
+        $this->actingAs($staff->fresh());
+
+        app(MissionSourceActionService::class)->apply($mission, $staff->fresh(), [
+            'paid_amount' => 10000,
+            'payment_method' => 'bank',
+            'reference' => 'TEST-REF',
+        ]);
+
+        $this->assertSame('paid', $billing->fresh()->payment_status);
+        $this->assertSame(Mission::STATUS_COMPLETED, $mission->fresh()->status);
+        $this->assertDatabaseHas('mission_events', [
+            'mission_id' => $mission->id,
+            'event_type' => 'source_action',
+        ]);
+    }
+
+    public function test_staff_bank_action_cannot_approve_owner_only_money_type(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        $staff = $this->staff($horns, [
+            'staff_responsibilities' => [],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($owner);
+
+        StaffResponsibilityAssignment::query()->create([
+            'user_id' => $staff->id,
+            'business_id' => $horns->id,
+            'responsibility_code' => 'bank_exceptions',
+            'can_view' => true,
+            'can_edit' => true,
+            'can_complete' => true,
+            'is_active' => true,
+        ]);
+
+        $transaction = BankTransaction::query()->create([
+            'business_id' => $horns->id,
+            'transaction_date' => today(),
+            'description' => 'Owner cash movement',
+            'debit' => 10000,
+            'credit' => 0,
+            'classification' => 'unknown',
+            'transaction_type' => 'other',
+            'status' => 'review',
+        ]);
+
+        $mission = Mission::query()->create([
+            'source_key' => $horns->id.':bank-review-'.$transaction->id,
+            'mission_type' => 'bank_review',
+            'responsibility_code' => 'bank_exceptions',
+            'business_id' => $horns->id,
+            'source_type' => 'bank_transaction',
+            'source_id' => (string) $transaction->id,
+            'title' => 'Review bank row',
+            'summary' => 'Bank row needs review.',
+            'status' => Mission::STATUS_OPEN,
+        ]);
+
+        $this->actingAs($staff->fresh());
+
+        app(MissionSourceActionService::class)->apply($mission, $staff->fresh(), [
+            'classification' => 'owner_withdrawal',
+            'transaction_type' => 'owner_withdrawal',
+            'allocated_business_id' => $horns->id,
+        ]);
+
+        $this->assertSame('review', $transaction->fresh()->status);
+        $this->assertSame(Mission::STATUS_WAITING_REVIEW, $mission->fresh()->status);
+    }
+
+    public function test_unresolved_mission_cannot_be_completed_without_source_fix(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        $staff = $this->staff($horns, [
+            'staff_responsibilities' => [],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($owner);
+
+        StaffResponsibilityAssignment::query()->create([
+            'user_id' => $staff->id,
+            'business_id' => $horns->id,
+            'responsibility_code' => 'expense_recording',
+            'can_view' => true,
+            'can_edit' => true,
+            'can_complete' => true,
+            'is_active' => true,
+        ]);
+
+        $expense = Expense::query()->create([
+            'business_id' => $horns->id,
+            'category' => 'Supplier bill',
+            'expense_type' => 'variable',
+            'amount' => 5000,
+            'payment_status' => 'partial',
+            'paid_amount' => 0,
+            'spent_on' => today(),
+        ]);
+
+        $mission = Mission::query()->create([
+            'source_key' => $horns->id.':expense-settlement-'.$expense->id,
+            'mission_type' => 'expense_settlement',
+            'responsibility_code' => 'expense_recording',
+            'business_id' => $horns->id,
+            'source_type' => 'expense',
+            'source_id' => (string) $expense->id,
+            'title' => 'Settle supplier bill',
+            'summary' => 'Expense needs settlement.',
+            'status' => Mission::STATUS_OPEN,
+        ]);
+
+        $this->actingAs($staff->fresh());
+
+        $this->assertFalse(app(MissionSourceActionService::class)->completeIfResolved($mission, $staff->fresh()));
+        $this->assertSame(Mission::STATUS_OPEN, $mission->fresh()->status);
+    }
+
+    public function test_legacy_migration_status_identifies_fallback_and_explicit_no_access(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        $fallbackStaff = $this->staff($horns, [
+            'employee_access_profile' => 'operations',
+            'responsibilities_configured' => false,
+        ]);
+        $noAccessStaff = $this->staff($horns, [
+            'email' => 'no-access@example.com',
+            'staff_responsibilities' => [],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($owner);
+
+        $this->assertTrue(LegacyAccessMigrationStatus::canAccess());
+        $this->get(LegacyAccessMigrationStatus::getUrl())->assertOk()->assertSee('Legacy Migration Status');
+
+        $page = new LegacyAccessMigrationStatus();
+        $page->mount();
+
+        $fallbackRow = collect($page->rows)->firstWhere('id', $fallbackStaff->id);
+        $noAccessRow = collect($page->rows)->firstWhere('id', $noAccessStaff->id);
+
+        $this->assertTrue($fallbackRow['uses_fallback']);
+        $this->assertTrue($noAccessRow['no_access']);
+    }
+
+    public function test_trusted_higher_impact_mission_ranks_first(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        $staff = $this->staff($horns, [
+            'staff_responsibilities' => [],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($owner);
+
+        StaffResponsibilityAssignment::query()->create([
+            'user_id' => $staff->id,
+            'business_id' => $horns->id,
+            'responsibility_code' => 'expense_recording',
+            'can_view' => true,
+            'can_edit' => true,
+            'can_complete' => true,
+            'is_active' => true,
+        ]);
+
+        Expense::query()->create([
+            'business_id' => $horns->id,
+            'category' => 'Small supplier bill',
+            'expense_type' => 'variable',
+            'amount' => 1000,
+            'payment_status' => 'partial',
+            'paid_amount' => 0,
+            'due_on' => today(),
+            'spent_on' => today(),
+        ]);
+
+        Expense::query()->create([
+            'business_id' => $horns->id,
+            'category' => 'Large supplier bill',
+            'expense_type' => 'variable',
+            'amount' => 125000,
+            'payment_status' => 'partial',
+            'paid_amount' => 0,
+            'due_on' => today(),
+            'spent_on' => today(),
+        ]);
+
+        $missions = app(MissionGeneratorService::class)->visibleForUser($staff->fresh());
+
+        $this->assertSame('critical', $missions->first()->priority);
+        $this->assertSame(125000.0, $missions->first()->estimated_impact);
     }
 
     private function ownerWithBusinesses(): array

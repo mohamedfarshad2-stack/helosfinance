@@ -22,7 +22,7 @@ use Illuminate\Support\Str;
 class OperationalEventResource extends Resource
 {
     protected static ?string $model = OperationalEvent::class;
-    protected static ?string $navigationGroup = 'Sales & Work';
+    protected static ?string $navigationGroup = 'Reports';
     protected static ?string $navigationLabel = 'Stock App Order Events';
     protected static ?string $navigationIcon = 'heroicon-o-bolt';
 

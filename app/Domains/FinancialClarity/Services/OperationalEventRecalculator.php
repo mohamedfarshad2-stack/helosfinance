@@ -63,6 +63,17 @@ class OperationalEventRecalculator
         return $processed;
     }
 
+    public function recalculateSingleEvent(OperationalEvent $event, ?Sku $sku = null): void
+    {
+        $sku ??= $event->sku;
+
+        if (! $sku) {
+            return;
+        }
+
+        $this->recalculateEvent($event, $sku);
+    }
+
     private function recalculateEvent(OperationalEvent $event, Sku $sku, ?Business $business = null): void
     {
         $business ??= $event->business ?: Business::query()->findOrFail($event->business_id);
