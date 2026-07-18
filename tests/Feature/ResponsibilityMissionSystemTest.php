@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\BankTransaction;
+use App\Domains\Shared\Models\ClientGroup;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\Mission;
 use App\Domains\Shared\Models\ServiceBillingRecord;
@@ -246,6 +247,47 @@ class ResponsibilityMissionSystemTest extends TestCase
         $this->actingAs($staff);
         $this->assertFalse(StaffResponsibilityAssignmentResource::canAccess());
         $this->get(StaffResponsibilityAssignmentResource::getUrl('index'))->assertStatus(302);
+    }
+
+    public function test_responsibility_staff_selector_finds_client_group_staff_without_business_id(): void
+    {
+        $group = ClientGroup::query()->create(['name' => 'Owner Group']);
+        $horns = Business::query()->create([
+            'client_group_id' => $group->id,
+            'name' => 'Horns England',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+        $owner = User::query()->create([
+            'name' => 'Owner',
+            'email' => 'owner-selector@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $horns->id,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => false,
+        ]);
+        $staff = User::query()->create([
+            'name' => 'Arafath Dispatch',
+            'email' => 'arafath@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => null,
+            'client_group_id' => $group->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'employee_access_profile' => 'operations',
+        ]);
+
+        $this->actingAs($owner);
+
+        $method = new \ReflectionMethod(StaffResponsibilityAssignmentResource::class, 'staffOptions');
+        $method->setAccessible(true);
+        $options = $method->invoke(null, 'Arafath');
+
+        $this->assertArrayHasKey($staff->id, $options);
+        $this->assertSame('Arafath Dispatch', $options[$staff->id]);
     }
 
     public function test_collection_mission_action_updates_source_and_completes(): void

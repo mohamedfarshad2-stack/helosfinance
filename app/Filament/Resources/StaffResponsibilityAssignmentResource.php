@@ -34,7 +34,10 @@ class StaffResponsibilityAssignmentResource extends Resource
                     Select::make('user_id')
                         ->label('Staff member')
                         ->options(fn (): array => static::staffOptions())
+                        ->getSearchResultsUsing(fn (string $search): array => static::staffOptions($search))
+                        ->getOptionLabelUsing(fn ($value): ?string => static::staffLabel($value))
                         ->searchable()
+                        ->preload()
                         ->required(),
                     Select::make('business_id')
                         ->label('Business')
@@ -143,16 +146,57 @@ class StaffResponsibilityAssignmentResource extends Resource
             ->all();
     }
 
-    private static function staffOptions(): array
+    private static function staffOptions(?string $search = null): array
+    {
+        return static::staffQuery()
+            ->when(filled($search), function (Builder $query) use ($search): Builder {
+                return $query->where(function (Builder $query) use ($search): void {
+                    $query->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%');
+                });
+            })
+            ->orderBy('name')
+            ->limit(50)
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    private static function staffLabel(mixed $value): ?string
+    {
+        return static::staffQuery()
+            ->whereKey($value)
+            ->value('name');
+    }
+
+    private static function staffQuery(): Builder
     {
         $user = Auth::user();
 
+        $businessIds = $user?->accessibleBusinessIds() ?? [];
+        $clientGroupIds = Business::query()
+            ->whereIn('id', $businessIds)
+            ->whereNotNull('client_group_id')
+            ->pluck('client_group_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (filled($user?->client_group_id)) {
+            $clientGroupIds[] = (int) $user->client_group_id;
+        }
+
         return User::query()
             ->where('is_employee', true)
-            ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
+            ->when(! ($user?->seesAllBusinesses() ?? false), function (Builder $query) use ($businessIds, $clientGroupIds): Builder {
+                return $query->where(function (Builder $query) use ($businessIds, $clientGroupIds): void {
+                    $query->whereIn('business_id', $businessIds);
+
+                    if ($clientGroupIds !== []) {
+                        $query->orWhereIn('client_group_id', array_values(array_unique($clientGroupIds)));
+                    }
+                });
+            });
     }
 
     private static function scopeToOwnerBusinesses(Builder $query): Builder
