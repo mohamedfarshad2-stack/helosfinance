@@ -422,7 +422,10 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('Completed Today')
             ->assertSee('Order needs a tracking number')
             ->assertSee('Bank transaction needs review')
-            ->assertSee('Supplier payment needs settlement');
+            ->assertSee('Supplier payment needs settlement')
+            ->assertDontSee('{{ $task', false)
+            ->assertDontSee('@if (($task', false)
+            ->assertDontSee('@endif', false);
     }
 
     public function test_employees_cannot_access_the_work_queue_but_can_access_todays_work(): void
