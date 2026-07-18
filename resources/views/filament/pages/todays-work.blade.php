@@ -72,10 +72,10 @@
                     : '';
 
                 $actionButtons = $state !== 'completed'
-                    ? '<button type="button" wire:click="openMissionAction('.$id.')" class="inline-flex items-center justify-center rounded-md bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-500">Do action</button>
-                        <button type="button" wire:click="completeMission('.$id.')" class="inline-flex items-center justify-center rounded-md bg-success-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-success-500">Check complete</button>
-                        <button type="button" wire:click="blockMission('.$id.')" class="inline-flex items-center justify-center rounded-md bg-warning-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-warning-400">Blocked</button>
-                        <button type="button" wire:click="escalateMission('.$id.')" class="inline-flex items-center justify-center rounded-md bg-danger-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-danger-500">Escalate</button>'
+                    ? '<button type="button" wire:click="openMissionAction('.$id.')" class="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500">Do action</button>
+                        <button type="button" wire:click="completeMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50">Check complete</button>
+                        <button type="button" wire:click="blockMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-50">Blocked</button>
+                        <button type="button" wire:click="escalateMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-50">Escalate</button>'
                     : '';
 
                 $recordLink = $hasLink

@@ -205,6 +205,62 @@ class ResponsibilityMissionSystemTest extends TestCase
         ]);
     }
 
+    public function test_staff_today_work_does_not_show_missions_assigned_to_another_employee(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+
+        $arafath = $this->staff($horns, [
+            'name' => 'Arafath',
+            'email' => 'arafath-mission@example.com',
+            'staff_responsibilities' => ['expense_recording'],
+            'responsibilities_configured' => true,
+        ]);
+
+        $sandamali = $this->staff($horns, [
+            'name' => 'Sandamali',
+            'email' => 'sandamali-mission@example.com',
+            'staff_responsibilities' => ['expense_recording'],
+            'responsibilities_configured' => true,
+        ]);
+
+        StaffResponsibilityAssignment::query()->create([
+            'user_id' => $arafath->id,
+            'business_id' => $horns->id,
+            'responsibility_code' => 'expense_recording',
+            'can_view' => true,
+            'can_complete' => true,
+            'is_active' => true,
+        ]);
+
+        StaffResponsibilityAssignment::query()->create([
+            'user_id' => $sandamali->id,
+            'business_id' => $horns->id,
+            'responsibility_code' => 'expense_recording',
+            'can_view' => true,
+            'can_complete' => true,
+            'is_active' => true,
+        ]);
+
+        Expense::query()->create([
+            'business_id' => $horns->id,
+            'category' => 'Supplier bill for Arafath',
+            'expense_type' => 'variable',
+            'amount' => 5000,
+            'payment_status' => 'partial',
+            'paid_amount' => 1000,
+            'due_on' => today()->subDay(),
+            'spent_on' => today()->subDays(2),
+        ]);
+
+        $arafathMissions = app(MissionGeneratorService::class)->visibleForUser($arafath->fresh());
+        $sandamaliMissions = app(MissionGeneratorService::class)->visibleForUser($sandamali->fresh());
+
+        $this->assertCount(1, $arafathMissions);
+        $this->assertSame($arafath->id, $arafathMissions->first()->assigned_user_id);
+        $this->assertTrue($sandamaliMissions->isEmpty());
+        $this->assertFalse(app(MissionGeneratorService::class)->canUserAccessMission($sandamali->fresh(), $arafathMissions->first()));
+    }
+
     public function test_supervisor_can_review_missions_without_owner_finance_access(): void
     {
         [$owner, $horns] = $this->ownerWithBusinesses();

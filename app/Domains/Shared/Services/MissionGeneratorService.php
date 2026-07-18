@@ -118,6 +118,10 @@ class MissionGeneratorService
                     });
                 }
             })
+            ->where(function ($query) use ($user): void {
+                $query->whereNull('assigned_user_id')
+                    ->orWhere('assigned_user_id', $user->id);
+            })
             ->orderByRaw("case priority when 'critical' then 0 when 'high' then 1 when 'normal' then 2 else 3 end")
             ->orderBy('due_at')
             ->orderBy('created_at')
@@ -130,7 +134,8 @@ class MissionGeneratorService
             return in_array($mission->business_id, $user->accessibleBusinessIds(), true) || $user->isInternalAdmin();
         }
 
-        return $user->hasStaffResponsibility((string) $mission->responsibility_code, (int) $mission->business_id);
+        return $user->hasStaffResponsibility((string) $mission->responsibility_code, (int) $mission->business_id)
+            && (blank($mission->assigned_user_id) || (int) $mission->assigned_user_id === (int) $user->id);
     }
 
     public function canUserCompleteMission(User $user, Mission $mission): bool
