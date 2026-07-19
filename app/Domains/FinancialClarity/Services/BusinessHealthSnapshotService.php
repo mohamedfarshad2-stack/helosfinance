@@ -9,6 +9,7 @@ use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\ServiceClient;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
 
 class BusinessHealthSnapshotService
@@ -71,12 +72,6 @@ class BusinessHealthSnapshotService
 
     public function currentMonthSummary(Business $business): array
     {
-        $snapshot = $this->readCurrentMonth($business);
-
-        if ($snapshot instanceof FinancialSnapshot) {
-            return $this->snapshotToArray($snapshot);
-        }
-
         return $this->previewCurrentMonth($business);
     }
 
@@ -108,7 +103,13 @@ class BusinessHealthSnapshotService
             ->filter(fn (ServiceBillingRecord $record): bool => $record->balanceDue() > 0 && filled($record->due_on) && $record->due_on->isBefore(now()->startOfDay()))
             ->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue());
 
-        $revenue = (clone $events)->sum('revenue_amount') + $serviceRevenue;
+        $orderEvents = (clone $events)
+            ->whereIn('event_type', $this->orderLifecycleEventTypes())
+            ->get();
+        $latestDeliveredOrderEvents = $this->latestDeliveredOrderEvents($orderEvents);
+        $recognizedOrderRevenue = (float) $latestDeliveredOrderEvents->sum('revenue_amount');
+        $unrecognizedOrderRevenue = max((float) (clone $events)->sum('revenue_amount') - $recognizedOrderRevenue, 0.0);
+        $revenue = $recognizedOrderRevenue + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
         $leakage = (clone $events)->sum('leakage_amount');
         $recovery = (clone $events)->sum('recovery_amount');
@@ -160,7 +161,7 @@ class BusinessHealthSnapshotService
             'fake' => (clone $events)->where('event_type', OperationalEvent::FAKE_ORDER_DETECTED)->count(),
         ];
         $topLossSku = $this->topSkuByField((clone $events)->get(), 'leakage_amount');
-        $topRevenueSku = $this->topSkuByField((clone $events)->get(), 'revenue_amount');
+        $topRevenueSku = $this->topSkuByField($latestDeliveredOrderEvents, 'revenue_amount');
         $topExpenseCategories = Expense::query()
             ->where('business_id', $business->id)
             ->whereBetween('spent_on', [$start->toDateString(), $end->toDateString()])
@@ -189,6 +190,8 @@ class BusinessHealthSnapshotService
             'estimated_profit' => $profit,
             'metrics' => [
                 'direct_operational_costs' => $directCosts,
+                'recognized_order_revenue' => $recognizedOrderRevenue,
+                'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
                 'variable_expenses' => $variableExpenses,
                 'salary_pressure' => $salaryPressure,
@@ -231,6 +234,34 @@ class BusinessHealthSnapshotService
             'leakage_total' => (float) $snapshot->leakage_total,
             'estimated_profit' => (float) $snapshot->estimated_profit,
             'metrics' => $snapshot->metrics ?? [],
+        ];
+    }
+
+    private function latestDeliveredOrderEvents(Collection $events): Collection
+    {
+        return $events
+            ->groupBy(fn (OperationalEvent $event): string => (string) ($event->external_id ?: $event->id))
+            ->map(fn (Collection $group): ?OperationalEvent => $group
+                ->sortBy(fn (OperationalEvent $event): string => (string) $event->occurred_at?->timestamp.'-'.$event->id)
+                ->last())
+            ->filter(fn (?OperationalEvent $event): bool => $event instanceof OperationalEvent && $event->event_type === OperationalEvent::ORDER_DELIVERED)
+            ->values();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function orderLifecycleEventTypes(): array
+    {
+        return [
+            OperationalEvent::ORDER_CREATED,
+            OperationalEvent::ORDER_CONFIRMED,
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+            OperationalEvent::ORDER_RESENT,
+            OperationalEvent::FAKE_ORDER_DETECTED,
         ];
     }
 

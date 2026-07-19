@@ -189,12 +189,7 @@ class ClientHealthReport extends Page implements HasForms
 
         $this->snapshot = $refreshSnapshot
             ? $snapshots->refreshCurrentMonth($this->business)
-            : $snapshots->readCurrentMonth($this->business);
-
-        if (! $this->snapshot instanceof FinancialSnapshot) {
-            $preview = $snapshots->previewCurrentMonth($this->business);
-            $this->snapshot = new FinancialSnapshot($preview);
-        }
+            : new FinancialSnapshot($snapshots->previewCurrentMonth($this->business));
 
         $this->advisor = $advisor->forCurrentMonth($this->business);
         $this->briefing = $this->advisor['briefing'] ?? [];
