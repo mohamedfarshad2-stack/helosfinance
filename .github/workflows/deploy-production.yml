@@ -80,6 +80,22 @@ jobs:
       - name: Run deployment
         run: ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 'sudo deploy-helosfinance ${{ github.ref_name }}'
 
+      - name: Fast-forward known production app path
+        run: |
+          ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 "
+            sudo bash -lc '
+              if [ -f /var/www/helosfinance/artisan ]; then
+                cd /var/www/helosfinance
+                git fetch origin ${{ github.ref_name }}
+                git merge --ff-only origin/${{ github.ref_name }}
+                composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+                php artisan migrate --force
+              else
+                echo \"/var/www/helosfinance/artisan not found\"
+              fi
+            '
+          "
+
       - name: Clear runtime caches
         run: |
           ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 "
