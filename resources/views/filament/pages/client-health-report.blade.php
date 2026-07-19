@@ -1,5 +1,5 @@
 <x-filament-panels::page>
-    {{-- owner-dashboard-build: delivered-revenue-only-2026-07-19 --}}
+    <!-- owner-dashboard-build: delivered-revenue-only-2026-07-19 -->
     <div class="grid gap-6">
         <x-filament::section>
             <div class="text-sm text-gray-600 dark:text-gray-300">
