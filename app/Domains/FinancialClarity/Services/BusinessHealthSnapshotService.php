@@ -108,7 +108,13 @@ class BusinessHealthSnapshotService
             ->filter(fn (ServiceBillingRecord $record): bool => $record->balanceDue() > 0 && filled($record->due_on) && $record->due_on->isBefore(now()->startOfDay()))
             ->sum(fn (ServiceBillingRecord $record): float => $record->balanceDue());
 
-        $revenue = (clone $events)->sum('revenue_amount') + $serviceRevenue;
+        $recognizedOrderRevenue = (float) (clone $events)
+            ->where('event_type', OperationalEvent::ORDER_DELIVERED)
+            ->sum('revenue_amount');
+        $unrecognizedOrderRevenue = (float) (clone $events)
+            ->where('event_type', '!=', OperationalEvent::ORDER_DELIVERED)
+            ->sum('revenue_amount');
+        $revenue = $recognizedOrderRevenue + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
         $leakage = (clone $events)->sum('leakage_amount');
         $recovery = (clone $events)->sum('recovery_amount');
@@ -160,7 +166,10 @@ class BusinessHealthSnapshotService
             'fake' => (clone $events)->where('event_type', OperationalEvent::FAKE_ORDER_DETECTED)->count(),
         ];
         $topLossSku = $this->topSkuByField((clone $events)->get(), 'leakage_amount');
-        $topRevenueSku = $this->topSkuByField((clone $events)->get(), 'revenue_amount');
+        $topRevenueSku = $this->topSkuByField(
+            (clone $events)->where('event_type', OperationalEvent::ORDER_DELIVERED)->get(),
+            'revenue_amount'
+        );
         $topExpenseCategories = Expense::query()
             ->where('business_id', $business->id)
             ->whereBetween('spent_on', [$start->toDateString(), $end->toDateString()])
@@ -189,6 +198,8 @@ class BusinessHealthSnapshotService
             'estimated_profit' => $profit,
             'metrics' => [
                 'direct_operational_costs' => $directCosts,
+                'recognized_order_revenue' => $recognizedOrderRevenue,
+                'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
                 'variable_expenses' => $variableExpenses,
                 'salary_pressure' => $salaryPressure,
