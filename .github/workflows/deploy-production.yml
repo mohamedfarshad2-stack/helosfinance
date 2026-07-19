@@ -86,6 +86,7 @@ jobs:
             sudo bash -lc '
               for app in /var/www/*; do
                 if [ -f \"\$app/artisan\" ]; then
+                  echo \"===== clearing caches for \$app =====\"
                   cd \"\$app\"
                   php artisan optimize:clear || true
                   php artisan view:clear || true
@@ -94,9 +95,31 @@ jobs:
                 fi
               done
 
+              systemctl reload php8.4-fpm 2>/dev/null || true
               systemctl reload php8.3-fpm 2>/dev/null || true
               systemctl reload php8.2-fpm 2>/dev/null || true
               systemctl reload php8.1-fpm 2>/dev/null || true
+              systemctl reload nginx 2>/dev/null || true
               systemctl reload apache2 2>/dev/null || true
+            '
+          "
+
+      - name: Verify deployed code fingerprint
+        run: |
+          ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 "
+            sudo bash -lc '
+              for app in /var/www/*; do
+                if [ -f \"\$app/artisan\" ]; then
+                  echo \"===== app: \$app =====\"
+                  cd \"\$app\"
+                  git rev-parse HEAD 2>/dev/null || true
+                  git status --short 2>/dev/null || true
+                  if grep -q \"recognized_order_revenue\" app/Domains/FinancialClarity/Services/BusinessHealthSnapshotService.php 2>/dev/null; then
+                    echo \"owner-revenue-fix: present\"
+                  else
+                    echo \"owner-revenue-fix: missing\"
+                  fi
+                fi
+              done
             '
           "
