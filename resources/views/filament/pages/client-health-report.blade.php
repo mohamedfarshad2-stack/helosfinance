@@ -1,5 +1,6 @@
 <x-filament-panels::page>
     <!-- owner-dashboard-build: delivered-revenue-only-2026-07-19 -->
+    <!-- owner-dashboard-snapshot: revenue={{ $snapshot?->revenue_total ?? 'none' }} recognized={{ $snapshot?->metrics['recognized_order_revenue'] ?? 'missing' }} unrecognized={{ $snapshot?->metrics['unrecognized_order_revenue'] ?? 'missing' }} -->
     <div class="grid gap-6">
         <x-filament::section>
             <div class="text-sm text-gray-600 dark:text-gray-300">
