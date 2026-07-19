@@ -182,6 +182,38 @@ class RevenuePipelineServiceTest extends TestCase
         $this->assertSame(5000.0, (float) $snapshot['revenue_total']);
     }
 
+    public function test_stock_app_default_channel_counts_as_cod_delivered_revenue(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Default Channel Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'COD-DEFAULT-1',
+            'channel' => 'Default',
+            'quantity' => 1,
+            'revenue_amount' => 1990,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 1990, 'channel' => 'Default'],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        $pipeline = app(RevenuePipelineService::class)->forCurrentMonth($business);
+
+        $this->assertSame(1990.0, (float) $pipeline['cod']['collected_revenue']);
+        $this->assertSame(1990.0, (float) $pipeline['total_collected_revenue']);
+        $this->assertSame(1, (int) $pipeline['cod']['delivered_orders']);
+    }
+
     public function test_cod_orders_without_tracking_do_not_appear_in_finance_pipeline(): void
     {
         $business = Business::query()->create([

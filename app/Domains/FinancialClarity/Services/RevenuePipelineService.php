@@ -334,7 +334,7 @@ class RevenuePipelineService
 
     private function isCodChannel(string $channel): bool
     {
-        return $channel === '' || in_array($channel, ['cod', 'cash_on_delivery', 'cash', 'retail'], true);
+        return $channel === '' || in_array($channel, ['cod', 'cash_on_delivery', 'cash', 'retail', 'default'], true);
     }
 
     private function isWholesaleChannel(string $channel): bool
