@@ -293,7 +293,30 @@ class StockAppWebhookTest extends TestCase
             ->assertJsonPath('impact.leakage_amount', 420)
             ->assertJsonPath('impact.recovery_amount', 0)
             ->assertJsonPath('impact.economics.return_courier_amount', 260)
-            ->assertJsonPath('impact.economics.return_packaging_amount', 160);
+            ->assertJsonPath('impact.economics.return_packaging_amount', 160)
+            ->assertJsonPath('impact.economics.return_marketing_amount', 0);
+    }
+
+    public function test_returned_order_includes_return_marketing_cost_when_configured(): void
+    {
+        $business = Business::query()->create(['name' => 'Return Marketing Business']);
+        CostAssumption::query()->create(['business_id' => $business->id, 'key' => 'return_courier_fee', 'label' => 'Return courier cost', 'amount' => 260]);
+        CostAssumption::query()->create(['business_id' => $business->id, 'key' => 'return_packaging_fee', 'label' => 'Return packaging cost', 'amount' => 160]);
+        CostAssumption::query()->create(['business_id' => $business->id, 'key' => 'return_marketing_fee', 'label' => 'Return marketing cost', 'amount' => 500]);
+
+        $this->postJson('/api/v1/stock-app/webhook', [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::ORDER_RETURNED,
+            'external_id' => 'ORDER-RETURN-MARKETING',
+            'sale_amount' => 3000,
+            'quantity' => 1,
+        ])->assertCreated()
+            ->assertJsonPath('impact.revenue_amount', 0)
+            ->assertJsonPath('impact.direct_cost_amount', 0)
+            ->assertJsonPath('impact.leakage_amount', 920)
+            ->assertJsonPath('impact.economics.return_courier_amount', 260)
+            ->assertJsonPath('impact.economics.return_packaging_amount', 160)
+            ->assertJsonPath('impact.economics.return_marketing_amount', 500);
     }
 
     public function test_returned_order_can_restock_back_into_stock(): void

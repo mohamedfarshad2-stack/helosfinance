@@ -26,6 +26,7 @@ class OperationalImpactCalculator
         $delivery = $courier['delivery'];
         $returnCourier = $courier['return'];
         $returnPackaging = (float) ($payload['return_packaging_amount'] ?? $this->assumption($business, ['return_packaging_fee'], 'Return packaging cost', 0));
+        $returnMarketing = (float) ($payload['return_marketing_amount'] ?? $payload['marketing_amount'] ?? $this->assumption($business, ['return_marketing_fee', 'marketing_cost_per_return'], 'Return marketing cost', 0));
         $resendCourier = $courier['resend'];
         $resendPackaging = (float) ($payload['resend_packaging_amount'] ?? $this->assumption($business, ['resend_packaging_fee'], 'Resend packaging cost', 0));
         $verification = (float) ($payload['verification_amount'] ?? $this->assumption($business, 'verification_cost', 'Verification cost', 0));
@@ -95,12 +96,13 @@ class OperationalImpactCalculator
                 'sku_id' => $sku?->id,
                 'revenue_amount' => 0,
                 'direct_cost_amount' => 0,
-                'leakage_amount' => $returnCourier + $returnPackaging + (float) ($payload['damage_cost'] ?? 0),
+                'leakage_amount' => $returnCourier + $returnPackaging + $returnMarketing + (float) ($payload['damage_cost'] ?? 0),
                 'recovery_amount' => (float) ($payload['recovery_amount'] ?? $restockRecovery),
                 'economics' => [
                     'return_courier_amount' => $returnCourier,
                     'return_courier_cost_source' => $courier['return_source'],
                     'return_packaging_amount' => $returnPackaging,
+                    'return_marketing_amount' => $returnMarketing,
                     'damage_amount' => (float) ($payload['damage_cost'] ?? 0),
                     'recovery_amount' => (float) ($payload['recovery_amount'] ?? $restockRecovery),
                     ...$selling,

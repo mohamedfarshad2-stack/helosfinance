@@ -44,6 +44,7 @@ class RevenuePipelineService
                 'wholesale' => $this->emptyChannel('Wholesale'),
                 'service' => $serviceBilling,
                 'cod_settlement' => $codSettlement,
+                'cod_reconciliation' => $this->codReconciliation(0, 0, 0, 0, 0, 0, $codSettlement),
                 'total_expected_revenue' => round($serviceExpected, 2),
                 'total_collected_revenue' => round($serviceCollected, 2),
                 'total_cash_confirmed' => round($serviceCollected + (float) ($codSettlement['cash_received'] ?? 0), 2),
@@ -67,7 +68,11 @@ class RevenuePipelineService
 
         $codPending = $codOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('expected_amount');
         $codCollected = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount');
-        $codReturned = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->sum('reversed_amount');
+        $codReturnedOrders = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED);
+        $codReturned = $codReturnedOrders->sum('expected_amount');
+        $codReturnLoss = $codReturnedOrders->sum('leakage_amount');
+        $codDeliveredCourierCost = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('direct_cost_amount');
+        $codResendCost = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RESENT)->sum('direct_cost_amount');
         $codCashReceived = (float) ($codSettlement['cash_received'] ?? 0);
         $codSettlementGap = round($codCollected - $codCashReceived, 2);
 
@@ -102,6 +107,9 @@ class RevenuePipelineService
                 'cash_received' => round($codCashReceived, 2),
                 'settlement_gap' => $codSettlementGap,
                 'returned_revenue' => round($codReturned, 2),
+                'return_loss' => round($codReturnLoss, 2),
+                'delivered_courier_cost' => round($codDeliveredCourierCost, 2),
+                'resend_cost' => round($codResendCost, 2),
                 'pending_orders' => $codOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->count(),
                 'delivered_orders' => $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->count(),
                 'returned_orders' => $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->count(),
@@ -117,6 +125,15 @@ class RevenuePipelineService
             ],
             'service' => $serviceBilling,
             'cod_settlement' => $codSettlement,
+            'cod_reconciliation' => $this->codReconciliation(
+                $codCollected,
+                $codPending,
+                $codReturned,
+                $codReturnLoss,
+                $codDeliveredCourierCost,
+                $codResendCost,
+                $codSettlement
+            ),
             'total_expected_revenue' => round($codPending + $wholesalePending + $servicePending, 2),
             'total_collected_revenue' => round($codCollected + $wholesaleDelivered + $serviceCollected, 2),
             'total_cash_confirmed' => round($codCashReceived + $wholesaleDelivered + $serviceCollected, 2),
@@ -129,6 +146,43 @@ class RevenuePipelineService
                 $returnedCount > 0 ? 'Check which returned parcels can be restocked and which should be treated as scrap.' : null,
                 $deliveredCount > 0 && abs($codSettlementGap) > 0.01 ? 'Match delivered COD revenue with bank COD settlement deposits so cash is clear.' : null,
             ])),
+        ];
+    }
+
+    private function codReconciliation(float $deliveredRevenue, float $pendingRevenue, float $returnedValue, float $returnLoss, float $deliveredCourierCost, float $resendCost, array $settlement): array
+    {
+        $cashReceived = (float) ($settlement['cash_received'] ?? 0);
+        $courierDeductions = (float) ($settlement['deductions'] ?? 0);
+        $settlementGap = round($deliveredRevenue - $cashReceived, 2);
+        $parcelCost = $returnLoss + $deliveredCourierCost + $resendCost;
+
+        return [
+            'parcel_truth' => [
+                'delivered_revenue' => round($deliveredRevenue, 2),
+                'pending_revenue' => round($pendingRevenue, 2),
+                'returned_value' => round($returnedValue, 2),
+                'return_loss' => round($returnLoss, 2),
+                'delivered_courier_cost' => round($deliveredCourierCost, 2),
+                'resend_cost' => round($resendCost, 2),
+                'parcel_cost_total' => round($parcelCost, 2),
+            ],
+            'settlement_truth' => [
+                'cash_received' => round($cashReceived, 2),
+                'courier_deductions' => round($courierDeductions, 2),
+                'settlement_rows' => (int) ($settlement['row_count'] ?? 0),
+                'settlement_gap' => $settlementGap,
+            ],
+            'month_end' => [
+                'cash_confirmed_against_delivered_percent' => $deliveredRevenue > 0 ? round(($cashReceived / $deliveredRevenue) * 100, 1) : 0.0,
+                'net_cod_after_known_parcel_costs' => round($deliveredRevenue - $parcelCost, 2),
+                'needs_review' => abs($settlementGap) > 0.01 || $pendingRevenue > 0 || $returnedValue > 0,
+                'owner_message' => match (true) {
+                    abs($settlementGap) > 0.01 => 'Delivered COD and bank settlement do not match yet. Check courier settlement report and bank review.',
+                    $pendingRevenue > 0 => 'Some COD money is still in the parcel pipeline and not settled yet.',
+                    $returnedValue > 0 => 'Returns are reducing the month. Check return reasons, restock, and marketing waste.',
+                    default => 'COD parcel result and settlement cash are aligned for the visible data.',
+                },
+            ],
         ];
     }
 
@@ -274,6 +328,14 @@ class RevenuePipelineService
             'paid_amount' => $paidAmount,
             'remaining_amount' => max($expectedAmount - $paidAmount - $recognizedAmount, 0.0),
             'reversed_amount' => $reversedAmount,
+            'direct_cost_amount' => (float) ($latest->direct_cost_amount ?? 0),
+            'leakage_amount' => (float) ($latest->leakage_amount ?? 0),
+            'recovery_amount' => (float) ($latest->recovery_amount ?? 0),
+            'return_courier_amount' => (float) ($payload['economics']['return_courier_amount'] ?? 0),
+            'return_packaging_amount' => (float) ($payload['economics']['return_packaging_amount'] ?? 0),
+            'return_marketing_amount' => (float) ($payload['economics']['return_marketing_amount'] ?? 0),
+            'resend_courier_amount' => (float) ($payload['economics']['resend_courier_amount'] ?? 0),
+            'resend_packaging_amount' => (float) ($payload['economics']['resend_packaging_amount'] ?? 0),
             'customer_payment_method' => $payload['customer_payment_method'] ?? null,
             'payment_due_at' => $payload['payment_due_at'] ?? null,
             'cheque_number' => $payload['cheque_number'] ?? null,
@@ -348,6 +410,11 @@ class RevenuePipelineService
             'expected_revenue' => 0.0,
             'collected_revenue' => 0.0,
             'returned_revenue' => 0.0,
+            'return_loss' => 0.0,
+            'delivered_courier_cost' => 0.0,
+            'resend_cost' => 0.0,
+            'cash_received' => 0.0,
+            'settlement_gap' => 0.0,
             'pending_orders' => 0,
             'delivered_orders' => 0,
             'returned_orders' => 0,

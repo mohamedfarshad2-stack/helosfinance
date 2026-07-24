@@ -119,7 +119,7 @@ class RevenuePipelineServiceTest extends TestCase
         $this->assertSame(4500.0, (float) $pipeline['cod']['collected_revenue']);
         $this->assertSame(0.0, (float) $pipeline['cod']['cash_received']);
         $this->assertSame(4500.0, (float) $pipeline['cod']['settlement_gap']);
-        $this->assertSame(0.0, (float) $pipeline['cod']['returned_revenue']);
+        $this->assertSame(4500.0, (float) $pipeline['cod']['returned_revenue']);
         $this->assertSame(5000.0, (float) $pipeline['wholesale']['expected_revenue']);
         $this->assertSame(15000.0, (float) $pipeline['wholesale']['collected_revenue']);
         $this->assertSame(3000.0, (float) collect($pipeline['orders'])->firstWhere('external_id', 'WHO-1')['paid_amount']);
@@ -212,6 +212,114 @@ class RevenuePipelineServiceTest extends TestCase
         $this->assertSame(1990.0, (float) $pipeline['cod']['collected_revenue']);
         $this->assertSame(1990.0, (float) $pipeline['total_collected_revenue']);
         $this->assertSame(1, (int) $pipeline['cod']['delivered_orders']);
+    }
+
+    public function test_cod_reconciliation_compares_parcel_truth_bank_cash_and_return_loss(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'COD Reconciliation Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'COD-RECON-DELIVERED',
+            'channel' => 'Default',
+            'quantity' => 1,
+            'revenue_amount' => 5000,
+            'direct_cost_amount' => 425,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 5000, 'channel' => 'Default'],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'COD-RECON-PENDING',
+            'channel' => 'Default',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 1200,
+            'leakage_amount' => 0,
+            'recovery_amount' => 0,
+            'payload' => ['sale_amount' => 3000, 'channel' => 'Default'],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_RETURNED,
+            'external_id' => 'COD-RECON-RETURNED',
+            'channel' => 'Default',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'direct_cost_amount' => 0,
+            'leakage_amount' => 920,
+            'recovery_amount' => 0,
+            'payload' => [
+                'sale_amount' => 2500,
+                'channel' => 'Default',
+                'economics' => [
+                    'return_courier_amount' => 260,
+                    'return_packaging_amount' => 160,
+                    'return_marketing_amount' => 500,
+                ],
+            ],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        BankTransaction::query()->create([
+            'business_id' => $business->id,
+            'allocated_business_id' => $business->id,
+            'transaction_date' => now()->toDateString(),
+            'description' => 'Courier COD settlement',
+            'money_container' => 'Current Account',
+            'debit' => 0,
+            'credit' => 4200,
+            'balance' => 4200,
+            'classification' => 'cod_settlement',
+            'transaction_type' => 'cod_settlement',
+            'status' => 'classified',
+            'confidence' => 1,
+            'reviewed_at' => now(),
+        ]);
+
+        BankTransaction::query()->create([
+            'business_id' => $business->id,
+            'allocated_business_id' => $business->id,
+            'transaction_date' => now()->toDateString(),
+            'description' => 'Courier invoice deduction',
+            'money_container' => 'Current Account',
+            'debit' => 300,
+            'credit' => 0,
+            'balance' => 3900,
+            'classification' => 'cod_settlement',
+            'transaction_type' => 'cod_settlement',
+            'status' => 'classified',
+            'confidence' => 1,
+            'reviewed_at' => now(),
+        ]);
+
+        $pipeline = app(RevenuePipelineService::class)->forCurrentMonth($business);
+        $reconciliation = $pipeline['cod_reconciliation'];
+
+        $this->assertSame(5000.0, (float) $reconciliation['parcel_truth']['delivered_revenue']);
+        $this->assertSame(3000.0, (float) $reconciliation['parcel_truth']['pending_revenue']);
+        $this->assertSame(2500.0, (float) $reconciliation['parcel_truth']['returned_value']);
+        $this->assertSame(920.0, (float) $reconciliation['parcel_truth']['return_loss']);
+        $this->assertSame(4200.0, (float) $reconciliation['settlement_truth']['cash_received']);
+        $this->assertSame(300.0, (float) $reconciliation['settlement_truth']['courier_deductions']);
+        $this->assertSame(800.0, (float) $reconciliation['settlement_truth']['settlement_gap']);
+        $this->assertTrue((bool) $reconciliation['month_end']['needs_review']);
     }
 
     public function test_cod_orders_without_tracking_do_not_appear_in_finance_pipeline(): void

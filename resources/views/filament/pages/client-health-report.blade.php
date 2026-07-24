@@ -1141,6 +1141,61 @@
                         | Total returned: LKR {{ number_format((float) ($revenuePipeline['total_returned_revenue'] ?? 0), 2) }}
                     </div>
                 </div>
+
+                @if ($supportsTradeOrManufacturing)
+                    @php
+                        $codRecon = $revenuePipeline['cod_reconciliation'] ?? [];
+                        $parcelTruth = $codRecon['parcel_truth'] ?? [];
+                        $settlementTruth = $codRecon['settlement_truth'] ?? [];
+                        $monthEndTruth = $codRecon['month_end'] ?? [];
+                    @endphp
+                    <div class="mt-4 rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <div class="text-xs uppercase tracking-wide text-gray-500">COD settlement reconciliation</div>
+                                <div class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                                    Parcel status creates sales truth. Courier settlement and bank review confirm cash truth. HELOS keeps them separate so month-end profit can be trusted.
+                                </div>
+                            </div>
+                            <div class="rounded-lg bg-gray-50 px-3 py-2 text-sm font-semibold {{ ($monthEndTruth['needs_review'] ?? false) ? 'text-amber-700 dark:text-amber-200' : 'text-emerald-700 dark:text-emerald-200' }} dark:bg-gray-900">
+                                {{ ($monthEndTruth['needs_review'] ?? false) ? 'Needs review' : 'Aligned' }}
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid gap-3 lg:grid-cols-3">
+                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                <div class="text-sm font-semibold text-gray-900 dark:text-white">Daily parcel result</div>
+                                <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <div class="flex justify-between gap-3"><span>Delivered revenue</span><strong>LKR {{ number_format((float) ($parcelTruth['delivered_revenue'] ?? 0), 2) }}</strong></div>
+                                    <div class="flex justify-between gap-3"><span>Pending COD</span><strong>LKR {{ number_format((float) ($parcelTruth['pending_revenue'] ?? 0), 2) }}</strong></div>
+                                    <div class="flex justify-between gap-3"><span>Returned value</span><strong>LKR {{ number_format((float) ($parcelTruth['returned_value'] ?? 0), 2) }}</strong></div>
+                                    <div class="flex justify-between gap-3"><span>Return loss</span><strong>LKR {{ number_format((float) ($parcelTruth['return_loss'] ?? 0), 2) }}</strong></div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                <div class="text-sm font-semibold text-gray-900 dark:text-white">Weekly courier/bank result</div>
+                                <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <div class="flex justify-between gap-3"><span>Bank COD cash</span><strong>LKR {{ number_format((float) ($settlementTruth['cash_received'] ?? 0), 2) }}</strong></div>
+                                    <div class="flex justify-between gap-3"><span>Courier deductions</span><strong>LKR {{ number_format((float) ($settlementTruth['courier_deductions'] ?? 0), 2) }}</strong></div>
+                                    <div class="flex justify-between gap-3"><span>Settlement rows</span><strong>{{ (int) ($settlementTruth['settlement_rows'] ?? 0) }}</strong></div>
+                                    <div class="flex justify-between gap-3"><span>Settlement gap</span><strong>LKR {{ number_format((float) ($settlementTruth['settlement_gap'] ?? 0), 2) }}</strong></div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                <div class="text-sm font-semibold text-gray-900 dark:text-white">Month-end owner guide</div>
+                                <div class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <div class="flex justify-between gap-3"><span>Cash confirmed</span><strong>{{ number_format((float) ($monthEndTruth['cash_confirmed_against_delivered_percent'] ?? 0), 1) }}%</strong></div>
+                                    <div class="flex justify-between gap-3"><span>Known COD after parcel costs</span><strong>LKR {{ number_format((float) ($monthEndTruth['net_cod_after_known_parcel_costs'] ?? 0), 2) }}</strong></div>
+                                    <div class="rounded-lg border border-dashed border-gray-300 p-3 text-gray-700 dark:border-gray-700 dark:text-gray-300">
+                                        {{ $monthEndTruth['owner_message'] ?? 'COD reconciliation is waiting for parcel and bank data.' }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                @endif
             </x-filament::section>
 
             <x-filament::section>
