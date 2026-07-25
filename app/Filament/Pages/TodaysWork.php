@@ -370,7 +370,7 @@ class TodaysWork extends Page
             $goalType === 'profit' && $averageContribution > 0 => (int) ceil($gap / $averageContribution),
             default => null,
         };
-        $daysRemaining = max(now()->diffInDays(now()->endOfMonth()) + 1, 1);
+        $daysRemaining = max((int) now()->startOfDay()->diffInDays(now()->endOfMonth()->startOfDay()) + 1, 1);
         $dailyDeliveries = $requiredDeliveries === null ? null : (int) ceil($requiredDeliveries / $daysRemaining);
         $directReportIds = $user->directReports()->pluck('id');
         $teamOverdue = Mission::query()
