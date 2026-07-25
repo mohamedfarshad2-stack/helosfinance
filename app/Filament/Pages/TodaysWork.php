@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\Mission;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\MissionGeneratorService;
@@ -39,6 +40,8 @@ class TodaysWork extends Page
     public array $missionActionData = [];
 
     public ?string $missionActionError = null;
+
+    private ?string $stockAppUrlCache = null;
 
     public function mount(MissionGeneratorService $missions): void
     {
@@ -340,6 +343,21 @@ class TodaysWork extends Page
             'overdue' => $missions->filter(fn (Mission $mission): bool => $mission->due_at?->isPast() ?? false)->count(),
             'blocked' => $missions->whereIn('status', [Mission::STATUS_BLOCKED, Mission::STATUS_ESCALATED])->count(),
             'waiting_review' => $missions->where('status', Mission::STATUS_WAITING_REVIEW)->count(),
+            'members' => $missions
+                ->groupBy('assigned_user_id')
+                ->map(function (Collection $memberMissions, int|string $userId): array {
+                    $employee = User::query()->find($userId);
+
+                    return [
+                        'name' => $employee?->name ?? 'Unassigned employee',
+                        'open' => $memberMissions->count(),
+                        'overdue' => $memberMissions->filter(fn (Mission $mission): bool => $mission->due_at?->isPast() ?? false)->count(),
+                        'blocked' => $memberMissions->whereIn('status', [Mission::STATUS_BLOCKED, Mission::STATUS_ESCALATED])->count(),
+                    ];
+                })
+                ->sortByDesc('overdue')
+                ->values()
+                ->all(),
         ];
     }
 
@@ -391,7 +409,7 @@ class TodaysWork extends Page
             'recommended_action' => $metadata['recommended_action'] ?? 'Open the related record and finish the next real step.',
             'related_record' => $metadata['related_record'] ?? null,
             'assigned_team' => $metadata['assigned_team'] ?? 'Assigned team',
-            'assigned_user' => $metadata['assigned_user_label'] ?? optional($mission->assignedUser)->name ?? 'Assigned staff',
+            'assigned_user' => optional($mission->assignedUser)->name ?? $metadata['assigned_user_label'] ?? 'Assigned staff',
             'created_at' => optional($mission->created_at)->toDateString(),
             'due_on' => optional($mission->due_at)->toDateString(),
             'completed_at' => optional($mission->completed_at)->toDateString(),
@@ -401,7 +419,37 @@ class TodaysWork extends Page
             'impact_type' => $mission->impact_type,
             'estimated_impact' => $mission->estimated_impact,
             'confidence' => $mission->confidence,
+            'workplace' => $this->missionWorkplace($mission),
+            'workplace_label' => $this->missionWorkplace($mission) === 'stock_app' ? 'Stock App' : 'HELOAS',
+            'workplace_instruction' => $this->missionWorkplace($mission) === 'stock_app'
+                ? 'HELOAS is guiding this work. Complete the operational change in Stock App, then return after the next sync.'
+                : 'Complete this source record inside HELOAS because it controls finance, cost, stock truth, production, or management review.',
+            'workplace_url' => $this->missionWorkplace($mission) === 'stock_app'
+                ? $this->stockAppUrl()
+                : ($metadata['related_record']['url'] ?? null),
         ];
+    }
+
+    private function missionWorkplace(Mission $mission): string
+    {
+        return in_array($mission->responsibility_code, ['order_confirmation', 'return_recovery', 'dispatch'], true)
+            ? 'stock_app'
+            : 'helos';
+    }
+
+    private function stockAppUrl(): string
+    {
+        if ($this->stockAppUrlCache !== null) {
+            return $this->stockAppUrlCache;
+        }
+
+        $baseUrl = IntegrationSource::query()
+            ->where('business_id', $this->business?->id)
+            ->where('type', 'stock_app')
+            ->where('status', 'active')
+            ->value('base_url');
+
+        return $this->stockAppUrlCache = rtrim((string) ($baseUrl ?: 'https://codreturnslanka.lk'), '/').'/admin';
     }
 
     private function taskResponsibility(array $task): ?string

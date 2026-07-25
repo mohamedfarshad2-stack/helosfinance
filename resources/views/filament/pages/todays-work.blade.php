@@ -40,6 +40,19 @@
                 </div>
             </x-filament::section>
 
+            <x-filament::section>
+                <div class="grid gap-4 lg:grid-cols-2">
+                    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Operational work - do it in Stock App</div>
+                        <div class="mt-2 text-sm text-blue-900 dark:text-blue-100">Customer calls, order confirmation, no-answer follow-up, dispatch, tracking, returns, and resends are completed in Stock App. HELOAS prioritizes and monitors them.</div>
+                    </div>
+                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Control work - do it in HELOAS</div>
+                        <div class="mt-2 text-sm text-emerald-900 dark:text-emerald-100">Finance, expenses, SKU mapping, cost truth, material stock, production records, management review, blockers, and escalation are handled in HELOAS.</div>
+                    </div>
+                </div>
+            </x-filament::section>
+
             @if (! empty($workQueue['team_summary']))
                 <x-filament::section>
                     <div>
@@ -54,6 +67,21 @@
                             </div>
                         @endforeach
                     </div>
+                    @if (! empty($workQueue['team_summary']['members']))
+                        <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                            <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900">
+                                <span>Employee</span><span>Open</span><span>Overdue</span><span>Blocked</span>
+                            </div>
+                            @foreach ($workQueue['team_summary']['members'] as $member)
+                                <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-800">
+                                    <span class="font-medium text-gray-950 dark:text-white">{{ $member['name'] }}</span>
+                                    <span>{{ $member['open'] }}</span>
+                                    <span class="{{ $member['overdue'] > 0 ? 'font-semibold text-red-600' : '' }}">{{ $member['overdue'] }}</span>
+                                    <span>{{ $member['blocked'] }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </x-filament::section>
             @endif
 
@@ -138,19 +166,30 @@
                 $priority = e(ucfirst((string) ($task['priority'] ?? 'medium')));
                 $action = e($task['recommended_action'] ?? 'Open the item and finish the next step.');
                 $assigned = e($task['assigned_user'] ?? 'Unassigned');
+                $workplace = (string) ($task['workplace'] ?? 'helos');
+                $workplaceLabel = e($task['workplace_label'] ?? 'HELOAS');
+                $workplaceInstruction = e($task['workplace_instruction'] ?? 'Complete the next step in HELOAS.');
+                $workplaceUrl = filled($task['workplace_url'] ?? null) ? e($task['workplace_url']) : null;
 
                 $startButton = $state === 'open'
                     ? '<button type="button" wire:click="startMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Start</button>'
                     : '';
 
-                $actionButtons = $state !== 'completed'
-                    ? '<button type="button" wire:click="openMissionAction('.$id.')" class="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500">Do action</button>
+                if ($state !== 'completed' && $workplace === 'stock_app') {
+                    $actionButtons = ($workplaceUrl ? '<a href="'.$workplaceUrl.'" target="_blank" rel="noopener" class="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500">Open Stock App</a>' : '')
+                        .'<button type="button" wire:click="completeMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50">Check Stock sync</button>
+                        <button type="button" wire:click="blockMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-50">Blocked</button>
+                        <button type="button" wire:click="escalateMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-50">Escalate</button>';
+                } elseif ($state !== 'completed') {
+                    $actionButtons = '<button type="button" wire:click="openMissionAction('.$id.')" class="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500">Do in HELOAS</button>
                         <button type="button" wire:click="completeMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50">Check complete</button>
                         <button type="button" wire:click="blockMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-50">Blocked</button>
-                        <button type="button" wire:click="escalateMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-50">Escalate</button>'
-                    : '';
+                        <button type="button" wire:click="escalateMission('.$id.')" class="inline-flex items-center justify-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-50">Escalate</button>';
+                } else {
+                    $actionButtons = '';
+                }
 
-                $recordLink = $hasLink
+                $recordLink = $hasLink && $workplace !== 'stock_app'
                     ? '<a href="'.e($related['url']).'" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">Open record</a>'
                     : '';
 
@@ -189,6 +228,10 @@
                             <div class="text-xs uppercase tracking-wide text-gray-500">Who should take it</div>
                             <div class="mt-1">{$assigned}</div>
                         </div>
+                    </div>
+
+                    <div class="mt-4 rounded-md border border-gray-200 bg-white/70 px-3 py-2 text-sm dark:border-gray-800 dark:bg-gray-950/30">
+                        <span class="font-semibold">Where to work: {$workplaceLabel}.</span> {$workplaceInstruction}
                     </div>
 
                     <div class="mt-4 flex flex-wrap items-center gap-3 text-sm">
