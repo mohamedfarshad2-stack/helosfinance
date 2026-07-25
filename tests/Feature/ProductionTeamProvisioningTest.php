@@ -65,5 +65,21 @@ class ProductionTeamProvisioningTest extends TestCase
             ->where('responsibility_code', 'supervisor_review')
             ->where('can_review', true)
             ->exists());
+
+        $loginMigration = require database_path('migrations/2026_07_25_000003_activate_horns_leadership_logins.php');
+        $loginMigration->up();
+
+        $nifras->refresh();
+        $arafath->refresh();
+        $sandamali->refresh();
+
+        $this->assertSame('nifras@helos.com', $nifras->email);
+        $this->assertSame('arafath@helos.com', $arafath->email);
+        $this->assertSame('sandhamali@helos.com', $sandamali->email);
+        $this->assertTrue(Hash::check('nifras@789', $nifras->password));
+        $this->assertTrue(Hash::check('arafath@789', $arafath->password));
+        $this->assertTrue(Hash::check('sandhamali@789', $sandamali->password));
+        $this->assertSame($nifras->id, $arafath->supervisor_user_id);
+        $this->assertSame($nifras->id, $sandamali->supervisor_user_id);
     }
 }
