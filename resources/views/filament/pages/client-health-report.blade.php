@@ -37,6 +37,46 @@
                 $ownerMap = $ownerBusinessMap ?? ['headline' => '', 'default_key' => 'trust', 'nodes' => [], 'top_actions' => []];
                 $setupGuide = $ownerSetupGuide ?? ['steps' => [], 'progress' => 0, 'completed' => 0, 'total' => 0];
                 $coach = $ownerCoach ?? ['coach_cards' => [], 'next_action' => null, 'do_first' => []];
+                $ownerPeriodStart = \Illuminate\Support\Carbon::parse($snapshot?->period_start ?? now()->startOfMonth())->format('M j, Y');
+                $ownerPeriodEnd = \Illuminate\Support\Carbon::parse($snapshot?->period_end ?? now())->format('M j, Y');
+                $ownerMetrics = collect($ownerMap['key_metrics'] ?? [])->keyBy('label');
+                $codRecon = $revenuePipeline['cod_reconciliation'] ?? [];
+                $parcelTruth = $codRecon['parcel_truth'] ?? [];
+                $settlementTruth = $codRecon['settlement_truth'] ?? [];
+                $monthEndTruth = $codRecon['month_end'] ?? [];
+                $openManagerWork = (int) ($operationalSummary['Tasks due today'] ?? 0) + (int) ($operationalSummary['High priority'] ?? 0);
+                $ownerBriefs = [
+                    [
+                        'title' => 'Owner decisions',
+                        'subtitle' => 'Is the business making money?',
+                        'items' => [
+                            ['label' => 'Delivered revenue', 'value' => data_get($ownerMetrics->get('Revenue'), 'value', 'LKR 0')],
+                            ['label' => 'Profit after recorded costs', 'value' => data_get($ownerMetrics->get('Profit'), 'value', 'LKR 0')],
+                            ['label' => 'Safe to use', 'value' => data_get($ownerMetrics->get('Safe to use'), 'value', 'Not ready')],
+                        ],
+                        'note' => 'Use this to decide spending, pricing, offers, and whether the month is healthy.',
+                    ],
+                    [
+                        'title' => 'Manager operations',
+                        'subtitle' => 'What work must staff clear?',
+                        'items' => [
+                            ['label' => 'Dispatched, not sales yet', 'value' => 'LKR '.number_format((float) ($parcelTruth['pending_cod_value'] ?? $revenuePipeline['cod']['pending_revenue'] ?? 0), 2)],
+                            ['label' => 'Returned value', 'value' => 'LKR '.number_format((float) ($parcelTruth['returned_value'] ?? $revenuePipeline['cod']['returned_revenue'] ?? 0), 2)],
+                            ['label' => 'Open priority work', 'value' => $openManagerWork.' task(s)'],
+                        ],
+                        'note' => 'Use this to push confirmations, dispatch follow-up, returns, and team work.',
+                    ],
+                    [
+                        'title' => 'Finance control',
+                        'subtitle' => 'Can cash and reports be trusted?',
+                        'items' => [
+                            ['label' => 'Bank COD cash', 'value' => 'LKR '.number_format((float) ($settlementTruth['cash_received'] ?? $revenuePipeline['cod']['cash_received'] ?? 0), 2)],
+                            ['label' => 'Settlement gap', 'value' => 'LKR '.number_format((float) ($settlementTruth['settlement_gap'] ?? $revenuePipeline['cod']['settlement_gap'] ?? 0), 2)],
+                            ['label' => 'Cash confirmed', 'value' => number_format((float) ($monthEndTruth['cash_confirmed_against_delivered_percent'] ?? 0), 1).'%'],
+                        ],
+                        'note' => 'Use this for bank review, courier settlement, COD invoice checks, and month-end closing.',
+                    ],
+                ];
                 $setupSteps = collect($setupGuide['steps'] ?? []);
                 $pendingSetupSteps = $setupSteps->reject(fn (array $step): bool => (bool) ($step['done'] ?? false))->values();
                 $supportsService = $business?->supportsBusinessType(\App\Domains\Shared\Models\Business::TYPE_SERVICE) ?? false;
@@ -45,6 +85,42 @@
                 $supportsCapital = $business?->supportsCapitalIntelligence() ?? false;
                 $supportsInventory = $business?->supportsInventoryIntelligence() ?? false;
             @endphp
+
+            <x-filament::section>
+                <div class="grid gap-4">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Owner briefing</div>
+                            <h2 class="mt-1 text-2xl font-black text-gray-950 dark:text-white">{{ $business?->name ?? 'Selected business' }}</h2>
+                            <p class="mt-2 max-w-4xl text-sm text-gray-600 dark:text-gray-300">
+                                Report period: {{ $ownerPeriodStart }} to {{ $ownerPeriodEnd }}. Revenue means delivered parcels only. Dispatched parcels stay as money at risk until delivered or returned.
+                            </p>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Month-end rule</div>
+                            <div class="mt-1">Parcel status, courier settlement, and bank review must agree before owner profit is trusted.</div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 xl:grid-cols-3">
+                        @foreach ($ownerBriefs as $brief)
+                            <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ $brief['title'] }}</div>
+                                <div class="mt-1 text-base font-bold text-gray-950 dark:text-white">{{ $brief['subtitle'] }}</div>
+                                <div class="mt-4 grid gap-3">
+                                    @foreach ($brief['items'] as $item)
+                                        <div class="flex items-start justify-between gap-4 border-t border-gray-100 pt-3 text-sm dark:border-gray-800">
+                                            <span class="text-gray-600 dark:text-gray-300">{{ $item['label'] }}</span>
+                                            <strong class="text-right text-gray-950 dark:text-white">{{ $item['value'] }}</strong>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <div class="mt-4 rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-600 dark:bg-gray-900 dark:text-gray-300">{{ $brief['note'] }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </x-filament::section>
 
             <x-filament::section>
                 <div

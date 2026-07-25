@@ -70,6 +70,10 @@ class SalesInsightsTest extends TestCase
         $this->actingAs($owner)
             ->get(SalesInsights::getUrl())
             ->assertOk()
+            ->assertSee('Owner date')
+            ->assertSee('Manager period')
+            ->assertSee('Finance rule')
+            ->assertSee('Delivered only')
             ->assertSee('Marketing spend')
             ->assertSee('Profit after direct + marketing');
 

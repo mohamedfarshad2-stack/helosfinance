@@ -16,6 +16,23 @@
                     <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
                         The first cards are only for the open date. Month and all-data cards below show the bigger picture. Delivered orders count as sales; dispatched parcels are still money at risk until delivered or returned.
                     </p>
+                    <div class="mt-4 grid gap-2 text-xs sm:grid-cols-3">
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                            <div class="font-semibold uppercase tracking-wide text-gray-500">Owner date</div>
+                            <div class="mt-1 font-bold text-gray-950 dark:text-white">{{ $todayLabel }}</div>
+                            <div class="mt-1 text-gray-500">Daily sales and dispatch result.</div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                            <div class="font-semibold uppercase tracking-wide text-gray-500">Manager period</div>
+                            <div class="mt-1 font-bold text-gray-950 dark:text-white">{{ $monthLabel }}</div>
+                            <div class="mt-1 text-gray-500">Month-to-date work pressure.</div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                            <div class="font-semibold uppercase tracking-wide text-gray-500">Finance rule</div>
+                            <div class="mt-1 font-bold text-gray-950 dark:text-white">Delivered only</div>
+                            <div class="mt-1 text-gray-500">Dispatched value is not revenue yet.</div>
+                        </div>
+                    </div>
                     <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium">
                         <button type="button" wire:click="moveDay(-1)" class="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">Previous day</button>
                         <button type="button" wire:click="selectDate('{{ now()->toDateString() }}')" class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">Today: {{ now()->format('M j, Y') }}</button>
