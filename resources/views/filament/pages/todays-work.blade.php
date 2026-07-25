@@ -1,5 +1,77 @@
 <x-filament-panels::page>
     <div class="grid gap-6">
+        @if (! empty($workQueue['employee_guide']))
+            @php
+                $guide = $workQueue['employee_guide'];
+            @endphp
+            <x-filament::section>
+                <div class="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-emerald-600">My guided dashboard</div>
+                        <h1 class="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">Welcome, {{ $guide['name'] }}</h1>
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                            You report to <span class="font-semibold text-gray-950 dark:text-white">{{ $guide['reports_to'] }}</span>.
+                            HELOAS ranks your work by urgency, business impact, and due date.
+                        </p>
+
+                        @if (! empty($guide['direct_reports']))
+                            <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">People you guide</div>
+                                <div class="mt-1 text-sm text-blue-900 dark:text-blue-100">{{ implode(', ', $guide['direct_reports']) }}</div>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        @forelse ($guide['responsibilities'] as $responsibility)
+                            <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                                <div class="font-semibold text-gray-950 dark:text-white">{{ $responsibility['label'] }}</div>
+                                <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ $responsibility['direction'] }}</div>
+                                <div class="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                                    <span class="font-semibold">Profit outcome:</span> {{ $responsibility['profit_outcome'] }}
+                                </div>
+                            </div>
+                        @empty
+                            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:col-span-2">
+                                Your owner or team leader still needs to assign your responsibility areas.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </x-filament::section>
+
+            @if (! empty($workQueue['team_summary']))
+                <x-filament::section>
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Team guidance</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Handle blocked and overdue direct-report work before routine review.</p>
+                    </div>
+                    <div class="mt-4 grid gap-3 sm:grid-cols-5">
+                        @foreach (['people' => 'Direct reports', 'open' => 'Open work', 'overdue' => 'Overdue', 'blocked' => 'Blocked / escalated', 'waiting_review' => 'Waiting review'] as $key => $label)
+                            <div class="rounded-lg bg-gray-50 px-3 py-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">{{ $label }}</div>
+                                <div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ $workQueue['team_summary'][$key] }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                </x-filament::section>
+            @endif
+
+            <x-filament::section>
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-950 dark:text-white">How to run your day</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Use this sequence every working day.</p>
+                </div>
+                <ol class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    @foreach ($guide['daily_routine'] as $step)
+                        <li class="rounded-lg border border-gray-200 p-3 text-sm text-gray-700 dark:border-gray-800 dark:text-gray-300">
+                            <span class="mr-2 font-semibold text-emerald-600">{{ $loop->iteration }}.</span>{{ $step }}
+                        </li>
+                    @endforeach
+                </ol>
+            </x-filament::section>
+        @endif
+
         <x-filament::section>
             <div class="grid gap-4 lg:grid-cols-[1.3fr_0.7fr] lg:items-start">
                 <div>

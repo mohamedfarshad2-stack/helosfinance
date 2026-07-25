@@ -13,13 +13,13 @@ use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuStockMovement;
 use App\Domains\Shared\Services\WorkQueueService;
 use App\Filament\Pages\BankStatementImport;
-use App\Filament\Resources\EmployeeResource;
-use App\Filament\Resources\ExpenseResource;
+use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Pages\ManagerWorkQueue;
 use App\Filament\Pages\TodaysWork;
-use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
+use App\Filament\Resources\EmployeeResource;
+use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MaterialLedgerResource;
 use App\Filament\Resources\ProductionEntryResource;
 use App\Filament\Resources\SkuRecipeResource;
@@ -415,7 +415,12 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->actingAs($employee)
             ->get(TodaysWork::getUrl())
             ->assertOk()
-            ->assertSee("Today's work")
+            ->assertSee('My guided dashboard')
+            ->assertSee('Welcome, Floor Worker')
+            ->assertSee('You report to')
+            ->assertSee('Profit outcome:')
+            ->assertSee('How to run your day')
+            ->assertSee("Today's work", false)
             ->assertSee('Tasks Due Today')
             ->assertSee('High Priority')
             ->assertSee('Waiting For Review')

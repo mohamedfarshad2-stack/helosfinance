@@ -2,13 +2,16 @@
 
 namespace App\Filament\Pages;
 
+use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Mission;
+use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\MissionGeneratorService;
 use App\Domains\Shared\Services\MissionSourceActionService;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -16,10 +19,15 @@ use Illuminate\Validation\ValidationException;
 class TodaysWork extends Page
 {
     protected static ?string $slug = 'todays-work';
+
     protected static ?string $navigationGroup = 'My Work';
-    protected static ?string $navigationLabel = "Today's work";
+
+    protected static ?string $navigationLabel = 'My guided dashboard';
+
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
+
     protected static ?int $navigationSort = 0;
+
     protected static string $view = 'filament.pages.todays-work';
 
     public ?Business $business = null;
@@ -183,10 +191,10 @@ class TodaysWork extends Page
             ->values();
 
         $sections = [
-            'due_today' => $tasks->filter(fn (array $task): bool => filled($task['due_on']) && \Illuminate\Support\Carbon::parse($task['due_on'])->lessThanOrEqualTo(today()) && $task['state'] !== 'completed')->values()->all(),
+            'due_today' => $tasks->filter(fn (array $task): bool => filled($task['due_on']) && Carbon::parse($task['due_on'])->lessThanOrEqualTo(today()) && $task['state'] !== 'completed')->values()->all(),
             'high_priority' => $tasks->filter(fn (array $task): bool => in_array($task['priority'], ['critical', 'high'], true) && $task['state'] !== 'completed')->values()->all(),
             'waiting_review' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['waiting_review', 'escalated', 'blocked'], true))->values()->all(),
-            'completed_today' => $tasks->filter(fn (array $task): bool => $task['state'] === 'completed' && filled($task['completed_at']) && \Illuminate\Support\Carbon::parse($task['completed_at'])->isToday())->values()->all(),
+            'completed_today' => $tasks->filter(fn (array $task): bool => $task['state'] === 'completed' && filled($task['completed_at']) && Carbon::parse($task['completed_at'])->isToday())->values()->all(),
             'problems' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['blocked', 'escalated'], true))->values()->all(),
             'missing_information' => $tasks->filter(fn (array $task): bool => in_array($task['responsibility_code'] ?? '', ['bank_exceptions', 'product_repair', 'material_stock'], true) && $task['state'] !== 'completed')->values()->all(),
         ];
@@ -203,11 +211,11 @@ class TodaysWork extends Page
             ->values();
         $completedToday = $tasks
             ->where('state', 'completed')
-            ->filter(fn (array $task): bool => filled($task['completed_at']) && Auth::user() && \Illuminate\Support\Carbon::parse($task['completed_at'])->isToday())
+            ->filter(fn (array $task): bool => filled($task['completed_at']) && Auth::user() && Carbon::parse($task['completed_at'])->isToday())
             ->values();
 
         $dueToday = $openTasks
-            ->filter(fn (array $task): bool => filled($task['due_on']) && \Illuminate\Support\Carbon::parse($task['due_on'])->lessThanOrEqualTo(today()))
+            ->filter(fn (array $task): bool => filled($task['due_on']) && Carbon::parse($task['due_on'])->lessThanOrEqualTo(today()))
             ->sortBy(fn (array $task): string => $this->taskSortKey($task))
             ->values();
 
@@ -222,12 +230,12 @@ class TodaysWork extends Page
             ->values();
 
         $blockedWork = $openTasks
-            ->filter(fn (array $task): bool => $task['priority'] === 'high' && filled($task['due_on']) && \Illuminate\Support\Carbon::parse($task['due_on'])->lessThan(today()))
+            ->filter(fn (array $task): bool => $task['priority'] === 'high' && filled($task['due_on']) && Carbon::parse($task['due_on'])->lessThan(today()))
             ->values();
 
         $teamWorkload = $openTasks
             ->groupBy(fn (array $task): string => (string) ($task['assigned_team'] ?? 'Unassigned'))
-            ->map(fn (\Illuminate\Support\Collection $group, string $team): array => [
+            ->map(fn (Collection $group, string $team): array => [
                 'team' => $team,
                 'count' => $group->count(),
                 'high_priority' => $group->where('priority', 'high')->count(),
@@ -237,7 +245,7 @@ class TodaysWork extends Page
 
         $responsibilityGroups = $openTasks
             ->groupBy(fn (array $task): string => $this->taskResponsibility($task) ?? 'general')
-            ->map(fn (\Illuminate\Support\Collection $group, string $responsibility): array => [
+            ->map(fn (Collection $group, string $responsibility): array => [
                 'key' => $responsibility,
                 'label' => $this->responsibilityLabel($responsibility),
                 'count' => $group->count(),
@@ -269,7 +277,104 @@ class TodaysWork extends Page
             'open_count' => $openTasks->count(),
             'blocked_count' => $blockedWork->count(),
             'completed_today_count' => $completedToday->count(),
+            'employee_guide' => $this->employeeGuide(),
+            'team_summary' => $this->teamSummary(),
         ];
+    }
+
+    private function employeeGuide(): array
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User) {
+            return [];
+        }
+
+        $responsibilities = collect($user->staffResponsibilities())
+            ->map(fn (string $code): array => [
+                'label' => $this->responsibilityLabel($code),
+                'direction' => $this->responsibilityDirection($code),
+                'profit_outcome' => $this->responsibilityProfitOutcome($code),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'name' => $user->name,
+            'reports_to' => $user->supervisor?->name ?? 'Business owner',
+            'is_supervisor' => $user->is_staff_supervisor,
+            'direct_reports' => $user->directReports()->orderBy('name')->pluck('name')->all(),
+            'responsibilities' => $responsibilities,
+            'daily_routine' => [
+                'Open the highest-priority mission and start it before taking lower-impact work.',
+                'Update the real order, product, stock, production, expense, or collection record—not only the mission status.',
+                'Mark blockers immediately and escalate them to '.($user->supervisor?->name ?? 'the business owner').' instead of leaving work silent.',
+                'Finish by checking overdue work and submitted items waiting for review.',
+            ],
+        ];
+    }
+
+    private function teamSummary(): array
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User || ! $user->is_staff_supervisor) {
+            return [];
+        }
+
+        $reportIds = $user->directReports()->pluck('id');
+
+        if ($reportIds->isEmpty()) {
+            return [];
+        }
+
+        $missions = Mission::query()
+            ->whereIn('business_id', $user->accessibleBusinessIds())
+            ->whereIn('assigned_user_id', $reportIds)
+            ->active()
+            ->get();
+
+        return [
+            'people' => $reportIds->count(),
+            'open' => $missions->count(),
+            'overdue' => $missions->filter(fn (Mission $mission): bool => $mission->due_at?->isPast() ?? false)->count(),
+            'blocked' => $missions->whereIn('status', [Mission::STATUS_BLOCKED, Mission::STATUS_ESCALATED])->count(),
+            'waiting_review' => $missions->where('status', Mission::STATUS_WAITING_REVIEW)->count(),
+        ];
+    }
+
+    private function responsibilityDirection(string $responsibility): string
+    {
+        return match ($responsibility) {
+            'order_confirmation' => 'Verify customer intent, phone, address, product, size, and value quickly; resolve no-answer orders through structured follow-up.',
+            'return_recovery' => 'Contact returned and failed-delivery customers, identify the real cause, and recover suitable orders through correction or resend.',
+            'dispatch' => 'Move confirmed orders to courier without avoidable delay and ensure tracking and delivery status are complete.',
+            'product_repair' => 'Link missing Stock App product descriptions to the correct HELOAS SKU so product cost and profit become trustworthy.',
+            'material_stock' => 'Keep material receipts, usage, waste, and stock balances accurate before shortages interrupt production.',
+            'supervisor_review' => 'Review overdue, blocked, and submitted work; coach the responsible employee and escalate only unresolved business risks.',
+            'production' => 'Record output, piece-work, waste, and delays accurately so production cost and capacity are visible.',
+            'expense_recording' => 'Record genuine expenses and supplier dues promptly with the correct business and evidence.',
+            'collections' => 'Follow up collectible money and update the actual receipt or billing record when cash is received.',
+            'bank_exceptions' => 'Resolve unclear bank rows without guessing classifications or approving owner-only decisions.',
+            default => 'Complete assigned missions using the underlying business record and leave a clear audit trail.',
+        };
+    }
+
+    private function responsibilityProfitOutcome(string $responsibility): string
+    {
+        return match ($responsibility) {
+            'order_confirmation' => 'Increase valid confirmed sales and reduce fake, duplicate, or unreachable orders.',
+            'return_recovery' => 'Reduce return leakage and recover revenue that would otherwise be lost.',
+            'dispatch' => 'Shorten order-to-courier time and prevent confirmed revenue from getting stuck.',
+            'product_repair' => 'Make SKU-level margin reliable and expose loss-making products.',
+            'material_stock' => 'Avoid emergency buying, excess stock, shortages, and unrecorded waste.',
+            'supervisor_review' => 'Prevent overdue work and repeated employee blockers from becoming revenue or cost leakage.',
+            'production' => 'Increase usable output while controlling piece-pay, delays, and waste.',
+            'expense_recording' => 'Prevent hidden costs, duplicate payments, and overdue supplier risk.',
+            'collections' => 'Convert recorded revenue into usable cash faster.',
+            'bank_exceptions' => 'Protect cash accuracy and prevent incorrect financial decisions.',
+            default => 'Protect revenue, reduce avoidable cost, and improve business truth.',
+        };
     }
 
     private function missionTask(Mission $mission): array
@@ -322,7 +427,7 @@ class TodaysWork extends Page
 
     private function responsibilityLabel(string $responsibility): string
     {
-        return \App\Models\User::staffResponsibilityOptions()[$responsibility] ?? 'General work';
+        return User::staffResponsibilityOptions()[$responsibility] ?? 'General work';
     }
 
     private function missionStatusLabel(Mission $mission): string
@@ -390,7 +495,7 @@ class TodaysWork extends Page
             return '100%';
         }
 
-        return number_format(($completedToday / $total) * 100, 0).'%' ;
+        return number_format(($completedToday / $total) * 100, 0).'%';
     }
 
     private function activeMission(): ?Mission
@@ -403,14 +508,14 @@ class TodaysWork extends Page
         $user = Auth::user();
 
         return [
-            'classifications' => \App\Domains\Shared\Models\BankTransaction::classificationOptions(),
-            'transactionTypes' => \App\Domains\Shared\Models\BankTransaction::transactionTypeOptions(),
+            'classifications' => BankTransaction::classificationOptions(),
+            'transactionTypes' => BankTransaction::transactionTypeOptions(),
             'businesses' => Business::query()
                 ->whereIn('id', $user?->accessibleBusinessIds() ?? [])
                 ->orderBy('name')
                 ->pluck('name', 'id')
                 ->all(),
-            'skus' => \App\Domains\Shared\Models\Sku::query()
+            'skus' => Sku::query()
                 ->when($user instanceof User && ! $user->isInternalAdmin(), fn ($query) => $query->whereIn('business_id', $user->accessibleBusinessIds()))
                 ->orderBy('code')
                 ->limit(500)
