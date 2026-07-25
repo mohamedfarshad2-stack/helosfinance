@@ -12,14 +12,17 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class IntegrationSourceResource extends Resource
 {
     protected static ?string $model = IntegrationSource::class;
+
     protected static ?string $navigationGroup = 'Setup';
+
     protected static ?string $navigationLabel = 'Stock App Link';
+
     protected static ?string $navigationIcon = 'heroicon-o-link';
 
     public static function form(Form $form): Form
@@ -70,19 +73,29 @@ class IntegrationSourceResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            Tables\Columns\TextColumn::make('name')->searchable(),
-            Tables\Columns\TextColumn::make('type')->badge(),
-            Tables\Columns\TextColumn::make('base_url'),
-            Tables\Columns\TextColumn::make('status')->badge(),
-            Tables\Columns\TextColumn::make('last_synced_at')->dateTime(),
-            Tables\Columns\TextColumn::make('last_webhook_received_at')->dateTime()->toggleable(isToggledHiddenByDefault: true),
-            Tables\Columns\TextColumn::make('last_successful_sync_at')->dateTime()->toggleable(isToggledHiddenByDefault: true),
-            Tables\Columns\TextColumn::make('last_health_status')->badge()->toggleable(isToggledHiddenByDefault: true),
-            Tables\Columns\TextColumn::make('failed_sync_attempts')->badge()->toggleable(isToggledHiddenByDefault: true),
-            Tables\Columns\TextColumn::make('duplicate_event_count')->badge()->toggleable(isToggledHiddenByDefault: true),
-            Tables\Columns\TextColumn::make('rejected_event_count')->badge()->toggleable(isToggledHiddenByDefault: true),
-        ])->actions([Tables\Actions\EditAction::make()]);
+        return $table
+            ->modifyQueryUsing(function (Builder $query): Builder {
+                $user = Auth::user();
+
+                return $query->when(
+                    ! ($user?->seesAllBusinesses() ?? false),
+                    fn (Builder $query) => $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? [])
+                );
+            })
+            ->columns([
+                Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
+                Tables\Columns\TextColumn::make('name')->searchable(),
+                Tables\Columns\TextColumn::make('type')->badge(),
+                Tables\Columns\TextColumn::make('base_url'),
+                Tables\Columns\TextColumn::make('status')->badge(),
+                Tables\Columns\TextColumn::make('last_synced_at')->dateTime(),
+                Tables\Columns\TextColumn::make('last_webhook_received_at')->dateTime()->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('last_successful_sync_at')->dateTime()->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('last_health_status')->badge()->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('failed_sync_attempts')->badge()->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('duplicate_event_count')->badge()->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('rejected_event_count')->badge()->toggleable(isToggledHiddenByDefault: true),
+            ])->actions([Tables\Actions\EditAction::make()]);
     }
 
     public static function getPages(): array

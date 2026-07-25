@@ -4,15 +4,14 @@ namespace App\Domains\Shared\Services;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Mission;
+use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\StaffResponsibilityAssignment;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
 class MissionGeneratorService
 {
-    public function __construct(private readonly WorkQueueService $workQueue)
-    {
-    }
+    public function __construct(private readonly WorkQueueService $workQueue) {}
 
     public function syncForBusiness(Business $business): Collection
     {
@@ -27,7 +26,13 @@ class MissionGeneratorService
                 $activeSourceKeys[] = $sourceKey;
                 $related = is_array($task['related_record'] ?? null) ? $task['related_record'] : [];
                 $responsibility = $this->responsibilityForTask($task);
-                $status = $this->missionStatusForTask($task);
+                $generatedStatus = $this->missionStatusForTask($task);
+                $existingMission = Mission::query()->where('source_key', $sourceKey)->first();
+                $status = $existingMission && $generatedStatus !== Mission::STATUS_COMPLETED && $existingMission->status !== Mission::STATUS_COMPLETED
+                    ? $existingMission->status
+                    : $generatedStatus;
+                $assignedUserId = $existingMission?->assigned_user_id
+                    ?: $this->assignedUserId($business, $responsibility, $task, $sourceKey);
 
                 $mission = Mission::query()->updateOrCreate(
                     ['source_key' => $sourceKey],
@@ -44,7 +49,7 @@ class MissionGeneratorService
                         'estimated_impact' => filled($task['amount'] ?? null) ? (float) $task['amount'] : null,
                         'confidence' => filled($task['amount'] ?? null) ? 'trusted_source_value' : 'incomplete',
                         'due_at' => filled($task['due_on'] ?? null) ? now()->parse($task['due_on'])->endOfDay() : null,
-                        'assigned_user_id' => $this->assignedUserId($business, $responsibility),
+                        'assigned_user_id' => $assignedUserId,
                         'status' => $status,
                         'completed_at' => $status === Mission::STATUS_COMPLETED
                             ? (filled($task['completed_at'] ?? null) ? now()->parse($task['completed_at'])->endOfDay() : now())
@@ -218,18 +223,49 @@ class MissionGeneratorService
         };
     }
 
-    private function assignedUserId(Business $business, ?string $responsibility): ?int
+    private function assignedUserId(Business $business, ?string $responsibility, array $task, string $sourceKey): ?int
     {
         if (! $responsibility) {
             return null;
         }
 
-        return StaffResponsibilityAssignment::query()
+        $assignments = StaffResponsibilityAssignment::query()
             ->activeNow()
             ->where('business_id', $business->id)
             ->where('responsibility_code', $responsibility)
             ->orderByDesc('can_complete')
             ->orderBy('id')
-            ->value('user_id');
+            ->get(['id', 'user_id']);
+
+        if ($assignments->isEmpty()) {
+            return null;
+        }
+
+        if (in_array($responsibility, ['order_confirmation', 'return_recovery'], true)) {
+            $related = is_array($task['related_record'] ?? null) ? $task['related_record'] : [];
+            $event = ($related['type'] ?? null) === 'operational_event' && filled($related['id'] ?? null)
+                ? OperationalEvent::query()->find($related['id'])
+                : null;
+            $csrName = trim((string) (($event?->payload ?? [])['csr_employee'] ?? ''));
+
+            if ($csrName !== '') {
+                $matchedUserId = User::query()
+                    ->whereIn('id', $assignments->pluck('user_id'))
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($csrName)])
+                    ->value('id');
+
+                if ($matchedUserId) {
+                    return (int) $matchedUserId;
+                }
+            }
+        }
+
+        if (! in_array($responsibility, ['order_confirmation', 'return_recovery'], true)) {
+            return (int) $assignments->first()->user_id;
+        }
+
+        $index = abs(crc32($sourceKey)) % $assignments->count();
+
+        return (int) $assignments->values()->get($index)->user_id;
     }
 }

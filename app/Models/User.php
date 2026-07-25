@@ -3,10 +3,10 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\ClientGroup;
 use App\Domains\Shared\Models\StaffResponsibilityAssignment;
+use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -37,6 +37,7 @@ class User extends Authenticatable implements FilamentUser
         'staff_responsibilities',
         'responsibilities_configured',
         'is_staff_supervisor',
+        'supervisor_user_id',
     ];
 
     /**
@@ -91,6 +92,30 @@ class User extends Authenticatable implements FilamentUser
     public function activeStaffResponsibilityAssignments(): HasMany
     {
         return $this->staffResponsibilityAssignments()->activeNow();
+    }
+
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'supervisor_user_id');
+    }
+
+    public function directReports(): HasMany
+    {
+        return $this->hasMany(self::class, 'supervisor_user_id');
+    }
+
+    public function isDirectSupervisorOf(self $user): bool
+    {
+        return (int) $user->supervisor_user_id === (int) $this->id;
+    }
+
+    public function directReportIds(): array
+    {
+        return $this->directReports()
+            ->where('is_employee', true)
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
     }
 
     public function seesAllBusinesses(): bool

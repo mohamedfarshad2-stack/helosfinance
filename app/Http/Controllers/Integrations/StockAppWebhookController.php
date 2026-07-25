@@ -7,6 +7,7 @@ use App\Domains\FinancialClarity\Services\SkuStockMovementService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Services\StockAppEmployeeDiscoveryService;
 use App\Domains\Shared\Services\StockAppIntegrationSecurityService;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
@@ -20,9 +21,9 @@ class StockAppWebhookController extends Controller
         Request $request,
         OperationalImpactCalculator $calculator,
         SkuStockMovementService $stockMovements,
-        StockAppIntegrationSecurityService $security
-    ): JsonResponse
-    {
+        StockAppIntegrationSecurityService $security,
+        StockAppEmployeeDiscoveryService $employees,
+    ): JsonResponse {
         $data = $request->validate([
             'business_id' => ['nullable', 'integer', 'exists:businesses,id'],
             'business_key' => ['nullable', 'string'],
@@ -99,6 +100,7 @@ class StockAppWebhookController extends Controller
 
         try {
             $payload = array_merge($request->all(), ['event_type' => $eventType]);
+            $employees->discover($business, $payload);
             $impact = $calculator->calculate($business, $payload);
             $externalId = $data['external_id'] ?? $this->stableExternalId($business->id, $payload);
             $eventImpact = $impact;
@@ -235,8 +237,7 @@ class StockAppWebhookController extends Controller
         array $existingPayload = [],
         array $incomingPayload = [],
         ?string $eventType = null,
-    ): mixed
-    {
+    ): mixed {
         if (blank($incomingOccurredAt)) {
             return $existingOccurredAt;
         }

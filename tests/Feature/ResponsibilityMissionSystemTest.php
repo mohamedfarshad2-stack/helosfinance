@@ -2,19 +2,18 @@
 
 namespace Tests\Feature;
 
-use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\BankTransaction;
+use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\ClientGroup;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\Mission;
+use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\StaffResponsibilityAssignment;
-use App\Domains\Shared\Models\StaffResponsibilityAudit;
 use App\Domains\Shared\Services\MissionGeneratorService;
 use App\Domains\Shared\Services\MissionSourceActionService;
 use App\Filament\Pages\ClientHealthReport;
 use App\Filament\Pages\LegacyAccessMigrationStatus;
-use App\Filament\Pages\TodaysWork;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MissionResource;
 use App\Filament\Resources\StaffResponsibilityAssignmentResource;
@@ -525,7 +524,7 @@ class ResponsibilityMissionSystemTest extends TestCase
         $this->assertTrue(LegacyAccessMigrationStatus::canAccess());
         $this->get(LegacyAccessMigrationStatus::getUrl())->assertOk()->assertSee('Legacy Migration Status');
 
-        $page = new LegacyAccessMigrationStatus();
+        $page = new LegacyAccessMigrationStatus;
         $page->mount();
 
         $fallbackRow = collect($page->rows)->firstWhere('id', $fallbackStaff->id);
@@ -581,6 +580,200 @@ class ResponsibilityMissionSystemTest extends TestCase
 
         $this->assertSame('critical', $missions->first()->priority);
         $this->assertSame(125000.0, $missions->first()->estimated_impact);
+    }
+
+    public function test_company_hierarchy_limits_supervisors_to_direct_report_missions(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        [$nifras, $sandhamali, $arafath, $csr] = $this->companyHierarchy($owner, $horns);
+
+        $nifrasMission = $this->mission($horns, $nifras, 'Manager daily review');
+        $sandhamaliMission = $this->mission($horns, $sandhamali, 'CSR team leader review');
+        $arafathMission = $this->mission($horns, $arafath, 'Online store dispatch');
+        $csrMission = $this->mission($horns, $csr, 'CSR no-answer follow-up');
+
+        $this->assertTrue($csrMission->canBeReviewedBy($sandhamali));
+        $this->assertFalse($arafathMission->canBeReviewedBy($sandhamali));
+        $this->assertTrue($sandhamaliMission->canBeReviewedBy($nifras));
+        $this->assertTrue($arafathMission->canBeReviewedBy($nifras));
+        $this->assertFalse($csrMission->canBeReviewedBy($nifras));
+        $this->assertTrue($nifrasMission->canBeReviewedBy($owner));
+        $this->assertFalse($csrMission->canBeReviewedBy($owner));
+
+        $sandhamaliTitles = $this->reviewMissionTitlesFor($sandhamali);
+        $this->assertContains('CSR no-answer follow-up', $sandhamaliTitles);
+        $this->assertNotContains('Online store dispatch', $sandhamaliTitles);
+
+        $nifrasTitles = $this->reviewMissionTitlesFor($nifras);
+        $this->assertContains('CSR team leader review', $nifrasTitles);
+        $this->assertContains('Online store dispatch', $nifrasTitles);
+        $this->assertNotContains('CSR no-answer follow-up', $nifrasTitles);
+
+        $ownerTitles = $this->reviewMissionTitlesFor($owner);
+        $this->assertContains('Manager daily review', $ownerTitles);
+        $this->assertNotContains('CSR no-answer follow-up', $ownerTitles);
+    }
+
+    public function test_mission_escalation_follows_employee_team_leader_manager_owner_chain(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        [$nifras, $sandhamali, , $csr] = $this->companyHierarchy($owner, $horns);
+        $mission = $this->mission($horns, $csr, 'Recover a return');
+
+        $mission->escalate($csr, 'CSR needs team leader help.');
+        $this->assertSame($sandhamali->id, $mission->fresh()->escalated_to_user_id);
+        $this->assertSame('supervisor', $mission->fresh()->escalation_level);
+
+        $mission->escalate($sandhamali, 'Team leader needs manager help.');
+        $this->assertSame($nifras->id, $mission->fresh()->escalated_to_user_id);
+        $this->assertSame('manager', $mission->fresh()->escalation_level);
+
+        $mission->escalate($nifras, 'Manager needs owner decision.');
+        $this->assertSame($owner->id, $mission->fresh()->escalated_to_user_id);
+        $this->assertSame('owner', $mission->fresh()->escalation_level);
+        $this->assertTrue($mission->fresh()->canBeReviewedBy($owner));
+    }
+
+    public function test_hierarchy_prevents_self_approval_and_keeps_owner_decisions_protected(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        [$nifras, $sandhamali, , $csr] = $this->companyHierarchy($owner, $horns);
+        $mission = $this->mission($horns, $csr, 'Correct customer outcome');
+
+        $this->assertFalse($mission->canBeApprovedBy($csr));
+        $this->assertTrue($mission->canBeApprovedBy($sandhamali));
+
+        $mission->submitForOwnerReview($csr, 'Protected bank decision.');
+
+        $this->assertFalse($mission->fresh()->canBeApprovedBy($sandhamali));
+        $this->assertFalse($mission->fresh()->canBeApprovedBy($nifras));
+        $this->assertTrue($mission->fresh()->canBeApprovedBy($owner));
+        $this->assertSame($owner->id, $mission->fresh()->escalated_to_user_id);
+    }
+
+    public function test_csr_event_mission_stays_with_named_employee_and_keeps_manual_lifecycle(): void
+    {
+        [$owner, $horns] = $this->ownerWithBusinesses();
+        $shamindi = $this->staff($horns, [
+            'name' => 'Shamindi',
+            'email' => 'shamindi-routing@example.com',
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => ['return_recovery'],
+        ]);
+        $pramila = $this->staff($horns, [
+            'name' => 'Pramila',
+            'email' => 'pramila-routing@example.com',
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => ['return_recovery'],
+        ]);
+
+        foreach ([$shamindi, $pramila] as $staff) {
+            StaffResponsibilityAssignment::query()->create([
+                'user_id' => $staff->id,
+                'business_id' => $horns->id,
+                'responsibility_code' => 'return_recovery',
+                'can_view' => true,
+                'can_complete' => true,
+                'is_active' => true,
+            ]);
+        }
+
+        OperationalEvent::query()->create([
+            'business_id' => $horns->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_RETURNED,
+            'external_id' => 'RETURN-SHAMINDI-1',
+            'quantity' => 1,
+            'payload' => ['csr_employee' => 'Shamindi', 'return_reason' => 'No answer'],
+            'occurred_at' => now(),
+        ]);
+
+        $missions = app(MissionGeneratorService::class)->syncForBusiness($horns);
+        $mission = $missions->firstWhere('responsibility_code', 'return_recovery');
+
+        $this->assertNotNull($mission);
+        $this->assertSame($shamindi->id, $mission->assigned_user_id);
+
+        $mission->block($shamindi, 'Waiting for customer response.');
+        app(MissionGeneratorService::class)->syncForBusiness($horns);
+
+        $this->assertSame(Mission::STATUS_BLOCKED, $mission->fresh()->status);
+        $this->assertSame($shamindi->id, $mission->fresh()->assigned_user_id);
+    }
+
+    private function companyHierarchy(User $owner, Business $business): array
+    {
+        $nifras = $this->staff($business, [
+            'name' => 'Nifras',
+            'email' => 'nifras-hierarchy@example.com',
+            'supervisor_user_id' => $owner->id,
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => ['supervisor_review'],
+            'is_staff_supervisor' => true,
+        ]);
+        $sandhamali = $this->staff($business, [
+            'name' => 'Sandhamali',
+            'email' => 'sandhamali-hierarchy@example.com',
+            'supervisor_user_id' => $nifras->id,
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => ['supervisor_review'],
+            'is_staff_supervisor' => true,
+        ]);
+        $arafath = $this->staff($business, [
+            'name' => 'Arafath',
+            'email' => 'arafath-hierarchy@example.com',
+            'supervisor_user_id' => $nifras->id,
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => ['dispatch', 'product_repair'],
+        ]);
+        $csr = $this->staff($business, [
+            'name' => 'CSR Employee',
+            'email' => 'csr-hierarchy@example.com',
+            'supervisor_user_id' => $sandhamali->id,
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => ['order_confirmation', 'return_recovery'],
+        ]);
+
+        foreach ([$nifras, $sandhamali] as $supervisor) {
+            StaffResponsibilityAssignment::query()->create([
+                'user_id' => $supervisor->id,
+                'business_id' => $business->id,
+                'responsibility_code' => 'supervisor_review',
+                'can_view' => true,
+                'can_review' => true,
+                'team_records_allowed' => true,
+                'is_active' => true,
+            ]);
+        }
+
+        return [$nifras->fresh(), $sandhamali->fresh(), $arafath->fresh(), $csr->fresh()];
+    }
+
+    private function mission(Business $business, User $assignee, string $title): Mission
+    {
+        return Mission::query()->create([
+            'source_key' => $business->id.':hierarchy-'.md5($title.'-'.$assignee->id),
+            'mission_type' => 'hierarchy_test',
+            'responsibility_code' => 'order_confirmation',
+            'business_id' => $business->id,
+            'title' => $title,
+            'summary' => 'Protect revenue by completing operational work on time.',
+            'assigned_user_id' => $assignee->id,
+            'status' => Mission::STATUS_OPEN,
+            'impact_type' => 'revenue_protected',
+            'confidence' => 'incomplete',
+            'due_at' => now()->subHour(),
+        ]);
+    }
+
+    private function reviewMissionTitlesFor(User $reviewer): array
+    {
+        $this->actingAs($reviewer);
+
+        $method = new \ReflectionMethod(MissionResource::class, 'scopeToAllowedMissions');
+        $method->setAccessible(true);
+
+        return $method->invoke(null, Mission::query())->pluck('title')->all();
     }
 
     private function ownerWithBusinesses(): array

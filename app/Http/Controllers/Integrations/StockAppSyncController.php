@@ -9,6 +9,7 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
+use App\Domains\Shared\Services\StockAppEmployeeDiscoveryService;
 use App\Domains\Shared\Services\StockAppIntegrationSecurityService;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
@@ -22,9 +23,9 @@ class StockAppSyncController extends Controller
         Request $request,
         OperationalImpactCalculator $calculator,
         SkuStockMovementService $stockMovements,
-        StockAppIntegrationSecurityService $security
-    ): JsonResponse
-    {
+        StockAppIntegrationSecurityService $security,
+        StockAppEmployeeDiscoveryService $employees,
+    ): JsonResponse {
         $data = $request->validate([
             'business_id' => ['nullable', 'integer', 'exists:businesses,id'],
             'business_key' => ['nullable', 'string'],
@@ -71,6 +72,7 @@ class StockAppSyncController extends Controller
             'orders.*.restock' => ['nullable'],
             'orders.*.damage_cost' => ['nullable', 'numeric'],
             'orders.*.recovery_amount' => ['nullable', 'numeric'],
+            'orders.*.csr_employee' => ['nullable', 'string', 'max:255'],
         ], [
             'business_id.required' => 'Business context is required for this sync.',
         ]);
@@ -101,10 +103,12 @@ class StockAppSyncController extends Controller
 
                 if ($eventType === null) {
                     $security->recordRejected($integrationSource, 'An order row was missing an event type.');
+
                     continue;
                 }
 
                 $this->ensureSkuExists($business, $order);
+                $employees->discover($business, $order);
 
                 $payload = array_merge($order, ['event_type' => $eventType]);
                 $impact = $calculator->calculate($business, $payload);
@@ -296,8 +300,7 @@ class StockAppSyncController extends Controller
         array $existingPayload = [],
         array $incomingPayload = [],
         ?string $eventType = null,
-    ): mixed
-    {
+    ): mixed {
         if (blank($incomingOccurredAt)) {
             return $existingOccurredAt;
         }

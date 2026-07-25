@@ -5,10 +5,11 @@ namespace Tests\Feature;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\CostAssumption;
 use App\Domains\Shared\Models\CourierRate;
+use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
-use App\Domains\Shared\Models\SkuStockMovement;
 use App\Domains\Shared\Models\Sku;
+use App\Domains\Shared\Models\SkuStockMovement;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -16,6 +17,31 @@ use Tests\TestCase;
 class StockAppWebhookTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_webhook_discovers_stock_app_csr_as_employee_without_creating_login(): void
+    {
+        $business = Business::query()->create(['name' => 'Horns England']);
+
+        $payload = [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'CSR-DISCOVERY-1',
+            'csr_employee' => '  Shamindi  ',
+            'quantity' => 1,
+        ];
+
+        $this->postJson('/api/v1/stock-app/webhook', $payload)->assertCreated();
+        $this->postJson('/api/v1/stock-app/webhook', $payload)->assertCreated();
+
+        $this->assertDatabaseHas('employees', [
+            'business_id' => $business->id,
+            'name' => 'Shamindi',
+            'role' => 'CSR',
+            'active' => true,
+        ]);
+        $this->assertSame(1, Employee::query()->where('business_id', $business->id)->count());
+        $this->assertDatabaseMissing('users', ['name' => 'Shamindi']);
+    }
 
     public function test_imported_order_keeps_profitability_cost_zero(): void
     {
@@ -73,7 +99,7 @@ class StockAppWebhookTest extends TestCase
             'external_id' => 'ORDER-2',
             'sku_code' => 'SKU-1',
             'quantity' => 1,
-            ])->assertCreated()
+        ])->assertCreated()
             ->assertJsonPath('impact.revenue_amount', 0)
             ->assertJsonPath('impact.direct_cost_amount', 1350)
             ->assertJsonPath('impact.economics.courier_amount', 0)

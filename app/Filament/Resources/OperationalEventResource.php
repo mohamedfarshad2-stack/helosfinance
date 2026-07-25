@@ -10,20 +10,23 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Get;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class OperationalEventResource extends Resource
 {
     protected static ?string $model = OperationalEvent::class;
+
     protected static ?string $navigationGroup = 'Reports';
+
     protected static ?string $navigationLabel = 'Stock App Order Events';
+
     protected static ?string $navigationIcon = 'heroicon-o-bolt';
 
     public static function form(Form $form): Form
@@ -127,10 +130,16 @@ class OperationalEventResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->whereNotIn('event_type', [
-                OperationalEvent::ORDER_CREATED,
-                OperationalEvent::ORDER_CONFIRMED,
-            ]))
+            ->modifyQueryUsing(function (Builder $query): Builder {
+                $user = Auth::user();
+
+                return $query
+                    ->when(! ($user?->seesAllBusinesses() ?? false), fn (Builder $query) => $query->whereIn('business_id', $user?->accessibleBusinessIds() ?? []))
+                    ->whereNotIn('event_type', [
+                        OperationalEvent::ORDER_CREATED,
+                        OperationalEvent::ORDER_CONFIRMED,
+                    ]);
+            })
             ->defaultSort('occurred_at', 'desc')
             ->columns([
                 Tables\Columns\TextColumn::make('occurred_at')

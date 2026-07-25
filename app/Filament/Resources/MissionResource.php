@@ -18,8 +18,11 @@ use Illuminate\Support\Facades\Auth;
 class MissionResource extends Resource
 {
     protected static ?string $model = Mission::class;
+
     protected static ?string $navigationGroup = 'Team Work';
+
     protected static ?string $navigationLabel = 'Mission Review';
+
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
 
     public static function form(Form $form): Form
@@ -63,6 +66,8 @@ class MissionResource extends Resource
                     ->formatStateUsing(fn (?string $state): string => $state ? (User::staffResponsibilityOptions()[$state] ?? $state) : 'General'),
                 Tables\Columns\TextColumn::make('status')->badge()->sortable(),
                 Tables\Columns\TextColumn::make('assignedUser.name')->label('Assigned')->placeholder('Unassigned'),
+                Tables\Columns\TextColumn::make('assignedUser.supervisor.name')->label('Reports to')->placeholder('Owner / not set')->toggleable(),
+                Tables\Columns\TextColumn::make('escalatedToUser.name')->label('Escalated to')->placeholder('-')->toggleable(),
                 Tables\Columns\TextColumn::make('due_at')->label('Due')->dateTime()->placeholder('-')->sortable(),
                 Tables\Columns\TextColumn::make('estimated_impact')->label('Impact')->money('LKR')->placeholder('-')->toggleable(),
             ])
@@ -87,6 +92,7 @@ class MissionResource extends Resource
                     ->label('Reassign')
                     ->icon('heroicon-o-user-plus')
                     ->color('gray')
+                    ->visible(fn (Mission $record): bool => $record->canBeReviewedBy(Auth::user()))
                     ->form([
                         Select::make('assigned_user_id')
                             ->label('Assigned employee')
@@ -98,6 +104,7 @@ class MissionResource extends Resource
                             ->rows(2),
                     ])
                     ->action(function (Mission $record, array $data): void {
+                        abort_unless($record->canBeReviewedBy(Auth::user()), 403);
                         $previous = $record->only(['assigned_user_id', 'status']);
 
                         $record->forceFill([
@@ -108,11 +115,13 @@ class MissionResource extends Resource
 
                         $record->recordEvent('reassigned', Auth::user(), $data['note'] ?? 'Reassigned from Mission Review.', $previous, $record->only(['assigned_user_id', 'status']));
                     }),
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->visible(fn (): bool => (Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false)),
                 Action::make('returnForCorrection')
                     ->label('Return')
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->color('warning')
+                    ->visible(fn (Mission $record): bool => $record->canBeReviewedBy(Auth::user()))
                     ->form([
                         Textarea::make('note')
                             ->label('Correction needed')
@@ -120,26 +129,31 @@ class MissionResource extends Resource
                             ->rows(3),
                     ])
                     ->action(function (Mission $record, array $data): void {
+                        abort_unless($record->canBeReviewedBy(Auth::user()), 403);
                         $record->transition(Mission::STATUS_REOPENED, Auth::user(), 'returned_for_correction', $data['note']);
                     }),
                 Action::make('approve')
                     ->label('Approve')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
+                    ->visible(fn (Mission $record): bool => $record->canBeApprovedBy(Auth::user()))
                     ->requiresConfirmation()
                     ->action(function (Mission $record): void {
+                        abort_unless($record->canBeApprovedBy(Auth::user()), 403);
                         $record->complete(Auth::user(), 'Approved from Mission Review.');
                     }),
                 Action::make('escalate')
                     ->label('Escalate')
                     ->icon('heroicon-o-arrow-up-circle')
                     ->color('danger')
+                    ->visible(fn (Mission $record): bool => $record->canBeReviewedBy(Auth::user()))
                     ->form([
                         Textarea::make('note')
                             ->label('Why owner is needed')
                             ->rows(3),
                     ])
                     ->action(function (Mission $record, array $data): void {
+                        abort_unless($record->canBeReviewedBy(Auth::user()), 403);
                         $record->escalate(Auth::user(), $data['note'] ?? 'Escalated from Mission Review.');
                     }),
             ]);
@@ -174,11 +188,26 @@ class MissionResource extends Resource
         }
 
         if ($user?->isOwner()) {
-            return $query->whereIn('business_id', $user->accessibleBusinessIds());
+            $directReportIds = $user->directReportIds();
+
+            return $query
+                ->whereIn('business_id', $user->accessibleBusinessIds())
+                ->where(function (Builder $query) use ($user, $directReportIds): void {
+                    $query->where('escalated_to_user_id', $user->id)
+                        ->orWhere('escalation_level', 'owner')
+                        ->when($directReportIds !== [], fn (Builder $query) => $query->orWhereIn('assigned_user_id', $directReportIds));
+                });
         }
 
         if ($user?->canAccessSupervisorReview()) {
-            return $query->whereIn('business_id', $user->accessibleBusinessIdsForResponsibility('supervisor_review'));
+            $directReportIds = $user->directReportIds();
+
+            return $query
+                ->whereIn('business_id', $user->accessibleBusinessIdsForResponsibility('supervisor_review'))
+                ->where(function (Builder $query) use ($user, $directReportIds): void {
+                    $query->where('escalated_to_user_id', $user->id)
+                        ->when($directReportIds !== [], fn (Builder $query) => $query->orWhereIn('assigned_user_id', $directReportIds));
+                });
         }
 
         return $query->whereRaw('1 = 0');
@@ -190,9 +219,16 @@ class MissionResource extends Resource
             return [];
         }
 
-        return User::query()
+        $user = Auth::user();
+        $query = User::query()
             ->where('is_employee', true)
-            ->whereIn('business_id', [$record->business_id])
+            ->where('business_id', $record->business_id);
+
+        if ($user?->isStaff()) {
+            $query->whereIn('id', $user->directReportIds());
+        }
+
+        return $query
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();

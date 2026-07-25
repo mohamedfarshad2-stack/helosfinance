@@ -25,9 +25,7 @@ class MissionSourceActionService
         'loan',
     ];
 
-    public function __construct(private readonly OperationalEventRecalculator $recalculator)
-    {
-    }
+    public function __construct(private readonly OperationalEventRecalculator $recalculator) {}
 
     public function canComplete(User $user, Mission $mission): bool
     {
@@ -238,7 +236,7 @@ class MissionSourceActionService
 
         if (! ($user->isOwner() || $user->isInternalAdmin()) && in_array($transactionType, self::OWNER_ONLY_BANK_TYPES, true)) {
             $transaction->forceFill(['status' => 'review'])->save();
-            $mission->transition(Mission::STATUS_WAITING_REVIEW, $user, 'submitted_for_owner_review', 'Owner-only bank decision submitted for review.');
+            $mission->submitForOwnerReview($user, 'Owner-only bank decision submitted for review.');
 
             return;
         }

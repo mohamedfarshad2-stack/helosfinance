@@ -3,10 +3,10 @@
 namespace App\Filament\Resources;
 
 use App\Domains\Shared\Models\Business;
-use App\Models\User;
 use App\Filament\Resources\UserResource\Pages;
-use Filament\Forms\Components\Select;
+use App\Models\User;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
@@ -15,16 +15,19 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
 
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
+
     protected static ?string $navigationGroup = 'Admin';
+
     protected static ?string $navigationLabel = 'Team Access';
+
     protected static ?string $navigationIcon = 'heroicon-o-identification';
 
     public static function form(Form $form): Form
@@ -100,6 +103,14 @@ class UserResource extends Resource
                 ->label('Can review team work')
                 ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record) && in_array($get('staff_role_preset') ?? 'daily_operations', ['supervisor', 'custom'], true))
                 ->helperText('Supervisor can see review-style work without owner financial guidance.'),
+            Select::make('supervisor_user_id')
+                ->label('Reports to')
+                ->options(fn (?User $record): array => static::reportingSupervisorOptions($record))
+                ->searchable()
+                ->preload()
+                ->nullable()
+                ->visible(fn (Get $get, ?User $record): bool => static::staffFieldsVisible($get, $record))
+                ->helperText('Missions escalate to this employee first. Leave blank only when the owner directly supervises this account.'),
             TextInput::make('password')
                 ->password()
                 ->revealable()
@@ -117,30 +128,34 @@ class UserResource extends Resource
             ->defaultSort('name')
             ->columns([
                 Tables\Columns\TextColumn::make('name')->searchable(),
-            Tables\Columns\TextColumn::make('email')->searchable(),
-            Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
-            Tables\Columns\TextColumn::make('role')
-                ->label('Role')
-                ->badge()
-                ->state(fn (User $record): string => $record->is_employee ? 'Staff' : 'Owner'),
-            Tables\Columns\TextColumn::make('employee_access_profile')
-                ->label('Staff access')
-                ->badge()
-                ->placeholder('-')
-                ->formatStateUsing(fn (?string $state): string => User::employeeAccessProfileOptions()[$state ?? 'operations'] ?? 'Operations'),
-            Tables\Columns\TextColumn::make('staff_responsibilities')
-                ->label('Responsibilities')
-                ->badge()
-                ->separator(',')
-                ->placeholder('Profile default')
-                ->formatStateUsing(fn (string $state): string => User::staffResponsibilityOptions()[$state] ?? $state)
-                ->toggleable(),
-            Tables\Columns\IconColumn::make('is_staff_supervisor')
-                ->label('Supervisor')
-                ->boolean()
-                ->toggleable(),
-            Tables\Columns\IconColumn::make('is_employee')->label('Employee')->boolean(),
-        ])
+                Tables\Columns\TextColumn::make('email')->searchable(),
+                Tables\Columns\TextColumn::make('business.name')->label('Business')->toggleable(),
+                Tables\Columns\TextColumn::make('role')
+                    ->label('Role')
+                    ->badge()
+                    ->state(fn (User $record): string => $record->is_employee ? 'Staff' : 'Owner'),
+                Tables\Columns\TextColumn::make('employee_access_profile')
+                    ->label('Staff access')
+                    ->badge()
+                    ->placeholder('-')
+                    ->formatStateUsing(fn (?string $state): string => User::employeeAccessProfileOptions()[$state ?? 'operations'] ?? 'Operations'),
+                Tables\Columns\TextColumn::make('staff_responsibilities')
+                    ->label('Responsibilities')
+                    ->badge()
+                    ->separator(',')
+                    ->placeholder('Profile default')
+                    ->formatStateUsing(fn (string $state): string => User::staffResponsibilityOptions()[$state] ?? $state)
+                    ->toggleable(),
+                Tables\Columns\IconColumn::make('is_staff_supervisor')
+                    ->label('Supervisor')
+                    ->boolean()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('supervisor.name')
+                    ->label('Reports to')
+                    ->placeholder('Owner / not set')
+                    ->toggleable(),
+                Tables\Columns\IconColumn::make('is_employee')->label('Employee')->boolean(),
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make()
@@ -357,6 +372,24 @@ class UserResource extends Resource
 
         return (filled($record->business_id) && in_array((int) $record->business_id, $businessIds, true))
             || (filled($owner->client_group_id) && (int) $record->client_group_id === (int) $owner->client_group_id);
+    }
+
+    private static function reportingSupervisorOptions(?User $record): array
+    {
+        $user = Auth::user();
+        $businessIds = $user?->accessibleBusinessIds() ?? [];
+
+        return User::query()
+            ->whereIn('business_id', $businessIds)
+            ->when($record, fn (Builder $query) => $query->whereKeyNot($record->id))
+            ->where(function (Builder $query): void {
+                $query->where('is_employee', false)
+                    ->orWhere('is_staff_supervisor', true)
+                    ->orWhereHas('activeStaffResponsibilityAssignments', fn (Builder $query) => $query->where('responsibility_code', 'supervisor_review'));
+            })
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 
     private static function seatUsageContent(mixed $businessId): string

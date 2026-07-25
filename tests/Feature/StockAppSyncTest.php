@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
@@ -13,6 +14,29 @@ use Tests\TestCase;
 class StockAppSyncTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_sync_preserves_csr_identity_and_discovers_employee(): void
+    {
+        $business = Business::query()->create(['name' => 'Horns England']);
+
+        $this->postJson('/api/v1/stock-app/sync/orders', [
+            'business_id' => $business->id,
+            'orders' => [[
+                'event_type' => OperationalEvent::ORDER_CONFIRMED,
+                'external_id' => 'CSR-SYNC-1',
+                'csr_employee' => 'Pramila',
+                'quantity' => 1,
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('employees', [
+            'business_id' => $business->id,
+            'name' => 'Pramila',
+            'role' => 'CSR',
+        ]);
+        $this->assertSame('Pramila', OperationalEvent::query()->first()?->payload['csr_employee']);
+        $this->assertSame(1, Employee::query()->count());
+    }
 
     public function test_duplicate_sync_orders_are_not_created_twice(): void
     {
