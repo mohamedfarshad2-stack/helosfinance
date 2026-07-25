@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Domains\FinancialClarity\Services\BusinessHealthSnapshotService;
 use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
@@ -35,6 +36,8 @@ class TodaysWork extends Page
 
     public array $workQueue = [];
 
+    public array $managerProfit = [];
+
     public ?int $activeMissionId = null;
 
     public array $missionActionData = [];
@@ -43,11 +46,12 @@ class TodaysWork extends Page
 
     private ?string $stockAppUrlCache = null;
 
-    public function mount(MissionGeneratorService $missions): void
+    public function mount(MissionGeneratorService $missions, BusinessHealthSnapshotService $snapshots): void
     {
         $businessId = Auth::user()?->business_id;
         $this->business = $businessId ? Business::query()->find($businessId) : null;
         $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
+        $this->managerProfit = $this->managerProfitGuide($snapshots);
     }
 
     protected function getViewData(): array
@@ -55,6 +59,7 @@ class TodaysWork extends Page
         return [
             'business' => $this->business,
             'workQueue' => $this->workQueue,
+            'managerProfit' => $this->managerProfit,
             'activeMission' => $this->activeMission(),
             'actionOptions' => $this->actionOptions(),
         ];
@@ -314,6 +319,92 @@ class TodaysWork extends Page
                 'Mark blockers immediately and escalate them to '.($user->supervisor?->name ?? 'the business owner').' instead of leaving work silent.',
                 'Finish by checking overdue work and submitted items waiting for review.',
             ],
+        ];
+    }
+
+    private function managerProfitGuide(BusinessHealthSnapshotService $snapshots): array
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User || ! $user->is_staff_supervisor || ! $this->business) {
+            return [];
+        }
+
+        $savedSnapshot = $snapshots->readCurrentMonth($this->business);
+        $summary = $savedSnapshot ? [
+            'revenue_total' => (float) $savedSnapshot->revenue_total,
+            'cost_total' => (float) $savedSnapshot->cost_total,
+            'leakage_total' => (float) $savedSnapshot->leakage_total,
+            'estimated_profit' => (float) $savedSnapshot->estimated_profit,
+            'metrics' => $savedSnapshot->metrics ?? [],
+        ] : $snapshots->currentMonthSummary($this->business);
+        $metrics = is_array($summary['metrics'] ?? null) ? $summary['metrics'] : [];
+        $profit = (float) ($summary['estimated_profit'] ?? 0);
+        $leakage = (float) ($summary['leakage_total'] ?? 0);
+        $returnImpact = (float) ($metrics['return_impact'] ?? 0);
+        $unrecognizedRevenue = (float) ($metrics['unrecognized_order_revenue'] ?? 0);
+        $operatingCost = (float) ($metrics['direct_operational_costs'] ?? 0);
+        $expensePressure = (float) ($metrics['manual_overhead_costs'] ?? 0);
+        $salaryPressure = (float) ($metrics['salary_pressure'] ?? 0);
+
+        $employees = $user->directReports()
+            ->orderBy('name')
+            ->get()
+            ->map(function (User $employee) use ($leakage, $returnImpact, $unrecognizedRevenue, $operatingCost, $expensePressure, $salaryPressure): array {
+                $responsibilities = $employee->staffResponsibilities($this->business?->id);
+                $signals = [];
+
+                if (in_array('dispatch', $responsibilities, true)) {
+                    $signals[] = ['label' => 'Order value still awaiting trusted delivery recognition', 'amount' => $unrecognizedRevenue, 'kind' => 'revenue_at_risk'];
+                }
+
+                if (in_array('return_recovery', $responsibilities, true)) {
+                    $signals[] = ['label' => 'Shared monthly return pressure', 'amount' => max($returnImpact, $leakage), 'kind' => 'shared_recovery_pool'];
+                }
+
+                if (in_array('product_repair', $responsibilities, true)) {
+                    $signals[] = ['label' => 'Product profit blocked until SKU links are repaired', 'amount' => null, 'kind' => 'truth_blocker'];
+                }
+
+                if (in_array('production', $responsibilities, true) || in_array('material_stock', $responsibilities, true)) {
+                    $signals[] = ['label' => 'Production, direct cost, and salary base to control', 'amount' => $operatingCost + $salaryPressure, 'kind' => 'cost_control'];
+                }
+
+                if (in_array('expense_recording', $responsibilities, true)) {
+                    $signals[] = ['label' => 'Recorded overhead requiring cost control', 'amount' => $expensePressure, 'kind' => 'cost_control'];
+                }
+
+                if (in_array('order_confirmation', $responsibilities, true)) {
+                    $signals[] = ['label' => 'Reduce fake, incorrect, and unreachable orders before courier cost', 'amount' => null, 'kind' => 'prevention'];
+                }
+
+                if (in_array('supervisor_review', $responsibilities, true)) {
+                    $signals[] = ['label' => 'Own overdue and blocked work across direct reports', 'amount' => null, 'kind' => 'management'];
+                }
+
+                return [
+                    'name' => $employee->name,
+                    'responsibilities' => collect($responsibilities)->map(fn (string $code): string => $this->responsibilityLabel($code))->values()->all(),
+                    'signals' => $signals,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'period' => now()->format('F Y'),
+            'as_of' => $savedSnapshot?->period_end?->format('M j, Y') ?? now()->format('M j, Y'),
+            'revenue' => (float) ($summary['revenue_total'] ?? 0),
+            'cost' => (float) ($summary['cost_total'] ?? 0),
+            'profit' => $profit,
+            'loss_gap' => max(-$profit, 0),
+            'leakage' => $leakage,
+            'return_impact' => $returnImpact,
+            'headline' => $profit < 0
+                ? 'The company is currently below cost by LKR '.number_format(abs($profit), 2).' this month.'
+                : 'The company is not showing an overall monthly loss, but LKR '.number_format($leakage, 2).' of recorded leakage still needs recovery or prevention.',
+            'employees' => $employees,
+            'warning' => 'These are company-level pools influenced by employees, not commission values. Shared amounts must not be added together. Profit remains estimated until missing SKU links, product costs, salaries, expenses, and bank truth are complete.',
         ];
     }
 

@@ -6,6 +6,7 @@ use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
+use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\MaterialLedgerEntry;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
@@ -371,8 +372,22 @@ class WorkQueueIntelligenceTest extends TestCase
             'business_id' => $business->id,
             'is_employee' => true,
             'is_platform_admin' => false,
+            'is_staff_supervisor' => true,
             'employee_access_profile' => 'finance_ops',
             'staff_responsibilities' => ['bank_exceptions', 'expense_recording', 'dispatch'],
+        ]);
+
+        User::query()->create([
+            'name' => 'Dispatch Assistant',
+            'email' => 'dispatch-assistant@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'supervisor_user_id' => $employee->id,
+            'employee_access_profile' => 'operations',
+            'staff_responsibilities' => ['dispatch'],
+            'responsibilities_configured' => true,
         ]);
 
         BankTransaction::query()->create([
@@ -412,6 +427,23 @@ class WorkQueueIntelligenceTest extends TestCase
             'occurred_at' => today()->subDay()->startOfDay(),
         ]);
 
+        FinancialSnapshot::query()->create([
+            'business_id' => $business->id,
+            'period_start' => now()->startOfMonth()->toDateString(),
+            'period_end' => now()->toDateString(),
+            'revenue_total' => 50000,
+            'cost_total' => 60000,
+            'leakage_total' => 5000,
+            'estimated_profit' => -10000,
+            'metrics' => [
+                'unrecognized_order_revenue' => 20000,
+                'return_impact' => 4000,
+                'direct_operational_costs' => 10000,
+                'manual_overhead_costs' => 12000,
+                'salary_pressure' => 8000,
+            ],
+        ]);
+
         $this->actingAs($employee)
             ->get(TodaysWork::getUrl())
             ->assertOk()
@@ -424,6 +456,10 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('Control work - do it in HELOAS')
             ->assertSee('Where to work: Stock App.')
             ->assertSee('Open Stock App')
+            ->assertSee('Manager profit recovery')
+            ->assertSee('Estimated profit / loss')
+            ->assertSee('Dispatch Assistant')
+            ->assertSee('Shared amounts must not be added together')
             ->assertSee("Today's work", false)
             ->assertSee('Tasks Due Today')
             ->assertSee('High Priority')

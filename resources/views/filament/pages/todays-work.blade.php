@@ -53,6 +53,60 @@
                 </div>
             </x-filament::section>
 
+            @if (! empty($managerProfit))
+                <x-filament::section>
+                    <div class="grid gap-5">
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-red-600">Manager profit recovery - {{ $managerProfit['period'] }}</div>
+                            <h2 class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ $managerProfit['headline'] }}</h2>
+                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">As of {{ $managerProfit['as_of'] }}. Use this section to divide business pressure among employees. It shows influence and accountability, not employee commission.</p>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                            @foreach ([
+                                ['label' => 'Revenue', 'value' => $managerProfit['revenue'], 'tone' => 'text-emerald-700'],
+                                ['label' => 'Total cost', 'value' => $managerProfit['cost'], 'tone' => 'text-amber-700'],
+                                ['label' => 'Estimated profit / loss', 'value' => $managerProfit['profit'], 'tone' => $managerProfit['profit'] >= 0 ? 'text-emerald-700' : 'text-red-700'],
+                                ['label' => 'Loss gap', 'value' => $managerProfit['loss_gap'], 'tone' => 'text-red-700'],
+                                ['label' => 'Recorded leakage', 'value' => $managerProfit['leakage'], 'tone' => 'text-red-700'],
+                            ] as $metric)
+                                <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                                    <div class="text-xs uppercase tracking-wide text-gray-500">{{ $metric['label'] }}</div>
+                                    <div class="mt-1 text-lg font-semibold {{ $metric['tone'] }}">LKR {{ number_format((float) $metric['value'], 2) }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        <div class="grid gap-4 xl:grid-cols-2">
+                            @foreach ($managerProfit['employees'] as $employee)
+                                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                                    <div class="flex flex-wrap items-start justify-between gap-2">
+                                        <div class="font-semibold text-gray-950 dark:text-white">{{ $employee['name'] }}</div>
+                                        <div class="text-xs text-gray-500">{{ implode(' / ', $employee['responsibilities']) }}</div>
+                                    </div>
+                                    <div class="mt-3 grid gap-2">
+                                        @forelse ($employee['signals'] as $signal)
+                                            <div class="rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900">
+                                                <div class="text-gray-700 dark:text-gray-300">{{ $signal['label'] }}</div>
+                                                <div class="mt-1 font-semibold {{ $signal['amount'] !== null ? 'text-red-700 dark:text-red-300' : 'text-gray-500' }}">
+                                                    {{ $signal['amount'] !== null ? 'LKR '.number_format((float) $signal['amount'], 2) : 'Measure through task completion and outcome trend' }}
+                                                </div>
+                                            </div>
+                                        @empty
+                                            <div class="text-sm text-amber-700">Assign a profit-linked responsibility to this employee.</div>
+                                        @endforelse
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                            {{ $managerProfit['warning'] }}
+                        </div>
+                    </div>
+                </x-filament::section>
+            @endif
+
             @if (! empty($workQueue['team_summary']))
                 <x-filament::section>
                     <div>
