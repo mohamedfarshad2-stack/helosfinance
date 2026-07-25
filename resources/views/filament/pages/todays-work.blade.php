@@ -5,6 +5,19 @@
                 $guide = $workQueue['employee_guide'];
             @endphp
             <x-filament::section>
+                @if ($guide['is_supervisor'])
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Manager control</div>
+                            <h1 class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $guide['name'] }}, focus the team on today&apos;s gap.</h1>
+                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">You report to {{ $guide['reports_to'] }}. Review the target, act on the highest overdue employee, and escalate only decisions the owner must make.</p>
+                        </div>
+                        <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/30">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Your direct team</div>
+                            <div class="mt-1 text-sm font-medium text-blue-950 dark:text-blue-100">{{ implode(', ', $guide['direct_reports']) }}</div>
+                        </div>
+                    </div>
+                @else
                 <div class="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
                     <div>
                         <div class="text-xs uppercase tracking-wide text-emerald-600">My guided dashboard</div>
@@ -38,9 +51,11 @@
                         @endforelse
                     </div>
                 </div>
+                @endif
             </x-filament::section>
 
-            <x-filament::section>
+            @if (! $guide['is_supervisor'])
+                <x-filament::section>
                 <div class="grid gap-4 lg:grid-cols-2">
                     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
                         <div class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Operational work - do it in Stock App</div>
@@ -51,7 +66,8 @@
                         <div class="mt-2 text-sm text-emerald-900 dark:text-emerald-100">Finance, expenses, SKU mapping, cost truth, material stock, production records, management review, blockers, and escalation are handled in HELOAS.</div>
                     </div>
                 </div>
-            </x-filament::section>
+                </x-filament::section>
+            @endif
 
             @if (! empty($managerProfit))
                 <x-filament::section>
@@ -95,19 +111,19 @@
                             </div>
                         </div>
 
-                        <div class="grid gap-4 xl:grid-cols-2">
+                        <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                            <div class="grid grid-cols-[minmax(9rem,0.7fr)_minmax(12rem,1.3fr)] gap-4 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900">
+                                <span>Person</span><span>What HELOAS expects</span>
+                            </div>
                             @foreach ($managerProfit['employees'] as $employee)
-                                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                                    <div class="flex flex-wrap items-start justify-between gap-2">
+                                <div class="grid grid-cols-[minmax(9rem,0.7fr)_minmax(12rem,1.3fr)] gap-4 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-800">
+                                    <div>
                                         <div class="font-semibold text-gray-950 dark:text-white">{{ $employee['name'] }}{{ $employee['is_manager'] ? ' (Manager)' : '' }}</div>
-                                        <div class="text-xs text-gray-500">{{ implode(' / ', $employee['responsibilities']) }}</div>
+                                        <div class="mt-1 text-xs text-gray-500">{{ implode(' / ', $employee['responsibilities']) }}</div>
                                     </div>
-                                    <div class="mt-3 grid gap-2">
+                                    <div class="grid gap-1 text-gray-700 dark:text-gray-300">
                                         @forelse ($employee['signals'] as $signal)
-                                            <div class="rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900">
-                                                <div class="text-gray-700 dark:text-gray-300">{{ $signal['label'] }}</div>
-                                                <div class="mt-1 font-semibold text-gray-950 dark:text-white">{{ $signal['display'] }}</div>
-                                            </div>
+                                            <div><span class="font-medium text-gray-950 dark:text-white">{{ $signal['label'] }}:</span> {{ $signal['display'] }}</div>
                                         @empty
                                             <div class="text-sm text-amber-700">Assign a profit-linked responsibility to this employee.</div>
                                         @endforelse
@@ -126,16 +142,8 @@
             @if (! empty($workQueue['team_summary']))
                 <x-filament::section>
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Team guidance</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Handle blocked and overdue direct-report work before routine review.</p>
-                    </div>
-                    <div class="mt-4 grid gap-3 sm:grid-cols-5">
-                        @foreach (['people' => 'Direct reports', 'open' => 'Open work', 'overdue' => 'Overdue', 'blocked' => 'Blocked / escalated', 'waiting_review' => 'Waiting review'] as $key => $label)
-                            <div class="rounded-lg bg-gray-50 px-3 py-3 dark:bg-gray-900">
-                                <div class="text-xs uppercase tracking-wide text-gray-500">{{ $label }}</div>
-                                <div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ $workQueue['team_summary'][$key] }}</div>
-                            </div>
-                        @endforeach
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Who needs your attention</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Start with the employee carrying the most overdue work. Reassign, unblock, or set today&apos;s expected result.</p>
                     </div>
                     @if (! empty($workQueue['team_summary']['members']))
                         <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
@@ -157,11 +165,20 @@
 
             <x-filament::section>
                 <div>
-                    <h2 class="text-lg font-semibold text-gray-950 dark:text-white">How to run your day</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Use this sequence every working day.</p>
+                    <h2 class="text-lg font-semibold text-gray-950 dark:text-white">{{ $guide['is_supervisor'] ? 'Your three actions today' : 'How to run your day' }}</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ $guide['is_supervisor'] ? 'Do these in order. Do not work through every card yourself.' : 'Use this sequence every working day.' }}</p>
                 </div>
-                <ol class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    @foreach ($guide['daily_routine'] as $step)
+                @php
+                    $routine = $guide['is_supervisor']
+                        ? [
+                            'Confirm the target gap or ask the owner to set the monthly target.',
+                            'Start with the employee at the top of Who needs your attention and agree today\'s result.',
+                            'Review blocked work at the end of the day; solve team blockers and escalate owner-only decisions.',
+                        ]
+                        : $guide['daily_routine'];
+                @endphp
+                <ol class="mt-4 grid gap-3 {{ $guide['is_supervisor'] ? 'lg:grid-cols-3' : 'md:grid-cols-2 xl:grid-cols-4' }}">
+                    @foreach ($routine as $step)
                         <li class="rounded-lg border border-gray-200 p-3 text-sm text-gray-700 dark:border-gray-800 dark:text-gray-300">
                             <span class="mr-2 font-semibold text-emerald-600">{{ $loop->iteration }}.</span>{{ $step }}
                         </li>
@@ -170,6 +187,7 @@
             </x-filament::section>
         @endif
 
+        @if (! (($guide['is_supervisor'] ?? false) && ($workQueue['open_count'] ?? 0) === 0))
         <x-filament::section>
             <div class="grid gap-4 lg:grid-cols-[1.3fr_0.7fr] lg:items-start">
                 <div>
@@ -468,6 +486,8 @@ HTML;
                 </div>
             </div>
         </x-filament::section>
+
+        @endif
 
         @if ($activeMission)
             @php
