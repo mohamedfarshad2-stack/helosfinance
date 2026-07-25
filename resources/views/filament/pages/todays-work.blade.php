@@ -81,7 +81,7 @@
                             @foreach ($managerProfit['employees'] as $employee)
                                 <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                                     <div class="flex flex-wrap items-start justify-between gap-2">
-                                        <div class="font-semibold text-gray-950 dark:text-white">{{ $employee['name'] }}</div>
+                                        <div class="font-semibold text-gray-950 dark:text-white">{{ $employee['name'] }}{{ $employee['is_manager'] ? ' (Manager)' : '' }}</div>
                                         <div class="text-xs text-gray-500">{{ implode(' / ', $employee['responsibilities']) }}</div>
                                     </div>
                                     <div class="mt-3 grid gap-2">

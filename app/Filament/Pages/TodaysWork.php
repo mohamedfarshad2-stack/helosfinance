@@ -351,9 +351,8 @@ class TodaysWork extends Page
         $expensePressure = (float) ($metrics['manual_overhead_costs'] ?? 0);
         $salaryPressure = (float) ($metrics['salary_pressure'] ?? 0);
 
-        $employees = $user->directReports()
-            ->orderBy('name')
-            ->get()
+        $employees = collect([$user])
+            ->merge($user->directReports()->orderBy('name')->get())
             ->map(function (User $employee) use ($leakage, $returnImpact, $unrecognizedRevenue, $operatingCost, $expensePressure, $salaryPressure): array {
                 $responsibilities = $employee->staffResponsibilities($this->business?->id);
                 $signals = [];
@@ -388,6 +387,7 @@ class TodaysWork extends Page
 
                 return [
                     'name' => $employee->name,
+                    'is_manager' => $employee->is(Auth::user()),
                     'responsibilities' => collect($responsibilities)->map(fn (string $code): string => $this->responsibilityLabel($code))->values()->all(),
                     'signals' => $signals,
                 ];
