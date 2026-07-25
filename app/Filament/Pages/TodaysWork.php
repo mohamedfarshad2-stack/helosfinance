@@ -194,12 +194,12 @@ class TodaysWork extends Page
             ->values();
 
         $sections = [
-            'due_today' => $tasks->filter(fn (array $task): bool => filled($task['due_on']) && Carbon::parse($task['due_on'])->lessThanOrEqualTo(today()) && $task['state'] !== 'completed')->values()->all(),
-            'high_priority' => $tasks->filter(fn (array $task): bool => in_array($task['priority'], ['critical', 'high'], true) && $task['state'] !== 'completed')->values()->all(),
-            'waiting_review' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['waiting_review', 'escalated', 'blocked'], true))->values()->all(),
-            'completed_today' => $tasks->filter(fn (array $task): bool => $task['state'] === 'completed' && filled($task['completed_at']) && Carbon::parse($task['completed_at'])->isToday())->values()->all(),
-            'problems' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['blocked', 'escalated'], true))->values()->all(),
-            'missing_information' => $tasks->filter(fn (array $task): bool => in_array($task['responsibility_code'] ?? '', ['bank_exceptions', 'product_repair', 'material_stock'], true) && $task['state'] !== 'completed')->values()->all(),
+            'due_today' => $tasks->filter(fn (array $task): bool => filled($task['due_on']) && Carbon::parse($task['due_on'])->lessThanOrEqualTo(today()) && $task['state'] !== 'completed')->take(10)->values()->all(),
+            'high_priority' => $tasks->filter(fn (array $task): bool => in_array($task['priority'], ['critical', 'high'], true) && $task['state'] !== 'completed')->take(10)->values()->all(),
+            'waiting_review' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['waiting_review', 'escalated', 'blocked'], true))->take(10)->values()->all(),
+            'completed_today' => $tasks->filter(fn (array $task): bool => $task['state'] === 'completed' && filled($task['completed_at']) && Carbon::parse($task['completed_at'])->isToday())->take(10)->values()->all(),
+            'problems' => $tasks->filter(fn (array $task): bool => in_array($task['state'], ['blocked', 'escalated'], true))->take(10)->values()->all(),
+            'missing_information' => $tasks->filter(fn (array $task): bool => in_array($task['responsibility_code'] ?? '', ['bank_exceptions', 'product_repair', 'material_stock'], true) && $task['state'] !== 'completed')->take(10)->values()->all(),
         ];
 
         $openTasks = $tasks
@@ -272,7 +272,7 @@ class TodaysWork extends Page
             ],
             'sections' => $sections,
             'todays_priority' => $openTasks->sortBy(fn (array $task): string => $this->taskSortKey($task))->first(),
-            'ranked_missions' => $openTasks->sortBy(fn (array $task): string => $this->taskSortKey($task))->values()->all(),
+            'ranked_missions' => $openTasks->sortBy(fn (array $task): string => $this->taskSortKey($task))->take(25)->values()->all(),
             'tasks' => $tasks->all(),
             'team_workload' => $teamWorkload->all(),
             'responsibility_groups' => $responsibilityGroups->all(),
@@ -293,7 +293,7 @@ class TodaysWork extends Page
             return [];
         }
 
-        $responsibilities = collect($user->staffResponsibilities())
+        $responsibilities = collect($user->staffResponsibilities($user->business_id))
             ->map(fn (string $code): array => [
                 'label' => $this->responsibilityLabel($code),
                 'direction' => $this->responsibilityDirection($code),
@@ -515,7 +515,7 @@ class TodaysWork extends Page
             return [];
         }
 
-        return collect($user->staffResponsibilities())
+        return collect($user->staffResponsibilities($user->business_id))
             ->map(fn (string $responsibility): string => $this->responsibilityLabel($responsibility))
             ->values()
             ->all();
