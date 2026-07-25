@@ -363,6 +363,7 @@ class WorkQueueIntelligenceTest extends TestCase
             'business_type' => Business::TYPE_MANUFACTURING,
             'business_maturity' => Business::MATURITY_LEVEL_5,
             'onboarding_status' => 'ready',
+            'settings' => ['goal' => ['type' => 'profit', 'amount' => 100000]],
         ]);
 
         $employee = User::query()->create([
@@ -441,6 +442,7 @@ class WorkQueueIntelligenceTest extends TestCase
                 'direct_operational_costs' => 10000,
                 'manual_overhead_costs' => 12000,
                 'salary_pressure' => 8000,
+                'order_counts' => ['delivered' => 10],
             ],
         ]);
 
@@ -456,10 +458,15 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('Control work - do it in HELOAS')
             ->assertSee('Where to work: Stock App.')
             ->assertSee('Open Stock App')
-            ->assertSee('Manager profit recovery')
-            ->assertSee('Estimated profit / loss')
+            ->assertSee('Manager target recovery')
+            ->assertSee('Monthly company target gap')
+            ->assertSee('LKR 110,000.00')
+            ->assertSee('Additional deliveries required')
             ->assertSee('Dispatch Assistant')
-            ->assertSee('Shared amounts must not be added together')
+            ->assertSee('Managers see only the remaining operational gap')
+            ->assertDontSee('Revenue LKR')
+            ->assertDontSee('Total cost')
+            ->assertDontSee('Estimated profit / loss')
             ->assertSee("Today's work", false)
             ->assertSee('Tasks Due Today')
             ->assertSee('High Priority')

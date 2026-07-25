@@ -343,51 +343,92 @@ class TodaysWork extends Page
             'metrics' => $savedSnapshot->metrics ?? [],
         ] : $snapshots->currentMonthSummary($this->business);
         $metrics = is_array($summary['metrics'] ?? null) ? $summary['metrics'] : [];
+        $revenue = (float) ($summary['revenue_total'] ?? 0);
         $profit = (float) ($summary['estimated_profit'] ?? 0);
         $leakage = (float) ($summary['leakage_total'] ?? 0);
-        $returnImpact = (float) ($metrics['return_impact'] ?? 0);
-        $unrecognizedRevenue = (float) ($metrics['unrecognized_order_revenue'] ?? 0);
-        $operatingCost = (float) ($metrics['direct_operational_costs'] ?? 0);
-        $expensePressure = (float) ($metrics['manual_overhead_costs'] ?? 0);
-        $salaryPressure = (float) ($metrics['salary_pressure'] ?? 0);
+        $directCosts = (float) ($metrics['direct_operational_costs'] ?? 0);
+        $delivered = (int) ($metrics['order_counts']['delivered'] ?? 0);
+        $settings = is_array($this->business->settings ?? null) ? $this->business->settings : [];
+        $goal = is_array($settings['goal'] ?? null) ? $settings['goal'] : [];
+        $goalType = (string) ($goal['type'] ?? 'profit');
+        $target = (float) ($goal['amount'] ?? 0);
+        $configured = $target > 0;
+        $current = match ($goalType) {
+            'revenue' => $revenue,
+            'deliveries' => (float) $delivered,
+            'profit' => $profit,
+            default => null,
+        };
+        $gap = $configured && $current !== null ? max($target - $current, 0) : null;
+        $contributionPool = max($revenue - $directCosts - $leakage, 0);
+        $averageContribution = $delivered > 0 ? $contributionPool / $delivered : 0;
+        $averageRevenue = $delivered > 0 ? $revenue / $delivered : 0;
+        $requiredDeliveries = match (true) {
+            ! $configured || $gap === null => null,
+            $goalType === 'deliveries' => (int) ceil($gap),
+            $goalType === 'revenue' && $averageRevenue > 0 => (int) ceil($gap / $averageRevenue),
+            $goalType === 'profit' && $averageContribution > 0 => (int) ceil($gap / $averageContribution),
+            default => null,
+        };
+        $daysRemaining = max(now()->diffInDays(now()->endOfMonth()) + 1, 1);
+        $dailyDeliveries = $requiredDeliveries === null ? null : (int) ceil($requiredDeliveries / $daysRemaining);
+        $directReportIds = $user->directReports()->pluck('id');
+        $teamOverdue = Mission::query()
+            ->whereIn('assigned_user_id', $directReportIds)
+            ->whereIn('business_id', $user->accessibleBusinessIds())
+            ->active()
+            ->where('due_at', '<', today())
+            ->count();
 
         $employees = collect([$user])
             ->merge($user->directReports()->orderBy('name')->get())
-            ->map(function (User $employee) use ($leakage, $returnImpact, $unrecognizedRevenue, $operatingCost, $expensePressure, $salaryPressure): array {
+            ->map(function (User $employee) use ($leakage, $requiredDeliveries, $dailyDeliveries, $teamOverdue): array {
                 $responsibilities = $employee->staffResponsibilities($this->business?->id);
                 $signals = [];
+                $isManager = $employee->is(Auth::user());
+                $openMissions = Mission::query()
+                    ->where('assigned_user_id', $employee->id)
+                    ->where('business_id', $this->business?->id)
+                    ->active()
+                    ->count();
+                $overdueMissions = Mission::query()
+                    ->where('assigned_user_id', $employee->id)
+                    ->where('business_id', $this->business?->id)
+                    ->active()
+                    ->where('due_at', '<', today())
+                    ->count();
 
                 if (in_array('dispatch', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Order value still awaiting trusted delivery recognition', 'amount' => $unrecognizedRevenue, 'kind' => 'revenue_at_risk'];
+                    $signals[] = ['label' => 'Delivery contribution required', 'display' => $requiredDeliveries === null ? 'Waiting for owner target' : number_format($requiredDeliveries).' additional deliveries shared across operations'];
                 }
 
                 if (in_array('return_recovery', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Shared monthly return pressure', 'amount' => max($returnImpact, $leakage), 'kind' => 'shared_recovery_pool'];
+                    $signals[] = ['label' => 'Return leakage to recover or prevent', 'display' => 'LKR '.number_format($leakage, 2).' shared company pressure'];
                 }
 
                 if (in_array('product_repair', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Product profit blocked until SKU links are repaired', 'amount' => null, 'kind' => 'truth_blocker'];
+                    $signals[] = ['label' => 'Product-cost truth work', 'display' => number_format($openMissions).' open assigned missions; repair SKU links before margin decisions'];
                 }
 
                 if (in_array('production', $responsibilities, true) || in_array('material_stock', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Production, direct cost, and salary base to control', 'amount' => $operatingCost + $salaryPressure, 'kind' => 'cost_control'];
+                    $signals[] = ['label' => 'Production and material control', 'display' => 'Keep output, waste, material use, and piece-pay records current'];
                 }
 
                 if (in_array('expense_recording', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Recorded overhead requiring cost control', 'amount' => $expensePressure, 'kind' => 'cost_control'];
+                    $signals[] = ['label' => 'Expense control', 'display' => 'Record and challenge avoidable expenses without exposing owner financial totals'];
                 }
 
                 if (in_array('order_confirmation', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Reduce fake, incorrect, and unreachable orders before courier cost', 'amount' => null, 'kind' => 'prevention'];
+                    $signals[] = ['label' => 'Daily confirmation pace', 'display' => $dailyDeliveries === null ? 'Waiting for owner target' : 'Support at least '.number_format($dailyDeliveries).' additional deliveries per remaining day'];
                 }
 
                 if (in_array('supervisor_review', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Own overdue and blocked work across direct reports', 'amount' => null, 'kind' => 'management'];
+                    $signals[] = ['label' => 'Overdue work reduction', 'display' => $isManager ? number_format($teamOverdue).' overdue direct-report missions to triage' : number_format($overdueMissions).' overdue assigned missions to clear'];
                 }
 
                 return [
                     'name' => $employee->name,
-                    'is_manager' => $employee->is(Auth::user()),
+                    'is_manager' => $isManager,
                     'responsibilities' => collect($responsibilities)->map(fn (string $code): string => $this->responsibilityLabel($code))->values()->all(),
                     'signals' => $signals,
                 ];
@@ -398,17 +439,27 @@ class TodaysWork extends Page
         return [
             'period' => now()->format('F Y'),
             'as_of' => $savedSnapshot?->period_end?->format('M j, Y') ?? now()->format('M j, Y'),
-            'revenue' => (float) ($summary['revenue_total'] ?? 0),
-            'cost' => (float) ($summary['cost_total'] ?? 0),
-            'profit' => $profit,
-            'loss_gap' => max(-$profit, 0),
+            'configured' => $configured,
+            'goal_label' => match ($goalType) {
+                'revenue' => 'Monthly sales target gap',
+                'deliveries' => 'Monthly delivery target gap',
+                'collections' => 'Monthly collection target gap',
+                default => 'Monthly company target gap',
+            },
+            'gap' => $gap,
+            'gap_is_count' => $goalType === 'deliveries',
+            'required_deliveries' => $requiredDeliveries,
+            'daily_deliveries' => $dailyDeliveries,
+            'days_remaining' => $daysRemaining,
             'leakage' => $leakage,
-            'return_impact' => $returnImpact,
-            'headline' => $profit < 0
-                ? 'The company is currently below cost by LKR '.number_format(abs($profit), 2).' this month.'
-                : 'The company is not showing an overall monthly loss, but LKR '.number_format($leakage, 2).' of recorded leakage still needs recovery or prevention.',
+            'team_overdue' => $teamOverdue,
+            'headline' => ! $configured
+                ? 'The owner has not set this month\'s company target, so HELOAS cannot calculate the exact operational gap yet.'
+                : ($gap !== null && $gap <= 0
+                    ? 'The company target is covered. Protect it by reducing leakage and overdue work.'
+                    : 'Close the remaining target gap through the operational numbers below.'),
             'employees' => $employees,
-            'warning' => 'These are company-level pools influenced by employees, not commission values. Shared amounts must not be added together. Profit remains estimated until missing SKU links, product costs, salaries, expenses, and bank truth are complete.',
+            'warning' => 'HELOAS uses private company financials to calculate this plan. Managers see only the remaining operational gap and assigned recovery actions. Shared targets must not be added together.',
         ];
     }
 

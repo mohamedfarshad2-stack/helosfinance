@@ -57,24 +57,42 @@
                 <x-filament::section>
                     <div class="grid gap-5">
                         <div>
-                            <div class="text-xs font-semibold uppercase tracking-wide text-red-600">Manager profit recovery - {{ $managerProfit['period'] }}</div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-red-600">Manager target recovery - {{ $managerProfit['period'] }}</div>
                             <h2 class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ $managerProfit['headline'] }}</h2>
-                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">As of {{ $managerProfit['as_of'] }}. Use this section to divide business pressure among employees. It shows influence and accountability, not employee commission.</p>
+                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">As of {{ $managerProfit['as_of'] }}. HELOAS keeps owner financial totals private and converts them into operational targets for the manager.</p>
                         </div>
 
                         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                            @foreach ([
-                                ['label' => 'Revenue', 'value' => $managerProfit['revenue'], 'tone' => 'text-emerald-700'],
-                                ['label' => 'Total cost', 'value' => $managerProfit['cost'], 'tone' => 'text-amber-700'],
-                                ['label' => 'Estimated profit / loss', 'value' => $managerProfit['profit'], 'tone' => $managerProfit['profit'] >= 0 ? 'text-emerald-700' : 'text-red-700'],
-                                ['label' => 'Loss gap', 'value' => $managerProfit['loss_gap'], 'tone' => 'text-red-700'],
-                                ['label' => 'Recorded leakage', 'value' => $managerProfit['leakage'], 'tone' => 'text-red-700'],
-                            ] as $metric)
-                                <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
-                                    <div class="text-xs uppercase tracking-wide text-gray-500">{{ $metric['label'] }}</div>
-                                    <div class="mt-1 text-lg font-semibold {{ $metric['tone'] }}">LKR {{ number_format((float) $metric['value'], 2) }}</div>
+                            <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">{{ $managerProfit['goal_label'] }}</div>
+                                <div class="mt-1 text-lg font-semibold text-red-700">
+                                    @if (! $managerProfit['configured'])
+                                        Owner must set target
+                                    @elseif ($managerProfit['gap'] === null)
+                                        Waiting for trusted source data
+                                    @elseif ($managerProfit['gap_is_count'])
+                                        {{ number_format((float) $managerProfit['gap'], 0) }} deliveries
+                                    @else
+                                        LKR {{ number_format((float) $managerProfit['gap'], 2) }}
+                                    @endif
                                 </div>
-                            @endforeach
+                            </div>
+                            <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Additional deliveries required</div>
+                                <div class="mt-1 text-lg font-semibold text-blue-700">{{ $managerProfit['required_deliveries'] === null ? 'Waiting for target' : number_format($managerProfit['required_deliveries']) }}</div>
+                            </div>
+                            <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Daily pace for remaining {{ $managerProfit['days_remaining'] }} day(s)</div>
+                                <div class="mt-1 text-lg font-semibold text-blue-700">{{ $managerProfit['daily_deliveries'] === null ? 'Waiting for target' : number_format($managerProfit['daily_deliveries']).' deliveries/day' }}</div>
+                            </div>
+                            <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Leakage to recover or prevent</div>
+                                <div class="mt-1 text-lg font-semibold text-red-700">LKR {{ number_format((float) $managerProfit['leakage'], 2) }}</div>
+                            </div>
+                            <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Overdue team missions</div>
+                                <div class="mt-1 text-lg font-semibold text-amber-700">{{ number_format($managerProfit['team_overdue']) }}</div>
+                            </div>
                         </div>
 
                         <div class="grid gap-4 xl:grid-cols-2">
@@ -88,9 +106,7 @@
                                         @forelse ($employee['signals'] as $signal)
                                             <div class="rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900">
                                                 <div class="text-gray-700 dark:text-gray-300">{{ $signal['label'] }}</div>
-                                                <div class="mt-1 font-semibold {{ $signal['amount'] !== null ? 'text-red-700 dark:text-red-300' : 'text-gray-500' }}">
-                                                    {{ $signal['amount'] !== null ? 'LKR '.number_format((float) $signal['amount'], 2) : 'Measure through task completion and outcome trend' }}
-                                                </div>
+                                                <div class="mt-1 font-semibold text-gray-950 dark:text-white">{{ $signal['display'] }}</div>
                                             </div>
                                         @empty
                                             <div class="text-sm text-amber-700">Assign a profit-linked responsibility to this employee.</div>
