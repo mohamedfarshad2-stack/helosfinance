@@ -68,6 +68,8 @@ class ProductionTeamProvisioningTest extends TestCase
 
         $loginMigration = require database_path('migrations/2026_07_25_000003_activate_horns_leadership_logins.php');
         $loginMigration->up();
+        $cleanupMigration = require database_path('migrations/2026_07_25_000004_archive_duplicate_horns_leadership_access.php');
+        $cleanupMigration->up();
 
         $nifras->refresh();
         $arafath->refresh();
@@ -81,5 +83,13 @@ class ProductionTeamProvisioningTest extends TestCase
         $this->assertTrue(Hash::check('sandhamali@789', $sandamali->password));
         $this->assertSame($nifras->id, $arafath->supervisor_user_id);
         $this->assertSame($nifras->id, $sandamali->supervisor_user_id);
+        $this->assertEqualsCanonicalizing(
+            ['supervisor_review', 'order_confirmation', 'return_recovery'],
+            StaffResponsibilityAssignment::query()
+                ->where('user_id', $sandamali->id)
+                ->where('is_active', true)
+                ->pluck('responsibility_code')
+                ->all(),
+        );
     }
 }
