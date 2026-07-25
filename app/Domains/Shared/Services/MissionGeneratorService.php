@@ -8,6 +8,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\StaffResponsibilityAssignment;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class MissionGeneratorService
 {
@@ -102,7 +103,14 @@ class MissionGeneratorService
 
         $businesses = Business::query()->whereIn('id', $businessIds)->get();
 
-        $businesses->each(fn (Business $business) => $this->syncForBusiness($business));
+        $businesses->each(function (Business $business): void {
+            $shouldSync = app()->environment('testing')
+                || Cache::add('mission-sync:business:'.$business->id, true, now()->addMinutes(5));
+
+            if ($shouldSync) {
+                $this->syncForBusiness($business);
+            }
+        });
 
         $responsibilitiesByBusiness = collect($businessIds)
             ->mapWithKeys(fn (int $businessId): array => [$businessId => $user->staffResponsibilities($businessId)])

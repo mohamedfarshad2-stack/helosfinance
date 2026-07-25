@@ -331,6 +331,10 @@ class TodaysWork extends Page
         }
 
         $savedSnapshot = $snapshots->readCurrentMonth($this->business);
+
+        if (! $savedSnapshot || ! $savedSnapshot->period_end?->isToday()) {
+            $savedSnapshot = $snapshots->currentMonth($this->business);
+        }
         $summary = $savedSnapshot ? [
             'revenue_total' => (float) $savedSnapshot->revenue_total,
             'cost_total' => (float) $savedSnapshot->cost_total,
