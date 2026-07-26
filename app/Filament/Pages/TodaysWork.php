@@ -38,6 +38,8 @@ class TodaysWork extends Page
 
     public array $managerProfit = [];
 
+    public array $employeeContribution = [];
+
     public ?int $activeMissionId = null;
 
     public array $missionActionData = [];
@@ -52,6 +54,7 @@ class TodaysWork extends Page
         $this->business = $businessId ? Business::query()->find($businessId) : null;
         $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
         $this->managerProfit = $this->managerProfitGuide($snapshots);
+        $this->employeeContribution = $this->employeeContributionGuide($snapshots);
     }
 
     protected function getViewData(): array
@@ -60,6 +63,7 @@ class TodaysWork extends Page
             'business' => $this->business,
             'workQueue' => $this->workQueue,
             'managerProfit' => $this->managerProfit,
+            'employeeContribution' => $this->employeeContribution,
             'activeMission' => $this->activeMission(),
             'actionOptions' => $this->actionOptions(),
         ];
@@ -466,6 +470,127 @@ class TodaysWork extends Page
                     : 'Close the remaining target gap through the operational numbers below.'),
             'employees' => $employees,
             'warning' => 'HELOAS uses private company financials to calculate this plan. Managers see only the remaining operational gap and assigned recovery actions. Shared targets must not be added together.',
+        ];
+    }
+
+    private function employeeContributionGuide(BusinessHealthSnapshotService $snapshots): array
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User || ! $user->isStaff() || $user->is_staff_supervisor || ! $this->business) {
+            return [];
+        }
+
+        $snapshot = $snapshots->readCurrentMonth($this->business);
+
+        if (! $snapshot || ! $snapshot->period_end?->isToday()) {
+            $snapshot = $snapshots->currentMonth($this->business);
+        }
+
+        $metrics = is_array($snapshot?->metrics) ? $snapshot->metrics : [];
+        $revenue = (float) ($snapshot?->revenue_total ?? 0);
+        $directCosts = (float) ($metrics['direct_operational_costs'] ?? 0);
+        $leakage = (float) ($snapshot?->leakage_total ?? 0);
+        $profit = (float) ($snapshot?->estimated_profit ?? 0);
+        $delivered = (int) ($metrics['order_counts']['delivered'] ?? 0);
+        $contributionPerDelivery = $delivered > 0
+            ? max(($revenue - $directCosts - $leakage) / $delivered, 0)
+            : 0;
+        $recoveryGap = max(-$profit, $leakage, 0);
+        $daysRemaining = max((int) now()->startOfDay()->diffInDays(now()->endOfMonth()->startOfDay()) + 1, 1);
+        $companyDailyDeliveries = $contributionPerDelivery > 0
+            ? (int) ceil(ceil($recoveryGap / $contributionPerDelivery) / $daysRemaining)
+            : null;
+
+        $responsibilities = $user->staffResponsibilities($this->business->id);
+        $deliveryRoles = ['order_confirmation', 'dispatch', 'return_recovery'];
+        $supportsDeliveries = array_intersect($responsibilities, $deliveryRoles) !== [];
+        $deliveryStaffCount = User::query()
+            ->where('business_id', $this->business->id)
+            ->where('is_employee', true)
+            ->get()
+            ->filter(fn (User $employee): bool => array_intersect($employee->staffResponsibilities($this->business?->id), $deliveryRoles) !== [])
+            ->count();
+        $personalDeliveryTarget = $supportsDeliveries && $companyDailyDeliveries !== null
+            ? (int) ceil($companyDailyDeliveries / max($deliveryStaffCount, 1))
+            : null;
+
+        $completedToday = Mission::query()
+            ->where('business_id', $this->business->id)
+            ->where('assigned_user_id', $user->id)
+            ->where('status', Mission::STATUS_COMPLETED)
+            ->whereDate('completed_at', today())
+            ->count();
+        $openToday = Mission::query()
+            ->where('business_id', $this->business->id)
+            ->where('assigned_user_id', $user->id)
+            ->active()
+            ->where(fn ($query) => $query->whereNull('due_at')->orWhereDate('due_at', '<=', today()))
+            ->count();
+        $taskTarget = max($completedToday + $openToday, 1);
+        $progress = min((int) round(($completedToday / $taskTarget) * 100), 100);
+
+        $goals = collect($responsibilities)
+            ->map(function (string $responsibility) use ($personalDeliveryTarget, $openToday): array {
+                return match ($responsibility) {
+                    'order_confirmation' => [
+                        'label' => 'Move confirmed orders forward',
+                        'target' => $personalDeliveryTarget ? 'Support '.$personalDeliveryTarget.' deliveries today' : 'Clear today\'s confirmation missions',
+                        'action' => 'Confirm genuine orders and follow up no-answer customers in Stock App.',
+                        'tone' => 'blue',
+                    ],
+                    'dispatch' => [
+                        'label' => 'Protect today\'s deliveries',
+                        'target' => $personalDeliveryTarget ? $personalDeliveryTarget.' deliveries to support' : 'Clear today\'s dispatch missions',
+                        'action' => 'Add tracking and move confirmed parcels to the courier without delay.',
+                        'tone' => 'emerald',
+                    ],
+                    'return_recovery' => [
+                        'label' => 'Recover delayed and returned orders',
+                        'target' => max($openToday, 1).' assigned actions to review',
+                        'action' => 'Call, correct, resend, or close each return case in Stock App.',
+                        'tone' => 'amber',
+                    ],
+                    'production' => [
+                        'label' => 'Keep production output current',
+                        'target' => 'Record today\'s completed output',
+                        'action' => 'Enter good quantity, waste, material use, and employee payout in HELOAS.',
+                        'tone' => 'violet',
+                    ],
+                    'material_stock' => [
+                        'label' => 'Keep materials ready',
+                        'target' => 'Clear material and stock blockers',
+                        'action' => 'Update receipts, usage, shortages, and missing SKU links in HELOAS.',
+                        'tone' => 'cyan',
+                    ],
+                    'product_repair' => [
+                        'label' => 'Make product information usable',
+                        'target' => max($openToday, 1).' assigned fixes to review',
+                        'action' => 'Repair missing product and SKU links so the next decision uses trusted data.',
+                        'tone' => 'rose',
+                    ],
+                    'expense_recording', 'collections', 'bank_exceptions' => [
+                        'label' => $this->responsibilityLabel($responsibility),
+                        'target' => max($openToday, 1).' assigned actions to review',
+                        'action' => $this->responsibilityDirection($responsibility),
+                        'tone' => 'indigo',
+                    ],
+                    default => [],
+                };
+            })
+            ->filter()
+            ->take(3)
+            ->values()
+            ->all();
+
+        return [
+            'completed' => $completedToday,
+            'remaining' => max($taskTarget - $completedToday, 0),
+            'target' => $taskTarget,
+            'progress' => $progress,
+            'status' => $progress >= 100 ? 'Target reached' : ($progress >= 50 ? 'Good progress' : 'Start with your first priority'),
+            'goals' => $goals,
+            'calculation_ready' => $contributionPerDelivery > 0,
         ];
     }
 

@@ -735,4 +735,53 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('Expected result')
             ->assertSee('Exact steps for the employee');
     }
+
+    public function test_regular_employee_sees_a_private_colourful_contribution_plan(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Contribution Plan Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $employee = User::query()->create([
+            'name' => 'Delivery Employee',
+            'email' => 'delivery-contribution@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'employee_access_profile' => 'operations',
+            'staff_responsibilities' => ['dispatch', 'return_recovery'],
+            'responsibilities_configured' => true,
+            'is_staff_supervisor' => false,
+        ]);
+
+        FinancialSnapshot::query()->create([
+            'business_id' => $business->id,
+            'period_start' => now()->startOfMonth()->toDateString(),
+            'period_end' => now()->toDateString(),
+            'revenue_total' => 50000,
+            'cost_total' => 65000,
+            'leakage_total' => 5000,
+            'estimated_profit' => -15000,
+            'metrics' => [
+                'direct_operational_costs' => 20000,
+                'order_counts' => ['delivered' => 20],
+            ],
+        ]);
+
+        $this->actingAs($employee)
+            ->get(TodaysWork::getUrl())
+            ->assertOk()
+            ->assertSee('Your contribution today')
+            ->assertSee('Daily progress')
+            ->assertSee('Protect today')
+            ->assertSee('deliveries to support')
+            ->assertDontSee('estimated_profit')
+            ->assertDontSee('Monthly salary')
+            ->assertDontSee('company profit');
+    }
 }

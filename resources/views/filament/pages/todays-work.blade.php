@@ -54,6 +54,73 @@
                 @endif
             </x-filament::section>
 
+            @if (! empty($employeeContribution))
+                <x-filament::section>
+                    <div class="overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-blue-700 p-5 text-white shadow-lg">
+                        <div class="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-100">Your contribution today</div>
+                                <h2 class="mt-2 text-2xl font-bold">{{ $employeeContribution['status'] }}</h2>
+                                <p class="mt-2 max-w-2xl text-sm text-emerald-50">
+                                    Complete the work below to keep your daily contribution on track. HELOAS calculated this from the company workload and remaining operational gap without showing private financial information.
+                                </p>
+                            </div>
+                            <div class="grid grid-cols-3 gap-3 text-center">
+                                <div class="rounded-xl bg-white/15 px-4 py-3 backdrop-blur">
+                                    <div class="text-2xl font-black">{{ $employeeContribution['target'] }}</div>
+                                    <div class="text-xs text-emerald-100">Today&apos;s actions</div>
+                                </div>
+                                <div class="rounded-xl bg-white/15 px-4 py-3 backdrop-blur">
+                                    <div class="text-2xl font-black">{{ $employeeContribution['completed'] }}</div>
+                                    <div class="text-xs text-emerald-100">Completed</div>
+                                </div>
+                                <div class="rounded-xl bg-white/15 px-4 py-3 backdrop-blur">
+                                    <div class="text-2xl font-black">{{ $employeeContribution['remaining'] }}</div>
+                                    <div class="text-xs text-emerald-100">Remaining</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-5">
+                            <div class="mb-2 flex items-center justify-between text-xs font-semibold">
+                                <span>Daily progress</span>
+                                <span>{{ $employeeContribution['progress'] }}%</span>
+                            </div>
+                            <div class="h-3 overflow-hidden rounded-full bg-black/20">
+                                <div class="h-full rounded-full bg-gradient-to-r from-lime-300 to-yellow-300 transition-all" style="width: {{ $employeeContribution['progress'] }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                        @foreach ($employeeContribution['goals'] as $goal)
+                            @php
+                                $goalClasses = match ($goal['tone']) {
+                                    'blue' => 'border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100',
+                                    'emerald' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
+                                    'amber' => 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100',
+                                    'violet' => 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100',
+                                    'cyan' => 'border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100',
+                                    'rose' => 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
+                                    default => 'border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100',
+                                };
+                            @endphp
+                            <div class="rounded-xl border p-4 {{ $goalClasses }}">
+                                <div class="text-xs font-bold uppercase tracking-wide opacity-70">{{ $goal['label'] }}</div>
+                                <div class="mt-2 text-lg font-bold">{{ $goal['target'] }}</div>
+                                <div class="mt-2 text-sm opacity-80">{{ $goal['action'] }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    @if (! $employeeContribution['calculation_ready'])
+                        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            Your work targets are active. HELOAS will make the delivery pace more precise as trusted delivery and cost data becomes available.
+                        </div>
+                    @endif
+                </x-filament::section>
+            @endif
+
             @if (! $guide['is_supervisor'])
                 <x-filament::section>
                 <div class="grid gap-4 lg:grid-cols-2">
