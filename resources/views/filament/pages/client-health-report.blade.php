@@ -54,6 +54,8 @@
                         'subtitle' => $profitCashTrusted ? 'Parcel result and cash settlement agree' : 'Estimated parcel result — cash is not confirmed',
                         'items' => [
                             ['label' => 'Delivered parcel value ('.$deliveredEvidenceCount.' orders)', 'value' => data_get($ownerMetrics->get('Revenue'), 'value', 'LKR 0')],
+                            ['label' => 'Delivery/courier cost on delivered parcels', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'delivered_courier_costs', 0), 2)],
+                            ['label' => 'Delivered value after delivery/courier cost', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'delivered_value_after_courier', 0), 2)],
                             ['label' => 'Estimated result after recorded costs', 'value' => data_get($ownerMetrics->get('Profit'), 'value', 'LKR 0')],
                             ['label' => 'Safe to use', 'value' => data_get($ownerMetrics->get('Safe to use'), 'value', 'Not ready')],
                         ],

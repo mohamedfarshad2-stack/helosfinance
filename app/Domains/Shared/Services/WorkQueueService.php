@@ -421,7 +421,7 @@ class WorkQueueService
         }
 
         $orders = $events
-            ->groupBy(fn (OperationalEvent $event): string => (string) ($event->external_id ?: $event->id))
+            ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event))
             ->map(fn (Collection $group): array => [
                 'first' => $group->sortBy('occurred_at')->first(),
                 'latest' => $group->sortBy('occurred_at')->last(),
@@ -546,22 +546,25 @@ class WorkQueueService
                 ]);
             }
 
-            if ($latest->event_type === OperationalEvent::TRACKING_NUMBER_ADDED && $latest->occurred_at?->isToday()) {
+            if ($latest->event_type === OperationalEvent::TRACKING_NUMBER_ADDED) {
+                $payload = is_array($latest->payload ?? null) ? $latest->payload : [];
+                $parcelValue = (float) ($payload['sale_amount'] ?? $payload['customer_total_amount'] ?? 0);
                 $tasks[] = $this->makeTask([
-                    'id' => 'tracking-added-'.($latest->external_id ?: $latest->id),
+                    'id' => 'delivery-follow-up-'.$this->stableOrderKey($latest),
                     'queue' => 'pending',
-                    'state' => 'completed',
-                    'priority' => 'low',
-                    'title' => 'Tracking number added',
-                    'why_it_matters' => 'The order can now move into dispatch and delivery tracking.',
-                    'recommended_action' => 'No action needed. The tracking number has been added.',
+                    'state' => 'open',
+                    'priority' => $this->datePriority($latest->occurred_at, true),
+                    'title' => 'Dispatched parcel needs delivery follow-up',
+                    'why_it_matters' => 'This parcel is dispatched but has not generated revenue. It contributes only after delivery.',
+                    'recommended_action' => 'Check the courier status in Stock App. Contact the customer before delivery, correct address or phone issues, and follow up until delivered or a real return reason is recorded.',
                     'related_record' => $related,
                     'assigned_team' => 'Operations',
                     'assigned_user' => $this->assignedUserLabel($business, ['operations', 'dispatch', 'sales', 'admin']),
                     'created_at' => $latestDate,
-                    'completed_at' => $latestDate,
-                    'status_label' => 'Completed today',
-                    'work_type' => 'tracking_added',
+                    'due_on' => $latestDate,
+                    'status_label' => $this->statusLabel($latestDate),
+                    'work_type' => 'delivery_follow_up',
+                    'amount' => $parcelValue > 0 ? $parcelValue : null,
                 ]);
             }
 
@@ -586,6 +589,11 @@ class WorkQueueService
         }
 
         return $tasks;
+    }
+
+    private function stableOrderKey(OperationalEvent $event): string
+    {
+        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
     }
 
     private function inventoryTasks(Business $business): array

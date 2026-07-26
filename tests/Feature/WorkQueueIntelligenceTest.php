@@ -300,10 +300,58 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertContains('Supplier payment needs settlement', $titles);
         $this->assertContains('Production payout pending', $titles);
         $this->assertContains('Order needs a tracking number', $titles);
+        $this->assertContains('Dispatched parcel needs delivery follow-up', $titles);
         $this->assertContains('Return needs action', $titles);
         $this->assertContains('Resend is still open', $titles);
         $this->assertContains('Possible fake order needs checking', $titles);
         $this->assertContains('Material entry needs a SKU', $titles);
+    }
+
+    public function test_dispatched_order_stays_a_revenue_recovery_task_until_delivery(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Delivery Recovery Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'dispatch-event-1',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 9001, 'sale_amount' => 3500],
+            'occurred_at' => now()->subDays(3),
+        ]);
+
+        $task = collect(app(WorkQueueService::class)->forBusiness($business)['tasks'])
+            ->firstWhere('work_type', 'delivery_follow_up');
+
+        $this->assertNotNull($task);
+        $this->assertSame('open', $task['state']);
+        $this->assertSame(3500.0, $task['amount']);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'delivered-event-99',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 3500,
+            'direct_cost_amount' => 425,
+            'payload' => ['order_id' => 9001, 'sale_amount' => 3500],
+            'occurred_at' => now(),
+        ]);
+
+        $tasks = collect(app(WorkQueueService::class)->forBusiness($business)['tasks']);
+        $this->assertNull($tasks->firstWhere('work_type', 'delivery_follow_up'));
+        $this->assertNotNull($tasks->firstWhere('work_type', 'order_delivery'));
     }
 
     public function test_employee_users_land_on_todays_work(): void

@@ -117,6 +117,9 @@ class FinancialSnapshotServiceTest extends TestCase
         $summary = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business);
 
         $this->assertSame(3000.0, (float) $summary['revenue_total']);
+        $this->assertSame(425.0, (float) $summary['metrics']['delivered_courier_costs']);
+        $this->assertSame(2575.0, (float) $summary['metrics']['delivered_value_after_courier']);
+        $this->assertSame(-47425.0, (float) $summary['estimated_profit']);
         $this->assertSame(879979.0, (float) $summary['metrics']['unrecognized_order_revenue']);
     }
 

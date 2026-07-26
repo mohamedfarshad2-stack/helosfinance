@@ -171,7 +171,7 @@ class MissionGeneratorService
     private function responsibilityForTask(array $task): ?string
     {
         return match ((string) ($task['work_type'] ?? 'general')) {
-            'order_tracking', 'tracking_added', 'order_delivery' => 'dispatch',
+            'order_tracking', 'tracking_added', 'delivery_follow_up', 'order_delivery' => 'dispatch',
             'return_action', 'resend_follow_up' => 'return_recovery',
             'fake_order_check' => 'order_confirmation',
             'wholesale_collection', 'service_collection' => 'collections',

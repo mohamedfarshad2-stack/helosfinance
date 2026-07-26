@@ -108,6 +108,8 @@ class BusinessHealthSnapshotService
             ->get();
         $latestDeliveredOrderEvents = $this->latestDeliveredOrderEvents($orderEvents);
         $recognizedOrderRevenue = (float) $latestDeliveredOrderEvents->sum('revenue_amount');
+        $deliveredCourierCosts = (float) $latestDeliveredOrderEvents->sum('direct_cost_amount');
+        $deliveredValueAfterCourier = $recognizedOrderRevenue - $deliveredCourierCosts;
         $unrecognizedOrderRevenue = max((float) (clone $events)->sum('revenue_amount') - $recognizedOrderRevenue, 0.0);
         $revenue = $recognizedOrderRevenue + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
@@ -191,6 +193,9 @@ class BusinessHealthSnapshotService
             'metrics' => [
                 'direct_operational_costs' => $directCosts,
                 'recognized_order_revenue' => $recognizedOrderRevenue,
+                'delivered_courier_costs' => $deliveredCourierCosts,
+                'delivered_value_after_courier' => $deliveredValueAfterCourier,
+                'delivered_contribution_after_all_direct_costs' => $recognizedOrderRevenue - $directCosts - $leakage + $recovery,
                 'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
                 'variable_expenses' => $variableExpenses,
