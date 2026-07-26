@@ -53,10 +53,16 @@
                         'title' => 'Owner decisions',
                         'subtitle' => $profitCashTrusted ? 'Parcel result and cash settlement agree' : 'Estimated parcel result — cash is not confirmed',
                         'items' => [
+                            ['label' => 'Still dispatched — not revenue ('.number_format((int) data_get($snapshot?->metrics, 'pending_dispatch_count', 0)).' parcels)', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'pending_dispatch_value', 0), 2)],
                             ['label' => 'Delivered parcel value ('.$deliveredEvidenceCount.' orders)', 'value' => data_get($ownerMetrics->get('Revenue'), 'value', 'LKR 0')],
                             ['label' => 'Delivery/courier cost on delivered parcels', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'delivered_courier_costs', 0), 2)],
-                            ['label' => 'Delivered value after delivery/courier cost', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'delivered_value_after_courier', 0), 2)],
-                            ['label' => 'Estimated result after recorded costs', 'value' => data_get($ownerMetrics->get('Profit'), 'value', 'LKR 0')],
+                            ['label' => 'Delivered value after courier cost', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'delivered_value_after_courier', 0), 2)],
+                            ['label' => 'Other direct operational costs', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'other_direct_operational_costs', 0), 2)],
+                            ['label' => 'Overheads and recorded expenses', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'manual_overhead_costs', 0), 2)],
+                            ['label' => 'Employee salary pressure', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'salary_pressure', 0), 2)],
+                            ['label' => 'Return / leakage cost', 'value' => 'LKR '.number_format((float) ($snapshot?->leakage_total ?? 0), 2)],
+                            ['label' => 'Recovered value', 'value' => 'LKR '.number_format((float) data_get($snapshot?->metrics, 'recovered_value', 0), 2)],
+                            ['label' => 'Final estimated result after all recorded costs', 'value' => data_get($ownerMetrics->get('Profit'), 'value', 'LKR 0')],
                             ['label' => 'Safe to use', 'value' => data_get($ownerMetrics->get('Safe to use'), 'value', 'Not ready')],
                         ],
                         'note' => $profitCashTrusted

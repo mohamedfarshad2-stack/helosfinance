@@ -106,10 +106,24 @@ class BusinessHealthSnapshotService
         $orderEvents = (clone $events)
             ->whereIn('event_type', $this->orderLifecycleEventTypes())
             ->get();
-        $latestDeliveredOrderEvents = $this->latestDeliveredOrderEvents($orderEvents);
+        $latestOrderEvents = $this->latestOrderEvents($orderEvents);
+        $latestDeliveredOrderEvents = $latestOrderEvents
+            ->where('event_type', OperationalEvent::ORDER_DELIVERED)
+            ->values();
+        $pendingDispatchEvents = $latestOrderEvents
+            ->whereIn('event_type', [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_RESENT,
+            ])
+            ->values();
         $recognizedOrderRevenue = (float) $latestDeliveredOrderEvents->sum('revenue_amount');
         $deliveredCourierCosts = (float) $latestDeliveredOrderEvents->sum('direct_cost_amount');
         $deliveredValueAfterCourier = $recognizedOrderRevenue - $deliveredCourierCosts;
+        $pendingDispatchValue = (float) $pendingDispatchEvents->sum(fn (OperationalEvent $event): float => $this->orderValue($event));
+        $deliveredWithoutCourierCost = $latestDeliveredOrderEvents
+            ->filter(fn (OperationalEvent $event): bool => (float) $event->direct_cost_amount <= 0)
+            ->count();
         $unrecognizedOrderRevenue = max((float) (clone $events)->sum('revenue_amount') - $recognizedOrderRevenue, 0.0);
         $revenue = $recognizedOrderRevenue + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
@@ -196,6 +210,10 @@ class BusinessHealthSnapshotService
                 'delivered_courier_costs' => $deliveredCourierCosts,
                 'delivered_value_after_courier' => $deliveredValueAfterCourier,
                 'delivered_contribution_after_all_direct_costs' => $recognizedOrderRevenue - $directCosts - $leakage + $recovery,
+                'other_direct_operational_costs' => max($directCosts - $deliveredCourierCosts, 0),
+                'pending_dispatch_count' => $pendingDispatchEvents->count(),
+                'pending_dispatch_value' => $pendingDispatchValue,
+                'delivered_without_courier_cost_count' => $deliveredWithoutCourierCost,
                 'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
                 'variable_expenses' => $variableExpenses,
@@ -244,6 +262,13 @@ class BusinessHealthSnapshotService
 
     private function latestDeliveredOrderEvents(Collection $events): Collection
     {
+        return $this->latestOrderEvents($events)
+            ->where('event_type', OperationalEvent::ORDER_DELIVERED)
+            ->values();
+    }
+
+    private function latestOrderEvents(Collection $events): Collection
+    {
         return $events
             ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event))
             ->map(function (Collection $group): ?OperationalEvent {
@@ -255,8 +280,19 @@ class BusinessHealthSnapshotService
 
                 return $terminal->isNotEmpty() ? $terminal->last() : $ordered->last();
             })
-            ->filter(fn (?OperationalEvent $event): bool => $event instanceof OperationalEvent && $event->event_type === OperationalEvent::ORDER_DELIVERED)
+            ->filter(fn (?OperationalEvent $event): bool => $event instanceof OperationalEvent)
             ->values();
+    }
+
+    private function orderValue(OperationalEvent $event): float
+    {
+        return max((float) (
+            data_get($event->payload, 'sale_amount')
+            ?? data_get($event->payload, 'customer_total_amount')
+            ?? data_get($event->payload, 'total_amount')
+            ?? $event->revenue_amount
+            ?? 0
+        ), 0);
     }
 
     private function stableOrderKey(OperationalEvent $event): string
