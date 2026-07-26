@@ -22,7 +22,7 @@ class MissionResource extends Resource
 
     protected static ?string $navigationGroup = 'Team Work';
 
-    protected static ?string $navigationLabel = 'Mission Review';
+    protected static ?string $navigationLabel = 'Assign & Review Tasks';
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
 

@@ -13,6 +13,8 @@ class ListMissions extends ListRecords
 {
     protected static string $resource = MissionResource::class;
 
+    protected static ?string $title = 'Assign and review employee tasks';
+
     protected function getHeaderActions(): array
     {
         return [
