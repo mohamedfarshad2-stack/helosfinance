@@ -28,3 +28,20 @@ jobs:
               done
             '
           "
+
+      - name: Inspect Nifras authorization path
+        run: |
+          ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 'sudo bash -s' <<'REMOTE'
+          echo "===== nginx site root ====="
+          grep -R -E "server_name|root " /etc/nginx/sites-enabled 2>/dev/null || true
+
+          echo "===== recent HTTP 403 responses ====="
+          for file in /var/log/nginx/*access*.log; do
+            [ -f "$file" ] || continue
+            awk '$9 == 403 { print }' "$file" | tail -n 30
+          done
+
+          echo "===== Nifras application authorization ====="
+          cd /var/www/helosfinance
+          php artisan tinker --execute='$u = App\Models\User::whereRaw("LOWER(email) = ?", ["nifras@helos.com"])->first(); dump($u?->only(["id", "email", "business_id", "client_group_id", "is_platform_admin", "is_employee", "employee_access_profile", "responsibilities_configured", "is_staff_supervisor", "supervisor_user_id"])); if ($u) { Illuminate\Support\Facades\Auth::login($u); dump(["panel" => $u->canAccessPanel(Filament\Facades\Filament::getPanel("admin")), "staff" => $u->isStaff(), "todays_work" => App\Filament\Pages\TodaysWork::canAccess(), "url" => App\Filament\Pages\TodaysWork::getUrl()]); }'
+          REMOTE
