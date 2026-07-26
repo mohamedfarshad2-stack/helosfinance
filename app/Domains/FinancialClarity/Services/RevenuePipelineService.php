@@ -2,8 +2,8 @@
 
 namespace App\Domains\FinancialClarity\Services;
 
-use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\BankTransaction;
+use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\OperationalEvent;
@@ -58,7 +58,7 @@ class RevenuePipelineService
         }
 
         $orders = $events
-            ->groupBy(fn (OperationalEvent $event): string => (string) ($event->external_id ?: $event->id))
+            ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event))
             ->map(fn (Collection $group): array => $this->summarizeOrder($business, $group->sortBy(fn (OperationalEvent $event): string => (string) $event->occurred_at?->timestamp.'-'.$event->id)))
             ->filter(fn (array $order): bool => $this->isFinanceVisibleOrder($order))
             ->values();
@@ -300,7 +300,11 @@ class RevenuePipelineService
     private function summarizeOrder(Business $business, Collection $group): array
     {
         /** @var OperationalEvent $latest */
-        $latest = $group->last();
+        $terminal = $group->whereIn('event_type', [
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+        ]);
+        $latest = $terminal->isNotEmpty() ? $terminal->last() : $group->last();
         /** @var OperationalEvent $first */
         $first = $group->first();
 
@@ -342,6 +346,11 @@ class RevenuePipelineService
             'cheque_date' => $payload['cheque_date'] ?? null,
             'occurred_at' => $latest->occurred_at?->toDateTimeString(),
         ];
+    }
+
+    private function stableOrderKey(OperationalEvent $event): string
+    {
+        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
     }
 
     private function expectedAmount(?Sku $sku, array $payload): float

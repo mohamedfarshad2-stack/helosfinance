@@ -44,17 +44,22 @@
                 $parcelTruth = $codRecon['parcel_truth'] ?? [];
                 $settlementTruth = $codRecon['settlement_truth'] ?? [];
                 $monthEndTruth = $codRecon['month_end'] ?? [];
+                $deliveredEvidenceCount = (int) ($revenuePipeline['cod']['delivered_orders'] ?? data_get($snapshot?->metrics, 'order_counts.delivered', 0));
+                $settlementRows = (int) ($settlementTruth['settlement_rows'] ?? $revenuePipeline['cod_settlement']['row_count'] ?? 0);
+                $profitCashTrusted = $settlementRows > 0 && ! ($monthEndTruth['needs_review'] ?? true);
                 $openManagerWork = (int) ($operationalSummary['Tasks due today'] ?? 0) + (int) ($operationalSummary['High priority'] ?? 0);
                 $ownerBriefs = [
                     [
                         'title' => 'Owner decisions',
-                        'subtitle' => 'Is the business making money?',
+                        'subtitle' => $profitCashTrusted ? 'Parcel result and cash settlement agree' : 'Estimated parcel result — cash is not confirmed',
                         'items' => [
-                            ['label' => 'Delivered revenue', 'value' => data_get($ownerMetrics->get('Revenue'), 'value', 'LKR 0')],
-                            ['label' => 'Profit after recorded costs', 'value' => data_get($ownerMetrics->get('Profit'), 'value', 'LKR 0')],
+                            ['label' => 'Delivered parcel value ('.$deliveredEvidenceCount.' orders)', 'value' => data_get($ownerMetrics->get('Revenue'), 'value', 'LKR 0')],
+                            ['label' => 'Estimated result after recorded costs', 'value' => data_get($ownerMetrics->get('Profit'), 'value', 'LKR 0')],
                             ['label' => 'Safe to use', 'value' => data_get($ownerMetrics->get('Safe to use'), 'value', 'Not ready')],
                         ],
-                        'note' => 'Use this to decide spending, pricing, offers, and whether the month is healthy.',
+                        'note' => $profitCashTrusted
+                            ? 'Delivered parcels, recorded costs, courier settlement, and bank cash are aligned for this period.'
+                            : 'Do not treat the estimated result as spendable profit. HELOAS has '.$deliveredEvidenceCount.' delivered order records but only '.$settlementRows.' COD settlement row(s); reconcile courier and bank cash first.',
                     ],
                     [
                         'title' => 'Manager operations',

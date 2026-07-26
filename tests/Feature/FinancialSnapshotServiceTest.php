@@ -165,4 +165,45 @@ class FinancialSnapshotServiceTest extends TestCase
         $this->assertSame(0.0, (float) $summary['revenue_total']);
         $this->assertSame(5000.0, (float) $summary['metrics']['unrecognized_order_revenue']);
     }
+
+    public function test_snapshot_matches_delivery_and_return_with_stable_stock_order_id(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Stable Order Lifecycle Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'cod-order-100-delivered-item-501',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 5000,
+            'payload' => ['order_id' => '100', 'sale_amount' => 5000],
+            'occurred_at' => now()->subDay(),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_RETURNED,
+            'external_id' => 'cod-order-100-returned-item-501',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 0,
+            'leakage_amount' => 500,
+            'payload' => ['order_id' => '100', 'sale_amount' => 5000],
+            'occurred_at' => now(),
+        ]);
+
+        $summary = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business);
+
+        $this->assertSame(0.0, (float) $summary['revenue_total']);
+        $this->assertSame(5000.0, (float) $summary['metrics']['unrecognized_order_revenue']);
+    }
 }

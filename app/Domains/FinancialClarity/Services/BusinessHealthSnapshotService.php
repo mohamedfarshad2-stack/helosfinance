@@ -9,8 +9,8 @@ use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\ServiceClient;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class BusinessHealthSnapshotService
 {
@@ -240,12 +240,23 @@ class BusinessHealthSnapshotService
     private function latestDeliveredOrderEvents(Collection $events): Collection
     {
         return $events
-            ->groupBy(fn (OperationalEvent $event): string => (string) ($event->external_id ?: $event->id))
-            ->map(fn (Collection $group): ?OperationalEvent => $group
-                ->sortBy(fn (OperationalEvent $event): string => (string) $event->occurred_at?->timestamp.'-'.$event->id)
-                ->last())
+            ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event))
+            ->map(function (Collection $group): ?OperationalEvent {
+                $ordered = $group->sortBy(fn (OperationalEvent $event): string => (string) $event->occurred_at?->timestamp.'-'.$event->id);
+                $terminal = $ordered->whereIn('event_type', [
+                    OperationalEvent::ORDER_DELIVERED,
+                    OperationalEvent::ORDER_RETURNED,
+                ]);
+
+                return $terminal->isNotEmpty() ? $terminal->last() : $ordered->last();
+            })
             ->filter(fn (?OperationalEvent $event): bool => $event instanceof OperationalEvent && $event->event_type === OperationalEvent::ORDER_DELIVERED)
             ->values();
+    }
+
+    private function stableOrderKey(OperationalEvent $event): string
+    {
+        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
     }
 
     /**
