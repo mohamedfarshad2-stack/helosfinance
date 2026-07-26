@@ -44,4 +44,7 @@ jobs:
           echo "===== Nifras application authorization ====="
           cd /var/www/helosfinance
           php artisan tinker --execute='$u = App\Models\User::whereRaw("LOWER(email) = ?", ["nifras@helos.com"])->first(); dump($u?->only(["id", "email", "business_id", "client_group_id", "is_platform_admin", "is_employee", "employee_access_profile", "responsibilities_configured", "is_staff_supervisor", "supervisor_user_id"])); if ($u) { Illuminate\Support\Facades\Auth::login($u); dump(["panel" => $u->canAccessPanel(Filament\Facades\Filament::getPanel("admin")), "staff" => $u->isStaff(), "todays_work" => App\Filament\Pages\TodaysWork::canAccess(), "url" => App\Filament\Pages\TodaysWork::getUrl()]); }'
+
+          echo "===== Hosted role and recent task state ====="
+          php artisan tinker --execute='$s = App\Models\User::whereRaw("LOWER(email) = ?", ["sanduashani@gmail.com"])->first(); dump(["sanduashani" => $s?->only(["id", "name", "business_id", "employee_access_profile", "staff_responsibilities", "is_staff_supervisor", "supervisor_user_id"])]); dump(App\Domains\Shared\Models\Mission::with(["assignedUser:id,name,email"])->where("business_id", 5)->where(function ($q) { $q->where("title", "like", "%production%")->orWhere("summary", "like", "%production%")->orWhere("responsibility_code", "production"); })->latest("updated_at")->limit(20)->get(["id", "title", "summary", "responsibility_code", "source_type", "source_id", "assigned_user_id", "assigned_by", "status", "due_at", "metadata"])->toArray());'
           REMOTE
