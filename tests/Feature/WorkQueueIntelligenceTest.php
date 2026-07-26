@@ -481,7 +481,7 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertDontSee('@endif', false);
     }
 
-    public function test_employees_cannot_access_the_work_queue_but_can_access_todays_work(): void
+    public function test_employee_work_queue_url_redirects_to_todays_work(): void
     {
         $business = Business::query()->create([
             'name' => 'Restricted Queue Client',
@@ -503,7 +503,7 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->actingAs($employee)
             ->get(ManagerWorkQueue::getUrl())
-            ->assertForbidden();
+            ->assertRedirect(TodaysWork::getUrl());
 
         $this->actingAs($employee)
             ->get(TodaysWork::getUrl())

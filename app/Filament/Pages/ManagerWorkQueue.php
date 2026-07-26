@@ -4,8 +4,6 @@ namespace App\Filament\Pages;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Services\WorkQueueService;
-use App\Filament\Pages\BankStatementImport;
-use App\Filament\Pages\NewClientWizard;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\EmployeeResource;
@@ -19,10 +17,15 @@ use Illuminate\Support\Facades\Auth;
 class ManagerWorkQueue extends Page
 {
     protected static ?string $slug = 'work-queue';
+
     protected static ?string $navigationGroup = 'Team Work';
+
     protected static ?string $navigationLabel = 'Owner Work Queue';
+
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+
     protected static ?int $navigationSort = 1;
+
     protected static string $view = 'filament.pages.manager-work-queue';
 
     public ?Business $business = null;
@@ -33,6 +36,12 @@ class ManagerWorkQueue extends Page
 
     public function mount(WorkQueueService $workQueue): void
     {
+        if (Auth::user()?->isStaff()) {
+            $this->redirect(TodaysWork::getUrl());
+
+            return;
+        }
+
         $this->loadQueue($workQueue);
     }
 
@@ -53,7 +62,9 @@ class ManagerWorkQueue extends Page
 
     public static function canAccess(): bool
     {
-        return Auth::check() && (Auth::user()?->isOwner() ?? false);
+        $user = Auth::user();
+
+        return Auth::check() && (($user?->isOwner() ?? false) || ($user?->isStaff() ?? false));
     }
 
     private function loadQueue(WorkQueueService $workQueue): void
