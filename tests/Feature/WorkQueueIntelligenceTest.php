@@ -700,7 +700,7 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('If money only moved into petty cash, store cash, savings, or another own account, choose Transfer, not Expense.');
     }
 
-    public function test_client_owner_dashboard_keeps_the_existing_business_picture_and_operational_summary(): void
+    public function test_client_owner_dashboard_shows_the_simple_parcel_profit_boxes(): void
     {
         $business = Business::query()->create([
             'name' => 'Owner Queue Client',
@@ -722,8 +722,10 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->actingAs($user)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Operational completion summary')
-            ->assertSee('Money Safe To Use');
+            ->assertSee('Owner parcel dashboard')
+            ->assertSee('Total parcels dispatched')
+            ->assertSee('Pending delivery')
+            ->assertSee('Gross profit');
     }
 
     public function test_generated_mission_refresh_does_not_cancel_owner_assigned_tasks(): void

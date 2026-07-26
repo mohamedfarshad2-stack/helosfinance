@@ -116,12 +116,9 @@ class ServiceBusinessBillingIntegrationTest extends TestCase
         $this->actingAs($owner)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Start Here')
-            ->assertSee('Completed setup work')
-            ->assertSee('Service business truth')
-            ->assertSee('Should come this month')
-            ->assertSee('Service money overdue')
-            ->assertSee('COD Returns Client');
+            ->assertSee('Owner parcel dashboard')
+            ->assertSee('COD Returns Client')
+            ->assertDontSee('Service business truth');
     }
 
     private function serviceBusiness(): Business

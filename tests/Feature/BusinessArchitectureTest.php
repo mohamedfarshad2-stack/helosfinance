@@ -190,42 +190,13 @@ class BusinessArchitectureTest extends TestCase
         $this->actingAs($user)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Business flow')
-            ->assertSee('Business setup')
-            ->assertSee('Orders')
-            ->assertSee('Parcels on the move')
-            ->assertSee('Returns and retries')
-            ->assertSee('Stock movement')
-            ->assertSee('Money movement')
-            ->assertSee('sales source')
-            ->assertSee('Production activity')
-            ->assertSee('HELOS Coach')
-            ->assertSee('New user verdict')
-            ->assertSee('Needs guided onboarding')
-            ->assertSee('What to enter')
-            ->assertSee('Then HELOS can trust')
-            ->assertSee('Unsafe if skipped')
-            ->assertSee('Can a new person use this today?')
-            ->assertSee('What to do next')
-            ->assertSee('What happened')
-            ->assertSee('Why it matters')
-            ->assertSee('Risk')
-            ->assertSee('Opportunity')
-            ->assertSee('First action')
-            ->assertSee('Business picture')
-            ->assertSee('Money safe to use')
-            ->assertSee('Money Safe To Use')
-            ->assertSee('Money Already Committed')
-            ->assertSee('Money Tied Up')
-            ->assertSee('Money Waiting To Settle')
-            ->assertSee('Money Safe To Withdraw')
-            ->assertSee('Growth Capacity')
-            ->assertSee('Money coming in')
-            ->assertSee('Money left after running the business')
-            ->assertSee('Money still waiting to settle')
-            ->assertSee('Returns hurting profits')
-            ->assertSee('Stock holding cash')
-            ->assertSee('Money tied up');
+            ->assertSee('Owner parcel dashboard')
+            ->assertSee('Total parcels dispatched')
+            ->assertSee('Product costs')
+            ->assertSee('Courier costs')
+            ->assertSee('Pending delivery')
+            ->assertSee('Delivered sales')
+            ->assertSee('Gross profit');
     }
 
     public function test_client_health_report_surfaces_weekly_reminders(): void
@@ -279,9 +250,8 @@ class BusinessArchitectureTest extends TestCase
         $this->actingAs($user)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Weekly reminders')
-            ->assertSee('Due soon')
-            ->assertSee('Overdue');
+            ->assertSee('Owner parcel dashboard')
+            ->assertDontSee('Weekly reminders');
     }
 
     public function test_picker_based_entry_surfaces_render_for_repeated_values(): void

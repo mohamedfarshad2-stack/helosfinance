@@ -138,11 +138,7 @@ class SharedTreasuryTruthTest extends TestCase
         $this->actingAs($user)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Treasury picture')
-            ->assertSee('Cash by account')
-            ->assertSee('Business allocation')
-            ->assertSee('Shared / unallocated')
-            ->assertSee('Current Account')
-            ->assertSee('Petty Cash');
+            ->assertSee('Owner parcel dashboard')
+            ->assertDontSee('Treasury picture');
     }
 }

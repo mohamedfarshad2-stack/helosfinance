@@ -387,16 +387,9 @@ class TrustValidationTest extends TestCase
         $this->actingAs($owner)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('HELOS Trust Center')
-            ->assertSee('Data Quality')
-            ->assertSee('Validation Issues')
-            ->assertSee('Missing Information')
-            ->assertSee('Estimated Numbers')
-            ->assertSee('Critical warnings')
-            ->assertSee('Important warnings')
-            ->assertSee('Informational warnings')
-            ->assertSee('Fix expenses')
-            ->assertSee(ExpenseResource::getUrl('index'), false);
+            ->assertSee('Owner parcel dashboard')
+            ->assertSee('Gross profit')
+            ->assertDontSee('HELOS Trust Center');
     }
 
     public function test_employee_role_is_selectable_from_common_roles(): void

@@ -223,14 +223,10 @@ class BreakEvenIntelligenceTest extends TestCase
         $this->actingAs(User::query()->where('email', 'owner-break-even@example.com')->first())
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Money needed to cover the month')
-            ->assertSee('Money Needed To Cover The Month')
-            ->assertSee('Deliveries Needed To Cover The Month')
-            ->assertSee('Revenue Needed To Cover The Month')
-            ->assertSee('Current Progress')
-            ->assertSee('Still Needed')
-            ->assertSee('What Is Making It Harder')
-            ->assertSee('What helps most');
+            ->assertSee('Owner parcel dashboard')
+            ->assertSee('Product costs')
+            ->assertSee('Courier costs')
+            ->assertDontSee('Money Needed To Cover The Month');
     }
 
     public function test_break_even_read_does_not_create_missing_cost_assumptions(): void

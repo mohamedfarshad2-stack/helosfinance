@@ -95,7 +95,7 @@ class FinancialSnapshotServiceTest extends TestCase
             'direct_cost_amount' => 50000,
             'leakage_amount' => 0,
             'recovery_amount' => 0,
-            'payload' => ['sale_amount' => 200000],
+            'payload' => ['sale_amount' => 200000, 'economics' => ['product_cost_amount' => 50000]],
             'occurred_at' => now(),
         ]);
 
@@ -122,6 +122,9 @@ class FinancialSnapshotServiceTest extends TestCase
         $this->assertSame(50000.0, (float) $summary['metrics']['other_direct_operational_costs']);
         $this->assertSame(1, (int) $summary['metrics']['pending_dispatch_count']);
         $this->assertSame(200000.0, (float) $summary['metrics']['pending_dispatch_value']);
+        $this->assertSame(50000.0, (float) $summary['metrics']['product_costs']);
+        $this->assertSame(425.0, (float) $summary['metrics']['total_courier_costs']);
+        $this->assertSame(-47425.0, (float) $summary['metrics']['parcel_gross_profit']);
         $this->assertSame(0, (int) $summary['metrics']['delivered_without_courier_cost_count']);
         $this->assertSame(-47425.0, (float) $summary['estimated_profit']);
         $this->assertSame(879979.0, (float) $summary['metrics']['unrecognized_order_revenue']);
@@ -216,5 +219,63 @@ class FinancialSnapshotServiceTest extends TestCase
 
         $this->assertSame(0.0, (float) $summary['revenue_total']);
         $this->assertSame(5000.0, (float) $summary['metrics']['unrecognized_order_revenue']);
+    }
+
+    public function test_snapshot_separates_current_month_and_carryover_deliveries(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Delivery Cohort Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        foreach ([
+            ['order_id' => 1, 'confirmed_at' => now()->subMonth()->endOfMonth(), 'value' => 4000],
+            ['order_id' => 2, 'confirmed_at' => now()->startOfMonth()->addDay(), 'value' => 3000],
+        ] as $row) {
+            OperationalEvent::query()->create([
+                'business_id' => $business->id,
+                'source' => 'stock_app',
+                'event_type' => OperationalEvent::ORDER_CONFIRMED,
+                'external_id' => 'confirmation-'.$row['order_id'],
+                'channel' => 'cod',
+                'quantity' => 1,
+                'payload' => ['order_id' => $row['order_id']],
+                'occurred_at' => $row['confirmed_at'],
+            ]);
+
+            OperationalEvent::query()->create([
+                'business_id' => $business->id,
+                'source' => 'stock_app',
+                'event_type' => OperationalEvent::ORDER_DELIVERED,
+                'external_id' => 'delivery-'.$row['order_id'],
+                'channel' => 'cod',
+                'quantity' => 1,
+                'revenue_amount' => $row['value'],
+                'payload' => ['order_id' => $row['order_id']],
+                'occurred_at' => now()->startOfMonth()->addDays(5),
+            ]);
+        }
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'delivery-missing-confirmation',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'revenue_amount' => 2000,
+            'payload' => ['order_id' => 3],
+            'occurred_at' => now()->startOfMonth()->addDays(5),
+        ]);
+
+        $cohorts = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business)['metrics']['delivered_cohorts'];
+
+        $this->assertSame(['count' => 1, 'value' => 3000.0], $cohorts['confirmed_this_month']);
+        $this->assertSame(['count' => 1, 'value' => 4000.0], $cohorts['carryover_from_earlier_months']);
+        $this->assertSame(['count' => 1, 'value' => 2000.0], $cohorts['confirmation_missing']);
+        $this->assertSame(['count' => 0, 'value' => 0.0], $cohorts['invalid_confirmation_sequence']);
     }
 }

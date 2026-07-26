@@ -71,22 +71,11 @@ class GoalIntelligenceTest extends TestCase
         $this->actingAs($owner)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Owner briefing')
-            ->assertSee('Report period')
-            ->assertSee('Owner decisions')
-            ->assertSee('Manager operations')
-            ->assertSee('Finance control')
-            ->assertSee('Owner Home')
-            ->assertSee('Control Score')
-            ->assertSee('Start Here')
-            ->assertSee('Setup Progress')
-            ->assertSee('Selected flag repair path')
-            ->assertSee('Go deeper')
-            ->assertSee('Your Goal')
-            ->assertSee('Current Progress')
-            ->assertSee('Still Needed')
-            ->assertSee('What Is Slowing You Down')
-            ->assertSee('Fastest Path Forward');
+            ->assertSee('Owner parcel dashboard')
+            ->assertSee('From date')
+            ->assertSee('To date')
+            ->assertSee('Delivered sales')
+            ->assertSee('Gross profit');
     }
 
     public function test_completed_setup_steps_drop_out_of_live_checklist_and_progress_moves_up(): void
@@ -105,12 +94,9 @@ class GoalIntelligenceTest extends TestCase
         $this->actingAs($owner)
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
-            ->assertSee('Setup Progress')
-            ->assertSee('Completed setup work')
-            ->assertSee('% ready')
-            ->assertDontSee('Add monthly fixed costs')
-            ->assertDontSee('Add staff and salary truth')
-            ->assertDontSee('Add products or SKUs');
+            ->assertSee('Owner parcel dashboard')
+            ->assertDontSee('Setup Progress')
+            ->assertDontSee('Add monthly fixed costs');
     }
 
     private function seedGoalBusiness(): Business

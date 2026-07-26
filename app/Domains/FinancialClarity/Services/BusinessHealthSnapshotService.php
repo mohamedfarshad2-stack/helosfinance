@@ -70,6 +70,11 @@ class BusinessHealthSnapshotService
         return $this->buildSummary($business, now()->startOfMonth(), now());
     }
 
+    public function previewRange(Business $business, Carbon $start, Carbon $end): array
+    {
+        return $this->buildSummary($business, $start->copy()->startOfDay(), $end->copy()->endOfDay());
+    }
+
     public function currentMonthSummary(Business $business): array
     {
         return $this->previewCurrentMonth($business);
@@ -121,9 +126,22 @@ class BusinessHealthSnapshotService
         $deliveredCourierCosts = (float) $latestDeliveredOrderEvents->sum('direct_cost_amount');
         $deliveredValueAfterCourier = $recognizedOrderRevenue - $deliveredCourierCosts;
         $pendingDispatchValue = (float) $pendingDispatchEvents->sum(fn (OperationalEvent $event): float => $this->orderValue($event));
+        $dispatchEvents = $orderEvents
+            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT])
+            ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event))
+            ->map(fn (Collection $group): OperationalEvent => $group->sortBy('occurred_at')->last())
+            ->values();
+        $dispatchedParcelValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->orderValue($event));
+        $productCosts = (float) $orderEvents->sum(fn (OperationalEvent $event): float => (float) data_get($event->payload, 'economics.product_cost_amount', 0));
+        $returnCourierCosts = (float) $orderEvents
+            ->where('event_type', OperationalEvent::ORDER_RETURNED)
+            ->sum(fn (OperationalEvent $event): float => (float) data_get($event->payload, 'economics.return_courier_amount', 0));
+        $totalCourierCosts = $deliveredCourierCosts + $returnCourierCosts;
+        $parcelGrossProfit = $recognizedOrderRevenue - $productCosts - $totalCourierCosts;
         $deliveredWithoutCourierCost = $latestDeliveredOrderEvents
             ->filter(fn (OperationalEvent $event): bool => (float) $event->direct_cost_amount <= 0)
             ->count();
+        $deliveredCohorts = $this->deliveredCohorts($business, $latestDeliveredOrderEvents, $start, $end);
         $unrecognizedOrderRevenue = max((float) (clone $events)->sum('revenue_amount') - $recognizedOrderRevenue, 0.0);
         $revenue = $recognizedOrderRevenue + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
@@ -226,7 +244,14 @@ class BusinessHealthSnapshotService
                 'other_direct_operational_costs' => max($directCosts - $deliveredCourierCosts, 0),
                 'pending_dispatch_count' => $pendingDispatchEvents->count(),
                 'pending_dispatch_value' => $pendingDispatchValue,
+                'dispatched_parcel_count' => $dispatchEvents->count(),
+                'dispatched_parcel_value' => $dispatchedParcelValue,
+                'product_costs' => $productCosts,
+                'return_courier_costs' => $returnCourierCosts,
+                'total_courier_costs' => $totalCourierCosts,
+                'parcel_gross_profit' => $parcelGrossProfit,
                 'delivered_without_courier_cost_count' => $deliveredWithoutCourierCost,
+                'delivered_cohorts' => $deliveredCohorts,
                 'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
                 'variable_expenses' => $variableExpenses,
@@ -307,6 +332,66 @@ class BusinessHealthSnapshotService
             ?? $event->revenue_amount
             ?? 0
         ), 0);
+    }
+
+    private function deliveredCohorts(Business $business, Collection $deliveredEvents, Carbon $start, Carbon $end): array
+    {
+        $confirmationEvents = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->where('event_type', OperationalEvent::ORDER_CONFIRMED)
+            ->where('occurred_at', '<=', $end->copy()->endOfDay())
+            ->get()
+            ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event));
+
+        $cohorts = [
+            'confirmed_this_month' => ['count' => 0, 'value' => 0.0],
+            'carryover_from_earlier_months' => ['count' => 0, 'value' => 0.0],
+            'confirmation_missing' => ['count' => 0, 'value' => 0.0],
+            'invalid_confirmation_sequence' => ['count' => 0, 'value' => 0.0],
+        ];
+
+        foreach ($deliveredEvents as $delivered) {
+            $confirmation = $confirmationEvents
+                ->get($this->stableOrderKey($delivered), collect())
+                ->sortBy('occurred_at')
+                ->first();
+            $confirmedAt = $confirmation?->occurred_at ?? $this->payloadConfirmationAt($delivered);
+            $value = max((float) $delivered->revenue_amount, 0);
+
+            $key = match (true) {
+                ! $confirmedAt => 'confirmation_missing',
+                $confirmedAt->gt($delivered->occurred_at) => 'invalid_confirmation_sequence',
+                $confirmedAt->lt($start->copy()->startOfDay()) => 'carryover_from_earlier_months',
+                default => 'confirmed_this_month',
+            };
+
+            $cohorts[$key]['count']++;
+            $cohorts[$key]['value'] += $value;
+        }
+
+        return collect($cohorts)
+            ->map(fn (array $cohort): array => [
+                'count' => (int) $cohort['count'],
+                'value' => round((float) $cohort['value'], 2),
+            ])
+            ->all();
+    }
+
+    private function payloadConfirmationAt(OperationalEvent $event): ?Carbon
+    {
+        foreach (['confirmed_at', 'order_confirmed_at', 'client_confirmed_at'] as $key) {
+            $value = data_get($event->payload, $key);
+
+            if (filled($value)) {
+                try {
+                    return Carbon::parse($value);
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function stableOrderKey(OperationalEvent $event): string

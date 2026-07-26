@@ -37,6 +37,7 @@ use App\Filament\Resources\ServiceBillingResource;
 use App\Filament\Resources\SkuRecipeResource;
 use App\Filament\Resources\SkuResource;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
@@ -106,6 +107,8 @@ class ClientHealthReport extends Page implements HasForms
     {
         $this->form->fill([
             'business_id' => Auth::user()?->defaultBusinessId(),
+            'period_start' => now()->startOfMonth()->toDateString(),
+            'period_end' => now()->toDateString(),
             'goal_type' => 'profit',
             'goal_amount' => null,
         ]);
@@ -122,17 +125,15 @@ class ClientHealthReport extends Page implements HasForms
                     ->options(fn () => $this->businessOptions())
                     ->searchable()
                     ->required(),
-                Select::make('goal_type')
-                    ->label('Goal type')
-                    ->options(GoalIntelligenceService::goalTypeOptions())
-                    ->default('profit')
+                DatePicker::make('period_start')
+                    ->label('From date')
+                    ->native(false)
                     ->required(),
-                \Filament\Forms\Components\TextInput::make('goal_amount')
-                    ->label('Target amount')
-                    ->numeric()
-                    ->minValue(0)
-                    ->placeholder('300000')
-                    ->helperText('Use money for profit, revenue, and collections. Use a count for deliveries.'),
+                DatePicker::make('period_end')
+                    ->label('To date')
+                    ->native(false)
+                    ->afterOrEqual('period_start')
+                    ->required(),
             ])
             ->statePath('data')
             ->columns(3);
@@ -187,9 +188,9 @@ class ClientHealthReport extends Page implements HasForms
             ]);
         }
 
-        $this->snapshot = $refreshSnapshot
-            ? $snapshots->refreshCurrentMonth($this->business)
-            : new FinancialSnapshot($snapshots->previewCurrentMonth($this->business));
+        $periodStart = now()->parse($state['period_start'] ?? now()->startOfMonth());
+        $periodEnd = now()->parse($state['period_end'] ?? now());
+        $this->snapshot = new FinancialSnapshot($snapshots->previewRange($this->business, $periodStart, $periodEnd));
 
         $this->advisor = $advisor->forCurrentMonth($this->business);
         $this->briefing = $this->advisor['briefing'] ?? [];
@@ -202,8 +203,8 @@ class ClientHealthReport extends Page implements HasForms
         $goalSettings = $goalIntelligence->goalSettings($this->business);
         $this->form->fill([
             'business_id' => $this->business->id,
-            'goal_type' => $goalSettings['type'] ?? 'profit',
-            'goal_amount' => $goalSettings['amount'] > 0 ? $goalSettings['amount'] : null,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
         ]);
         $this->trend = FinancialSnapshot::query()
             ->where('business_id', $this->business->id)
