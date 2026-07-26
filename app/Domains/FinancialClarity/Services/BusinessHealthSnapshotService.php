@@ -167,7 +167,7 @@ class BusinessHealthSnapshotService
         $confirmationImpact = (clone $events)
             ->whereIn('event_type', [OperationalEvent::ORDER_CREATED, OperationalEvent::ORDER_CONFIRMED])
             ->sum('direct_cost_amount');
-        $orderCounts = [
+        $orderActivityCounts = [
             'confirmed' => (clone $events)->where('event_type', OperationalEvent::ORDER_CONFIRMED)->count(),
             'tracking_added' => (clone $events)->where('event_type', OperationalEvent::TRACKING_NUMBER_ADDED)->count(),
             'wholesale_sent' => (clone $events)->where('event_type', OperationalEvent::WHOLESALE_PARCEL_SENT)->count(),
@@ -175,6 +175,19 @@ class BusinessHealthSnapshotService
             'returned' => (clone $events)->where('event_type', OperationalEvent::ORDER_RETURNED)->count(),
             'resent' => (clone $events)->where('event_type', OperationalEvent::ORDER_RESENT)->count(),
             'fake' => (clone $events)->where('event_type', OperationalEvent::FAKE_ORDER_DETECTED)->count(),
+        ];
+        $orderCounts = [
+            'confirmed' => $latestOrderEvents->whereIn('event_type', [
+                OperationalEvent::ORDER_CREATED,
+                OperationalEvent::ORDER_CONFIRMED,
+            ])->count(),
+            'dispatched' => $pendingDispatchEvents->count(),
+            'tracking_added' => $latestOrderEvents->where('event_type', OperationalEvent::TRACKING_NUMBER_ADDED)->count(),
+            'wholesale_sent' => $latestOrderEvents->where('event_type', OperationalEvent::WHOLESALE_PARCEL_SENT)->count(),
+            'delivered' => $latestDeliveredOrderEvents->count(),
+            'returned' => $latestOrderEvents->where('event_type', OperationalEvent::ORDER_RETURNED)->count(),
+            'resent' => $latestOrderEvents->where('event_type', OperationalEvent::ORDER_RESENT)->count(),
+            'fake' => $latestOrderEvents->where('event_type', OperationalEvent::FAKE_ORDER_DETECTED)->count(),
         ];
         $topLossSku = $this->topSkuByField((clone $events)->get(), 'leakage_amount');
         $topRevenueSku = $this->topSkuByField($latestDeliveredOrderEvents, 'revenue_amount');
@@ -229,6 +242,7 @@ class BusinessHealthSnapshotService
                 'courier_impact' => $courierImpact,
                 'confirmation_impact' => $confirmationImpact,
                 'order_counts' => $orderCounts,
+                'order_activity_counts' => $orderActivityCounts,
                 'top_loss_sku' => $topLossSku,
                 'top_revenue_sku' => $topRevenueSku,
                 'top_expense_categories' => $topExpenseCategories,

@@ -171,6 +171,10 @@ class FinancialSnapshotServiceTest extends TestCase
 
         $this->assertSame(0.0, (float) $summary['revenue_total']);
         $this->assertSame(5000.0, (float) $summary['metrics']['unrecognized_order_revenue']);
+        $this->assertSame(0, (int) $summary['metrics']['order_counts']['delivered']);
+        $this->assertSame(1, (int) $summary['metrics']['order_counts']['returned']);
+        $this->assertSame(1, (int) $summary['metrics']['order_activity_counts']['delivered']);
+        $this->assertSame(1, (int) $summary['metrics']['order_activity_counts']['returned']);
     }
 
     public function test_snapshot_matches_delivery_and_return_with_stable_stock_order_id(): void
