@@ -359,15 +359,20 @@ class TodaysWork extends Page
             'profit' => $profit,
             default => null,
         };
-        $gap = $configured && $current !== null ? max($target - $current, 0) : null;
+        $ownerGap = $configured && $current !== null ? max($target - $current, 0) : null;
+        $recommendedGap = max(-$profit, $leakage, 0);
+        $gap = $configured ? $ownerGap : $recommendedGap;
+        $isRecommended = ! $configured;
         $contributionPool = max($revenue - $directCosts - $leakage, 0);
         $averageContribution = $delivered > 0 ? $contributionPool / $delivered : 0;
         $averageRevenue = $delivered > 0 ? $revenue / $delivered : 0;
         $requiredDeliveries = match (true) {
-            ! $configured || $gap === null => null,
+            $gap === null => null,
             $goalType === 'deliveries' => (int) ceil($gap),
             $goalType === 'revenue' && $averageRevenue > 0 => (int) ceil($gap / $averageRevenue),
             $goalType === 'profit' && $averageContribution > 0 => (int) ceil($gap / $averageContribution),
+            $isRecommended && $averageContribution > 0 => (int) ceil($gap / $averageContribution),
+            $isRecommended && $averageRevenue > 0 => (int) ceil($gap / $averageRevenue),
             default => null,
         };
         $daysRemaining = max((int) now()->startOfDay()->diffInDays(now()->endOfMonth()->startOfDay()) + 1, 1);
@@ -399,7 +404,7 @@ class TodaysWork extends Page
                     ->count();
 
                 if (in_array('dispatch', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Delivery contribution required', 'display' => $requiredDeliveries === null ? 'Waiting for owner target' : number_format($requiredDeliveries).' additional deliveries shared across operations'];
+                    $signals[] = ['label' => 'Delivery contribution required', 'display' => $requiredDeliveries === null ? 'Waiting for enough delivery and cost data' : number_format($requiredDeliveries).' additional deliveries shared across operations'];
                 }
 
                 if (in_array('return_recovery', $responsibilities, true)) {
@@ -419,7 +424,7 @@ class TodaysWork extends Page
                 }
 
                 if (in_array('order_confirmation', $responsibilities, true)) {
-                    $signals[] = ['label' => 'Daily confirmation pace', 'display' => $dailyDeliveries === null ? 'Waiting for owner target' : 'Support at least '.number_format($dailyDeliveries).' additional deliveries per remaining day'];
+                    $signals[] = ['label' => 'Daily confirmation pace', 'display' => $dailyDeliveries === null ? 'Waiting for enough delivery and cost data' : 'Support at least '.number_format($dailyDeliveries).' additional deliveries per remaining day'];
                 }
 
                 if (in_array('supervisor_review', $responsibilities, true)) {
@@ -440,11 +445,12 @@ class TodaysWork extends Page
             'period' => now()->format('F Y'),
             'as_of' => $savedSnapshot?->period_end?->format('M j, Y') ?? now()->format('M j, Y'),
             'configured' => $configured,
+            'is_recommended' => $isRecommended,
             'goal_label' => match ($goalType) {
                 'revenue' => 'Monthly sales target gap',
                 'deliveries' => 'Monthly delivery target gap',
                 'collections' => 'Monthly collection target gap',
-                default => 'Monthly company target gap',
+                default => $isRecommended ? 'HELOAS recommended recovery gap' : 'Monthly company target gap',
             },
             'gap' => $gap,
             'gap_is_count' => $goalType === 'deliveries',
@@ -454,7 +460,7 @@ class TodaysWork extends Page
             'leakage' => $leakage,
             'team_overdue' => $teamOverdue,
             'headline' => ! $configured
-                ? 'The owner has not set this month\'s company target, so HELOAS cannot calculate the exact operational gap yet.'
+                ? 'HELOAS calculated a recommended recovery target from the current loss, leakage, contribution, and remaining days.'
                 : ($gap !== null && $gap <= 0
                     ? 'The company target is covered. Protect it by reducing leakage and overdue work.'
                     : 'Close the remaining target gap through the operational numbers below.'),

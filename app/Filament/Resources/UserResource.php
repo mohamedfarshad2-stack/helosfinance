@@ -26,7 +26,7 @@ class UserResource extends Resource
 
     protected static ?string $navigationGroup = 'Admin';
 
-    protected static ?string $navigationLabel = 'Team Access';
+    protected static ?string $navigationLabel = 'Employees & Roles';
 
     protected static ?string $navigationIcon = 'heroicon-o-identification';
 
@@ -74,7 +74,7 @@ class UserResource extends Resource
                     ? 'Create the client owner login or staff accounts for the selected business.'
                     : 'This screen creates staff accounts for your business. Owner access stays protected.'),
             Select::make('staff_role_preset')
-                ->label('Employee role')
+                ->label('What is this employee responsible for?')
                 ->options(fn (): array => static::staffRolePresetOptions())
                 ->default('daily_operations')
                 ->live()
@@ -83,7 +83,7 @@ class UserResource extends Resource
                     $component->state(static::staffRolePresetForRecord($record));
                 })
                 ->afterStateUpdated(fn (?string $state, Set $set): mixed => static::applyStaffRolePresetToForm($state, $set))
-                ->helperText('Choose the closest real job. Use Custom only when one person needs an unusual mix.'),
+                ->helperText('Choose the job first. HELOAS will automatically show work connected to that role. Use Custom only for an unusual mix.'),
             Select::make('employee_access_profile')
                 ->label('Advanced access profile')
                 ->options(fn (): array => User::employeeAccessProfileOptions())

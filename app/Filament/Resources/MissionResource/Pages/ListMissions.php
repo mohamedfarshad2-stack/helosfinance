@@ -16,6 +16,10 @@ class ListMissions extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Actions\CreateAction::make()
+                ->label('Assign a task')
+                ->icon('heroicon-o-plus')
+                ->visible(fn (): bool => Auth::user()?->isOwner() ?? false),
             Actions\Action::make('refreshMissions')
                 ->label('Refresh missions')
                 ->icon('heroicon-o-arrow-path')

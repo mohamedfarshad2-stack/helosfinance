@@ -8,10 +8,12 @@ use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\MaterialLedgerEntry;
+use App\Domains\Shared\Models\Mission;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuStockMovement;
+use App\Domains\Shared\Services\MissionGeneratorService;
 use App\Domains\Shared\Services\WorkQueueService;
 use App\Filament\Pages\BankStatementImport;
 use App\Filament\Pages\ClientHealthReport;
@@ -22,6 +24,7 @@ use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\EmployeeResource;
 use App\Filament\Resources\ExpenseResource;
 use App\Filament\Resources\MaterialLedgerResource;
+use App\Filament\Resources\MissionResource;
 use App\Filament\Resources\ProductionEntryResource;
 use App\Filament\Resources\SkuRecipeResource;
 use App\Filament\Resources\SkuResource;
@@ -673,5 +676,63 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertOk()
             ->assertSee('Operational completion summary')
             ->assertSee('Money Safe To Use');
+    }
+
+    public function test_generated_mission_refresh_does_not_cancel_owner_assigned_tasks(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Manual Task Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $mission = Mission::query()->create([
+            'source_key' => 'manual:test-production-entry',
+            'mission_type' => 'owner_assigned_task',
+            'responsibility_code' => 'production',
+            'business_id' => $business->id,
+            'source_type' => 'manual',
+            'source_id' => 'test-production-entry',
+            'title' => 'Enter today\'s completed production',
+            'summary' => 'Record every completed SKU with good quantity and waste.',
+            'priority' => 'high',
+            'confidence' => 'confirmed',
+            'due_at' => now()->endOfDay(),
+            'status' => Mission::STATUS_OPEN,
+        ]);
+
+        app(MissionGeneratorService::class)->syncForBusiness($business);
+
+        $this->assertSame(Mission::STATUS_OPEN, $mission->fresh()->status);
+    }
+
+    public function test_owner_can_open_the_simple_employee_task_form(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Task Assignment Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $owner = User::query()->create([
+            'name' => 'Task Owner',
+            'email' => 'task-owner@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => false,
+            'is_platform_admin' => false,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(MissionResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Assign one clear employee task')
+            ->assertSee('What must be done?')
+            ->assertSee('Expected result')
+            ->assertSee('Exact steps for the employee');
     }
 }

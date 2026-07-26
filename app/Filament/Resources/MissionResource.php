@@ -7,6 +7,7 @@ use App\Filament\Resources\MissionResource\Pages;
 use App\Models\User;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -28,10 +29,45 @@ class MissionResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
+            TextInput::make('title')
+                ->label('What must be done?')
+                ->placeholder('Example: Enter today\'s completed production')
+                ->required()
+                ->maxLength(255),
+            Textarea::make('summary')
+                ->label('Expected result')
+                ->placeholder('Describe exactly what must be entered or completed, and how the owner will know it is finished.')
+                ->required()
+                ->rows(3)
+                ->columnSpanFull(),
+            Select::make('responsibility_code')
+                ->label('Work area')
+                ->options(User::staffResponsibilityOptions())
+                ->required()
+                ->live(),
             Select::make('assigned_user_id')
                 ->label('Assigned employee')
                 ->options(fn (?Mission $record): array => static::staffOptions($record))
-                ->searchable(),
+                ->searchable()
+                ->required(),
+            Select::make('priority')
+                ->options([
+                    'high' => 'High - do first',
+                    'normal' => 'Normal',
+                    'low' => 'Low',
+                ])
+                ->default('normal')
+                ->required(),
+            TextInput::make('due_at')
+                ->label('Due date and time')
+                ->type('datetime-local')
+                ->required(),
+            Textarea::make('recommended_action')
+                ->label('Exact steps for the employee')
+                ->placeholder('Example: Open Production Entries, create one row per completed SKU, enter good quantity, waste and employee, then save.')
+                ->required()
+                ->rows(3)
+                ->columnSpanFull(),
             Select::make('status')
                 ->options([
                     Mission::STATUS_OPEN => 'Open',
@@ -43,6 +79,8 @@ class MissionResource extends Resource
                     Mission::STATUS_CANCELLED => 'Cancelled',
                     Mission::STATUS_REOPENED => 'Reopened',
                 ])
+                ->default(Mission::STATUS_OPEN)
+                ->hiddenOn('create')
                 ->required(),
             Textarea::make('blocked_reason')
                 ->label('Blocked / review note')
@@ -163,6 +201,7 @@ class MissionResource extends Resource
     {
         return [
             'index' => Pages\ListMissions::route('/'),
+            'create' => Pages\CreateMission::route('/create'),
             'edit' => Pages\EditMission::route('/{record}/edit'),
         ];
     }
@@ -215,14 +254,10 @@ class MissionResource extends Resource
 
     private static function staffOptions(?Mission $record): array
     {
-        if (! $record) {
-            return [];
-        }
-
         $user = Auth::user();
         $query = User::query()
             ->where('is_employee', true)
-            ->where('business_id', $record->business_id);
+            ->whereIn('business_id', $record ? [$record->business_id] : ($user?->accessibleBusinessIds() ?? []));
 
         if ($user?->isStaff()) {
             $query->whereIn('id', $user->directReportIds());

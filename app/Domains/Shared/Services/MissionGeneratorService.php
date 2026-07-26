@@ -75,6 +75,10 @@ class MissionGeneratorService
         Mission::query()
             ->where('business_id', $business->id)
             ->active()
+            ->where(function ($query): void {
+                $query->whereNull('source_type')
+                    ->orWhere('source_type', '!=', 'manual');
+            })
             ->whereNotIn('source_key', $activeSourceKeys)
             ->get()
             ->each(function (Mission $mission): void {

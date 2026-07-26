@@ -82,9 +82,7 @@
                             <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
                                 <div class="text-xs uppercase tracking-wide text-gray-500">{{ $managerProfit['goal_label'] }}</div>
                                 <div class="mt-1 text-lg font-semibold text-red-700">
-                                    @if (! $managerProfit['configured'])
-                                        Owner must set target
-                                    @elseif ($managerProfit['gap'] === null)
+                                    @if ($managerProfit['gap'] === null)
                                         Waiting for trusted source data
                                     @elseif ($managerProfit['gap_is_count'])
                                         {{ number_format((float) $managerProfit['gap'], 0) }} deliveries
@@ -95,11 +93,11 @@
                             </div>
                             <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
                                 <div class="text-xs uppercase tracking-wide text-gray-500">Additional deliveries required</div>
-                                <div class="mt-1 text-lg font-semibold text-blue-700">{{ $managerProfit['required_deliveries'] === null ? 'Waiting for target' : number_format($managerProfit['required_deliveries']) }}</div>
+                                <div class="mt-1 text-lg font-semibold text-blue-700">{{ $managerProfit['required_deliveries'] === null ? 'Waiting for source data' : number_format($managerProfit['required_deliveries']) }}</div>
                             </div>
                             <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
                                 <div class="text-xs uppercase tracking-wide text-gray-500">Daily pace for remaining {{ $managerProfit['days_remaining'] }} day(s)</div>
-                                <div class="mt-1 text-lg font-semibold text-blue-700">{{ $managerProfit['daily_deliveries'] === null ? 'Waiting for target' : number_format($managerProfit['daily_deliveries']).' deliveries/day' }}</div>
+                                <div class="mt-1 text-lg font-semibold text-blue-700">{{ $managerProfit['daily_deliveries'] === null ? 'Waiting for source data' : number_format($managerProfit['daily_deliveries']).' deliveries/day' }}</div>
                             </div>
                             <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-900">
                                 <div class="text-xs uppercase tracking-wide text-gray-500">Leakage to recover or prevent</div>
@@ -171,7 +169,7 @@
                 @php
                     $routine = $guide['is_supervisor']
                         ? [
-                            'Confirm the target gap or ask the owner to set the monthly target.',
+                            ($managerProfit['is_recommended'] ?? false) ? 'Use the HELOAS recommended recovery target until the owner approves or overrides it.' : 'Use the owner-approved target gap shown above.',
                             'Start with the employee at the top of Who needs your attention and agree today\'s result.',
                             'Review blocked work at the end of the day; solve team blockers and escalate owner-only decisions.',
                         ]
