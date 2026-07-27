@@ -103,6 +103,8 @@ class ClientHealthReport extends Page implements HasForms
 
     public array $impact = [];
 
+    public array $serviceClientNames = [];
+
     public function mount(BusinessHealthSnapshotService $snapshots, BusinessAdvisorService $advisor, CashIntelligenceService $cashIntelligence, CapitalIntelligenceService $capitalIntelligence, InventoryIntelligenceService $inventoryIntelligence, RevenuePipelineService $revenuePipeline, BreakEvenIntelligenceService $breakEvenIntelligence, GoalIntelligenceService $goalIntelligence, TrustValidationService $trustValidation, WorkQueueService $workQueue): void
     {
         $this->form->fill([
@@ -177,6 +179,7 @@ class ClientHealthReport extends Page implements HasForms
             $this->ownerBusinessMap = [];
             $this->ownerSetupGuide = [];
             $this->ownerCoach = [];
+            $this->serviceClientNames = [];
 
             return;
         }
@@ -191,6 +194,19 @@ class ClientHealthReport extends Page implements HasForms
         $periodStart = now()->parse($state['period_start'] ?? now()->startOfMonth());
         $periodEnd = now()->parse($state['period_end'] ?? now());
         $this->snapshot = new FinancialSnapshot($snapshots->previewRange($this->business, $periodStart, $periodEnd));
+        $this->serviceClientNames = ServiceBillingRecord::query()
+            ->where('business_id', $this->business->id)
+            ->where(function ($query) use ($periodStart, $periodEnd): void {
+                $query->whereBetween('due_on', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                    ->orWhereBetween('paid_on', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                    ->orWhereBetween('created_at', [$periodStart->copy()->startOfDay(), $periodEnd->copy()->endOfDay()]);
+            })
+            ->orderBy('due_on')
+            ->limit(6)
+            ->pluck('client_name')
+            ->filter()
+            ->values()
+            ->all();
 
         $this->advisor = $advisor->forCurrentMonth($this->business);
         $this->briefing = $this->advisor['briefing'] ?? [];
@@ -264,6 +280,25 @@ class ClientHealthReport extends Page implements HasForms
         $this->ownerBusinessMap = $this->buildOwnerBusinessMap();
         $this->ownerSetupGuide = $this->buildOwnerSetupGuide();
         $this->ownerCoach = $this->buildOwnerCoach();
+        // The owner dashboard renders from snapshot metrics. Clear legacy story payloads so old labels do not leak into the page state.
+        $this->advisor = [];
+        $this->briefing = [];
+        $this->cashIntelligence = [];
+        $this->capitalIntelligence = [];
+        $this->inventoryIntelligence = [];
+        $this->revenuePipeline = [];
+        $this->breakEvenStory = [];
+        $this->goalStory = [];
+        $this->healthStory = [];
+        $this->bucketStory = [];
+        $this->lifecycleStory = [];
+        $this->operationalSummary = [];
+        $this->treasuryStory = [];
+        $this->trustStatus = [];
+        $this->ownerBusinessMap = [];
+        $this->ownerSetupGuide = [];
+        $this->ownerCoach = [];
+        $this->impact = [];
     }
 
     protected function getViewData(): array
@@ -291,6 +326,7 @@ class ClientHealthReport extends Page implements HasForms
             'trend' => $this->trend,
             'topExpenses' => $this->topExpenses,
             'impact' => $this->impact,
+            'serviceClientNames' => $this->serviceClientNames,
         ];
     }
 
