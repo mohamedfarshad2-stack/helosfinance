@@ -124,10 +124,14 @@ class FinancialSnapshotServiceTest extends TestCase
         $this->assertSame(200000.0, (float) $summary['metrics']['pending_dispatch_value']);
         $this->assertSame(0.0, (float) $summary['metrics']['product_costs']);
         $this->assertSame(0.0, (float) $summary['metrics']['production_costs']);
+        $this->assertSame(50000.0, (float) $summary['metrics']['production_cost_reference_amount']);
+        $this->assertSame(50000.0, (float) $summary['metrics']['missing_estimated_production_costs']);
+        $this->assertFalse((bool) $summary['metrics']['production_cost_trusted']);
         $this->assertSame(425.0, (float) $summary['metrics']['total_courier_costs']);
         $this->assertSame(2575.0, (float) $summary['metrics']['parcel_gross_profit']);
         $this->assertSame(0, (int) $summary['metrics']['delivered_without_courier_cost_count']);
         $this->assertSame(2575.0, (float) $summary['estimated_profit']);
+        $this->assertSame(-47425.0, (float) $summary['metrics']['profit_after_estimated_production_costs']);
         $this->assertSame(879979.0, (float) $summary['metrics']['unrecognized_order_revenue']);
     }
 

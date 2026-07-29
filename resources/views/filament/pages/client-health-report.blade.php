@@ -27,10 +27,14 @@
                 $pendingValue = (float) data_get($metrics, 'pending_dispatch_value', 0);
                 $productCosts = (float) data_get($metrics, 'production_costs', data_get($metrics, 'product_costs', 0));
                 $productionPendingPay = (float) data_get($metrics, 'production_pending_pay', 0);
+                $missingEstimatedProductionCosts = (float) data_get($metrics, 'missing_estimated_production_costs', 0);
+                $productionCostForOwner = $productCosts + $missingEstimatedProductionCosts;
+                $profitForOwner = (float) data_get($metrics, 'profit_after_estimated_production_costs', $snapshot->estimated_profit);
+                $productionCostTrusted = (bool) data_get($metrics, 'production_cost_trusted', true);
                 $courierCosts = (float) data_get($metrics, 'total_courier_costs', 0);
                 $grossProfit = (float) data_get($metrics, 'parcel_gross_profit', 0);
                 $netProfit = (float) $snapshot->estimated_profit;
-                $allCosts = (float) $snapshot->cost_total;
+                $allCosts = (float) $snapshot->cost_total + $missingEstimatedProductionCosts;
                 $deliveredCount = (int) data_get($metrics, 'order_counts.delivered', 0);
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
@@ -38,10 +42,12 @@
                 $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($deliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
-                $profitTone = $netProfit >= 0 ? 'emerald' : 'rose';
-                $decisionText = $netProfit >= 0
-                    ? 'The selected period is profitable after recorded costs. Protect delivery quality and keep cost entries complete.'
-                    : 'The selected period is losing money after recorded costs. Fix delivery recovery, returns, product costs, courier costs, and overhead leakage first.';
+                $profitTone = $profitForOwner >= 0 ? 'emerald' : 'rose';
+                $decisionText = ! $productionCostTrusted
+                    ? 'Production cost is not fully entered yet. HELOS is reducing owner profit using estimated missing production cost until daily entries catch up.'
+                    : ($profitForOwner >= 0
+                        ? 'The selected period is profitable after recorded costs. Protect delivery quality and keep cost entries complete.'
+                        : 'The selected period is losing money after recorded costs. Fix delivery recovery, returns, production costs, courier costs, and overhead leakage first.');
                 $heroStats = [
                     [
                         'label' => 'Delivered sales',
@@ -59,17 +65,17 @@
                     ],
                     [
                         'label' => 'Net profit after all costs',
-                        'value' => $money($netProfit),
-                        'helper' => 'Delivered sales - all recorded costs',
+                        'value' => $money($profitForOwner),
+                        'helper' => $productionCostTrusted ? 'Delivered sales - all recorded costs' : 'Includes estimated missing production cost',
                         'icon' => 'heroicon-o-arrow-trending-up',
-                        'style' => $netProfit >= 0 ? 'from-lime-400 to-emerald-500' : 'from-rose-500 to-red-500',
+                        'style' => $profitForOwner >= 0 && $productionCostTrusted ? 'from-lime-400 to-emerald-500' : 'from-rose-500 to-red-500',
                     ],
                 ];
                 $rolePanels = [
                     [
                         'title' => 'Owner view',
                         'kicker' => 'Decision',
-                        'value' => $netProfit >= 0 ? 'Protect profit' : 'Recover margin',
+                        'value' => ! $productionCostTrusted ? 'Profit not trusted yet' : ($profitForOwner >= 0 ? 'Protect profit' : 'Recover margin'),
                         'body' => $decisionText,
                         'icon' => 'heroicon-o-sparkles',
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
@@ -85,7 +91,7 @@
                     [
                         'title' => 'Finance view',
                         'kicker' => 'Cost control',
-                        'value' => $money($productCosts + $courierCosts),
+                        'value' => $money($productionCostForOwner + $courierCosts),
                         'body' => 'Production cost comes from Nifras daily entries. Delivery only reduces courier cost when the parcel is delivered.',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
@@ -102,9 +108,11 @@
                     ],
                     [
                         'label' => 'Production costs',
-                        'count' => 'Raw material + labour entered daily',
-                        'value' => $money($productCosts),
-                        'hint' => 'Monthly factory cost from production entries. Pending piece-pay: '.$money($productionPendingPay).'.',
+                        'count' => $productionCostTrusted ? 'Raw material + labour entered daily' : 'Daily entries missing - using estimate',
+                        'value' => $money($productionCostForOwner),
+                        'hint' => $productionCostTrusted
+                            ? 'Monthly factory cost from production entries. Pending piece-pay: '.$money($productionPendingPay).'.'
+                            : 'Recorded production: '.$money($productCosts).'. Estimated missing production cost: '.$money($missingEstimatedProductionCosts).'.',
                         'icon' => 'heroicon-o-cube',
                         'style' => 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100',
                     ],
@@ -134,11 +142,13 @@
                     ],
                     [
                         'label' => 'Net profit after all costs',
-                        'count' => 'Delivered sales - all recorded costs',
-                        'value' => $money($netProfit),
-                        'hint' => 'Owner profit after parcel costs, overheads, salaries, expenses, leakage and recoveries recorded in HELOS.',
-                        'icon' => $netProfit >= 0 ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-exclamation-triangle',
-                        'style' => $netProfit >= 0
+                        'count' => $productionCostTrusted ? 'Delivered sales - all recorded costs' : 'Includes estimated missing production cost',
+                        'value' => $money($profitForOwner),
+                        'hint' => $productionCostTrusted
+                            ? 'Owner profit after parcel costs, overheads, salaries, expenses, leakage and recoveries recorded in HELOS.'
+                            : 'Not fully trusted until Nifras enters production data for this period.',
+                        'icon' => $profitForOwner >= 0 && $productionCostTrusted ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-exclamation-triangle',
+                        'style' => $profitForOwner >= 0 && $productionCostTrusted
                             ? 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100'
                             : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
                     ],
@@ -146,10 +156,10 @@
                 $bridge = [
                     ['label' => 'Delivered sales', 'value' => $deliveredRevenue, 'color' => 'bg-emerald-500'],
                     ['label' => 'All recorded costs', 'value' => -$allCosts, 'color' => 'bg-orange-500'],
-                    ['label' => 'Net profit after all costs', 'value' => $netProfit, 'color' => $netProfit >= 0 ? 'bg-lime-500' : 'bg-rose-500'],
+                    ['label' => 'Net profit after all costs', 'value' => $profitForOwner, 'color' => $profitForOwner >= 0 && $productionCostTrusted ? 'bg-lime-500' : 'bg-rose-500'],
                     ['label' => 'Parcel gross before overhead', 'value' => $grossProfit, 'color' => $grossProfit >= 0 ? 'bg-cyan-500' : 'bg-rose-400'],
                 ];
-                $maxBridge = max(abs($deliveredRevenue), abs($allCosts), abs($netProfit), abs($grossProfit), 1);
+                $maxBridge = max(abs($deliveredRevenue), abs($allCosts), abs($profitForOwner), abs($grossProfit), 1);
             @endphp
 
             <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
@@ -166,7 +176,7 @@
                             </div>
                             <div class="rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-right backdrop-blur">
                                 <div class="text-xs uppercase tracking-wide text-cyan-100">Owner action</div>
-                                <div class="mt-1 text-sm font-bold">{{ $netProfit >= 0 ? 'Scale what is working' : 'Fix margin leakage first' }}</div>
+                                <div class="mt-1 text-sm font-bold">{{ ! $productionCostTrusted ? 'Enter production data first' : ($profitForOwner >= 0 ? 'Scale what is working' : 'Fix margin leakage first') }}</div>
                             </div>
                         </div>
 

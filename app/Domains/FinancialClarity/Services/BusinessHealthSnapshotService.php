@@ -143,6 +143,8 @@ class BusinessHealthSnapshotService
         $productionPendingPay = (float) (clone $productionEntries)
             ->where('payment_status', '!=', 'paid')
             ->sum('net_payable');
+        $productionReferenceCosts = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->productionCostReference($event));
+        $missingEstimatedProductionCosts = max($productionReferenceCosts - $productionCosts, 0);
         $productCosts = $productionCosts;
         $returnCourierCosts = (float) $orderEvents
             ->where('event_type', OperationalEvent::ORDER_RETURNED)
@@ -237,6 +239,7 @@ class BusinessHealthSnapshotService
 
         $costTotal = $directCosts + $expenses + $salaryPressure + $leakage - $recovery;
         $profit = $revenue - $costTotal;
+        $profitAfterEstimatedProductionCosts = $profit - $missingEstimatedProductionCosts;
 
         return [
             'business_id' => $business->id,
@@ -259,6 +262,10 @@ class BusinessHealthSnapshotService
                 'dispatched_parcel_value' => $dispatchedParcelValue,
                 'product_costs' => $productCosts,
                 'production_costs' => $productionCosts,
+                'production_cost_reference_amount' => $productionReferenceCosts,
+                'missing_estimated_production_costs' => $missingEstimatedProductionCosts,
+                'profit_after_estimated_production_costs' => $profitAfterEstimatedProductionCosts,
+                'production_cost_trusted' => $missingEstimatedProductionCosts <= 0,
                 'production_pending_pay' => $productionPendingPay,
                 'return_courier_costs' => $returnCourierCosts,
                 'total_courier_costs' => $totalCourierCosts,
@@ -343,6 +350,15 @@ class BusinessHealthSnapshotService
             ?? data_get($event->payload, 'customer_total_amount')
             ?? data_get($event->payload, 'total_amount')
             ?? $event->revenue_amount
+            ?? 0
+        ), 0);
+    }
+
+    private function productionCostReference(OperationalEvent $event): float
+    {
+        return max((float) (
+            data_get($event->payload, 'economics.production_cost_reference_amount')
+            ?? data_get($event->payload, 'economics.product_cost_amount')
             ?? 0
         ), 0);
     }
