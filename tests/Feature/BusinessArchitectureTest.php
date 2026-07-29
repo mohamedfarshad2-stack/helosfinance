@@ -196,7 +196,7 @@ class BusinessArchitectureTest extends TestCase
             ->assertSee('Courier costs')
             ->assertSee('Pending delivery')
             ->assertSee('Delivered sales')
-            ->assertSee('Net profit after all costs');
+            ->assertSee('Estimated profit from known costs');
     }
 
     public function test_client_health_report_surfaces_weekly_reminders(): void

@@ -43,11 +43,16 @@
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
                 $profitTone = $profitForOwner >= 0 ? 'emerald' : 'rose';
+                $profitLabel = 'Estimated profit from known costs';
+                $profitHelper = $productionCostTrusted ? 'Delivered sales - recorded costs in HELOS' : 'Includes estimated missing production cost';
+                $profitTrustNote = $productionCostTrusted
+                    ? 'Not final company net profit. HELOS can only subtract overheads, salaries, marketing, utilities, rent, expenses, leakage and recoveries that are entered.'
+                    : 'Not fully trusted until Nifras enters production data for this period.';
                 $decisionText = ! $productionCostTrusted
                     ? 'Production cost is not fully entered yet. HELOS is reducing owner profit using estimated missing production cost until daily entries catch up.'
                     : ($profitForOwner >= 0
-                        ? 'The selected period is profitable after recorded costs. Protect delivery quality and keep cost entries complete.'
-                        : 'The selected period is losing money after recorded costs. Fix delivery recovery, returns, production costs, courier costs, and overhead leakage first.');
+                        ? 'The selected period is positive after known HELOS costs. It is not final company net profit until every company expense is entered.'
+                        : 'The selected period is negative after known HELOS costs. This can happen when delivered sales are lower than recorded courier, production, salary, overhead, expense, leakage, and estimated missing production costs.');
                 $heroStats = [
                     [
                         'label' => 'Delivered sales',
@@ -64,9 +69,9 @@
                         'style' => 'from-amber-400 to-orange-500',
                     ],
                     [
-                        'label' => 'Net profit after all costs',
+                        'label' => $profitLabel,
                         'value' => $money($profitForOwner),
-                        'helper' => $productionCostTrusted ? 'Delivered sales - all recorded costs' : 'Includes estimated missing production cost',
+                        'helper' => $profitHelper,
                         'icon' => 'heroicon-o-arrow-trending-up',
                         'style' => $profitForOwner >= 0 && $productionCostTrusted ? 'from-lime-400 to-emerald-500' : 'from-rose-500 to-red-500',
                     ],
@@ -92,7 +97,7 @@
                         'title' => 'Finance view',
                         'kicker' => 'Cost control',
                         'value' => $money($productionCostForOwner + $courierCosts),
-                        'body' => 'Production cost comes from Nifras daily entries. Delivery only reduces courier cost when the parcel is delivered.',
+                        'body' => 'Production cost comes from Nifras daily entries. Delivery only reduces courier cost when the parcel is delivered. Company expenses must be entered before final net profit is trusted.',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
                     ],
@@ -141,12 +146,10 @@
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
                     ],
                     [
-                        'label' => 'Net profit after all costs',
-                        'count' => $productionCostTrusted ? 'Delivered sales - all recorded costs' : 'Includes estimated missing production cost',
+                        'label' => $profitLabel,
+                        'count' => $profitHelper,
                         'value' => $money($profitForOwner),
-                        'hint' => $productionCostTrusted
-                            ? 'Owner profit after parcel costs, overheads, salaries, expenses, leakage and recoveries recorded in HELOS.'
-                            : 'Not fully trusted until Nifras enters production data for this period.',
+                        'hint' => $profitTrustNote,
                         'icon' => $profitForOwner >= 0 && $productionCostTrusted ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-exclamation-triangle',
                         'style' => $profitForOwner >= 0 && $productionCostTrusted
                             ? 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100'
@@ -155,8 +158,8 @@
                 ];
                 $bridge = [
                     ['label' => 'Delivered sales', 'value' => $deliveredRevenue, 'color' => 'bg-emerald-500'],
-                    ['label' => 'All recorded costs', 'value' => -$allCosts, 'color' => 'bg-orange-500'],
-                    ['label' => 'Net profit after all costs', 'value' => $profitForOwner, 'color' => $profitForOwner >= 0 && $productionCostTrusted ? 'bg-lime-500' : 'bg-rose-500'],
+                    ['label' => 'Known HELOS costs', 'value' => -$allCosts, 'color' => 'bg-orange-500'],
+                    ['label' => $profitLabel, 'value' => $profitForOwner, 'color' => $profitForOwner >= 0 && $productionCostTrusted ? 'bg-lime-500' : 'bg-rose-500'],
                     ['label' => 'Parcel gross before overhead', 'value' => $grossProfit, 'color' => $grossProfit >= 0 ? 'bg-cyan-500' : 'bg-rose-400'],
                 ];
                 $maxBridge = max(abs($deliveredRevenue), abs($allCosts), abs($profitForOwner), abs($grossProfit), 1);

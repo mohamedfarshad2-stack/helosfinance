@@ -388,7 +388,7 @@ class TrustValidationTest extends TestCase
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
             ->assertSee('Owner parcel dashboard')
-            ->assertSee('Net profit after all costs')
+            ->assertSee('Estimated profit from known costs')
             ->assertDontSee('HELOS Trust Center');
     }
 

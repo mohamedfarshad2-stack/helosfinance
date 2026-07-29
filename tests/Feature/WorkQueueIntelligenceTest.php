@@ -725,7 +725,7 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('Owner parcel dashboard')
             ->assertSee('Dispatched this period')
             ->assertSee('Pending delivery')
-            ->assertSee('Net profit after all costs');
+            ->assertSee('Estimated profit from known costs');
     }
 
     public function test_generated_mission_refresh_does_not_cancel_owner_assigned_tasks(): void
