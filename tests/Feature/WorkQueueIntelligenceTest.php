@@ -724,6 +724,8 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertOk()
             ->assertSee('Owner parcel dashboard')
             ->assertSee('Dispatched this period')
+            ->assertSee('Recorded production cost')
+            ->assertSee('Estimated missing production')
             ->assertSee('Pending delivery')
             ->assertSee('This period dispatches delivered')
             ->assertSee('Earlier dispatches delivered')

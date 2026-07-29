@@ -35,6 +35,7 @@
                 $grossProfit = (float) data_get($metrics, 'parcel_gross_profit', 0);
                 $netProfit = (float) $snapshot->estimated_profit;
                 $allCosts = (float) $snapshot->cost_total + $missingEstimatedProductionCosts;
+                $otherKnownCosts = max($allCosts - $productionCostForOwner, 0);
                 $deliveredCount = (int) data_get($metrics, 'order_counts.delivered', 0);
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
@@ -108,7 +109,7 @@
                         'title' => 'Finance view',
                         'kicker' => 'Cost control',
                         'value' => $money($productionCostForOwner + $courierCosts),
-                        'body' => 'Production cost comes from Nifras daily entries. Delivery only reduces courier cost when the parcel is delivered. Company expenses must be entered before final net profit is trusted.',
+                        'body' => 'Recorded production is shown separately from estimated missing production. Delivery only reduces courier cost when the parcel is delivered. Company expenses must be entered before final net profit is trusted.',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
                     ],
@@ -127,10 +128,32 @@
                         'count' => $productionCostTrusted ? 'Raw material + labour entered daily' : 'Daily entries missing - using estimate',
                         'value' => $money($productionCostForOwner),
                         'hint' => $productionCostTrusted
-                            ? 'Monthly factory cost from production entries. Pending piece-pay: '.$money($productionPendingPay).'.'
-                            : 'Recorded production: '.$money($productCosts).'. Estimated missing production cost: '.$money($missingEstimatedProductionCosts).'.',
+                            ? 'Total used in owner estimate. All production cost here is recorded from daily production entries.'
+                            : 'Total used in owner estimate: recorded production plus estimated missing production.',
                         'icon' => 'heroicon-o-cube',
                         'style' => 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100',
+                    ],
+                    [
+                        'label' => 'Recorded production cost',
+                        'count' => $money($productionPendingPay).' pending piece-pay',
+                        'value' => $money($productCosts),
+                        'hint' => 'This is the real production cost entered in HELOS from daily production rows. If Nifras has not entered work, this stays zero.',
+                        'icon' => 'heroicon-o-clipboard-document-check',
+                        'style' => $productCosts > 0
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100'
+                            : 'border-gray-200 bg-gray-50 text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100',
+                    ],
+                    [
+                        'label' => 'Estimated missing production',
+                        'count' => $missingEstimatedProductionCosts > 0 ? 'Used only until daily entries catch up' : 'No missing estimate needed',
+                        'value' => $money($missingEstimatedProductionCosts),
+                        'hint' => $missingEstimatedProductionCosts > 0
+                            ? 'HELOS is temporarily reducing owner profit by this estimate because production entries are missing.'
+                            : 'Recorded production entries are enough for this period.',
+                        'icon' => 'heroicon-o-exclamation-triangle',
+                        'style' => $missingEstimatedProductionCosts > 0
+                            ? 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100'
+                            : 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100',
                     ],
                     [
                         'label' => 'Courier costs',
@@ -195,7 +218,9 @@
                 ];
                 $bridge = [
                     ['label' => 'Delivered sales', 'value' => $deliveredRevenue, 'color' => 'bg-emerald-500'],
-                    ['label' => 'Known HELOS costs', 'value' => -$allCosts, 'color' => 'bg-orange-500'],
+                    ['label' => 'Recorded production cost', 'value' => -$productCosts, 'color' => 'bg-violet-500'],
+                    ['label' => 'Estimated missing production', 'value' => -$missingEstimatedProductionCosts, 'color' => 'bg-rose-500'],
+                    ['label' => 'Other known HELOS costs', 'value' => -$otherKnownCosts, 'color' => 'bg-orange-500'],
                     ['label' => $profitLabel, 'value' => $profitForOwner, 'color' => $profitForOwner >= 0 && $productionCostTrusted ? 'bg-lime-500' : 'bg-rose-500'],
                     ['label' => 'Parcel gross before overhead', 'value' => $grossProfit, 'color' => $grossProfit >= 0 ? 'bg-cyan-500' : 'bg-rose-400'],
                 ];
