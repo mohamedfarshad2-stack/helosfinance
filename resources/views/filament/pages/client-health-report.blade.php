@@ -39,17 +39,17 @@
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
                 $dispatchCount = (int) data_get($metrics, 'dispatched_parcel_count', 0);
-                $deliveredCohorts = (array) data_get($metrics, 'delivered_cohorts', []);
-                $currentMonthDeliveredCount = (int) data_get($deliveredCohorts, 'confirmed_this_month.count', 0);
-                $currentMonthDeliveredValue = (float) data_get($deliveredCohorts, 'confirmed_this_month.value', 0);
-                $carryoverDeliveredCount = (int) data_get($deliveredCohorts, 'carryover_from_earlier_months.count', 0);
-                $carryoverDeliveredValue = (float) data_get($deliveredCohorts, 'carryover_from_earlier_months.value', 0);
-                $missingConfirmationDeliveredCount = (int) data_get($deliveredCohorts, 'confirmation_missing.count', 0);
-                $missingConfirmationDeliveredValue = (float) data_get($deliveredCohorts, 'confirmation_missing.value', 0);
-                $invalidConfirmationDeliveredCount = (int) data_get($deliveredCohorts, 'invalid_confirmation_sequence.count', 0);
-                $invalidConfirmationDeliveredValue = (float) data_get($deliveredCohorts, 'invalid_confirmation_sequence.value', 0);
-                $unknownMonthDeliveredCount = $missingConfirmationDeliveredCount + $invalidConfirmationDeliveredCount;
-                $unknownMonthDeliveredValue = $missingConfirmationDeliveredValue + $invalidConfirmationDeliveredValue;
+                $deliveredDispatchCohorts = (array) data_get($metrics, 'delivered_dispatch_cohorts', data_get($metrics, 'delivered_cohorts', []));
+                $currentMonthDeliveredCount = (int) data_get($deliveredDispatchCohorts, 'dispatched_this_period.count', data_get($deliveredDispatchCohorts, 'confirmed_this_month.count', 0));
+                $currentMonthDeliveredValue = (float) data_get($deliveredDispatchCohorts, 'dispatched_this_period.value', data_get($deliveredDispatchCohorts, 'confirmed_this_month.value', 0));
+                $carryoverDeliveredCount = (int) data_get($deliveredDispatchCohorts, 'dispatched_before_period.count', data_get($deliveredDispatchCohorts, 'carryover_from_earlier_months.count', 0));
+                $carryoverDeliveredValue = (float) data_get($deliveredDispatchCohorts, 'dispatched_before_period.value', data_get($deliveredDispatchCohorts, 'carryover_from_earlier_months.value', 0));
+                $missingDispatchDeliveredCount = (int) data_get($deliveredDispatchCohorts, 'dispatch_missing.count', data_get($deliveredDispatchCohorts, 'confirmation_missing.count', 0));
+                $missingDispatchDeliveredValue = (float) data_get($deliveredDispatchCohorts, 'dispatch_missing.value', data_get($deliveredDispatchCohorts, 'confirmation_missing.value', 0));
+                $invalidDispatchDeliveredCount = (int) data_get($deliveredDispatchCohorts, 'invalid_dispatch_sequence.count', data_get($deliveredDispatchCohorts, 'invalid_confirmation_sequence.count', 0));
+                $invalidDispatchDeliveredValue = (float) data_get($deliveredDispatchCohorts, 'invalid_dispatch_sequence.value', data_get($deliveredDispatchCohorts, 'invalid_confirmation_sequence.value', 0));
+                $unknownMonthDeliveredCount = $missingDispatchDeliveredCount + $invalidDispatchDeliveredCount;
+                $unknownMonthDeliveredValue = $missingDispatchDeliveredValue + $invalidDispatchDeliveredValue;
                 $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($deliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
@@ -157,26 +157,26 @@
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
                     ],
                     [
-                        'label' => 'This month orders delivered',
+                        'label' => 'This period dispatches delivered',
                         'count' => $number($currentMonthDeliveredCount).' parcels',
                         'value' => $money($currentMonthDeliveredValue),
-                        'hint' => 'Pure current-month orders: confirmed in this period and delivered in this period.',
+                        'hint' => 'Parcels dispatched in this selected period and delivered in this selected period.',
                         'icon' => 'heroicon-o-calendar-days',
                         'style' => 'border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100',
                     ],
                     [
-                        'label' => 'Carryover delivered',
+                        'label' => 'Earlier dispatches delivered',
                         'count' => $number($carryoverDeliveredCount).' parcels',
                         'value' => $money($carryoverDeliveredValue),
-                        'hint' => 'Older orders confirmed before this period but delivered now. Keep separate from pure current-month delivery.',
+                        'hint' => 'Parcels dispatched before this selected period but delivered now.',
                         'icon' => 'heroicon-o-arrow-path',
                         'style' => 'border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100',
                     ],
                     [
-                        'label' => 'Delivered but month unknown',
+                        'label' => 'Delivered but dispatch unknown',
                         'count' => $number($unknownMonthDeliveredCount).' parcels',
                         'value' => $money($unknownMonthDeliveredValue),
-                        'hint' => 'Delivered now, but HELOS cannot find the original confirmed/order date, so it cannot call these pure this-month or carryover yet.',
+                        'hint' => 'Delivered now, but HELOS cannot find the original dispatch/tracking date, so it cannot compare these against this period dispatches yet.',
                         'icon' => 'heroicon-o-question-mark-circle',
                         'style' => $unknownMonthDeliveredCount > 0
                             ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'
@@ -270,10 +270,10 @@
 
                         <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
                             <div class="font-black text-gray-950 dark:text-white">Simple owner rule</div>
-                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Pure this-month delivery is separated from carryover delivery so old parcel recovery does not hide current-month performance.</p>
-                            @if ($missingConfirmationDeliveredCount > 0)
+                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Delivery is split by dispatch date so the 390 dispatched this period can be compared against parcels from the same dispatch period.</p>
+                            @if ($unknownMonthDeliveredCount > 0)
                                 <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-                                    {{ $number($missingConfirmationDeliveredCount) }} delivered parcel(s) are missing confirmation dates, so HELOS cannot classify them as this-month or carryover yet.
+                                    {{ $number($unknownMonthDeliveredCount) }} delivered parcel(s) are missing dispatch dates, so HELOS cannot classify them against this selected period's dispatches yet.
                                 </p>
                             @endif
                         </div>

@@ -155,6 +155,7 @@ class BusinessHealthSnapshotService
             ->filter(fn (OperationalEvent $event): bool => (float) $event->direct_cost_amount <= 0)
             ->count();
         $deliveredCohorts = $this->deliveredCohorts($business, $latestDeliveredOrderEvents, $start, $end);
+        $deliveredDispatchCohorts = $this->deliveredDispatchCohorts($business, $latestDeliveredOrderEvents, $start, $end);
         $unrecognizedOrderRevenue = max((float) (clone $events)->sum('revenue_amount') - $recognizedOrderRevenue, 0.0);
         $revenue = $recognizedOrderRevenue + $serviceRevenue;
         $directCosts = (clone $events)->sum('direct_cost_amount');
@@ -272,6 +273,7 @@ class BusinessHealthSnapshotService
                 'parcel_gross_profit' => $parcelGrossProfit,
                 'delivered_without_courier_cost_count' => $deliveredWithoutCourierCost,
                 'delivered_cohorts' => $deliveredCohorts,
+                'delivered_dispatch_cohorts' => $deliveredDispatchCohorts,
                 'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
                 'variable_expenses' => $variableExpenses,
@@ -406,9 +408,72 @@ class BusinessHealthSnapshotService
             ->all();
     }
 
+    private function deliveredDispatchCohorts(Business $business, Collection $deliveredEvents, Carbon $start, Carbon $end): array
+    {
+        $dispatchEvents = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->whereIn('event_type', [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+            ])
+            ->where('occurred_at', '<=', $end->copy()->endOfDay())
+            ->get()
+            ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event));
+
+        $cohorts = [
+            'dispatched_this_period' => ['count' => 0, 'value' => 0.0],
+            'dispatched_before_period' => ['count' => 0, 'value' => 0.0],
+            'dispatch_missing' => ['count' => 0, 'value' => 0.0],
+            'invalid_dispatch_sequence' => ['count' => 0, 'value' => 0.0],
+        ];
+
+        foreach ($deliveredEvents as $delivered) {
+            $dispatch = $dispatchEvents
+                ->get($this->stableOrderKey($delivered), collect())
+                ->sortBy('occurred_at')
+                ->first();
+            $dispatchedAt = $dispatch?->occurred_at ?? $this->payloadDispatchAt($delivered);
+            $value = max((float) $delivered->revenue_amount, 0);
+
+            $key = match (true) {
+                ! $dispatchedAt => 'dispatch_missing',
+                $dispatchedAt->gt($delivered->occurred_at) => 'invalid_dispatch_sequence',
+                $dispatchedAt->lt($start->copy()->startOfDay()) => 'dispatched_before_period',
+                default => 'dispatched_this_period',
+            };
+
+            $cohorts[$key]['count']++;
+            $cohorts[$key]['value'] += $value;
+        }
+
+        return collect($cohorts)
+            ->map(fn (array $cohort): array => [
+                'count' => (int) $cohort['count'],
+                'value' => round((float) $cohort['value'], 2),
+            ])
+            ->all();
+    }
+
     private function payloadConfirmationAt(OperationalEvent $event): ?Carbon
     {
         foreach (['confirmed_at', 'order_confirmed_at', 'client_confirmed_at'] as $key) {
+            $value = data_get($event->payload, $key);
+
+            if (filled($value)) {
+                try {
+                    return Carbon::parse($value);
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function payloadDispatchAt(OperationalEvent $event): ?Carbon
+    {
+        foreach (['dispatched_at', 'tracking_added_at', 'tracking_number_added_at', 'courier_sent_at', 'shipped_at'] as $key) {
             $value = data_get($event->payload, $key);
 
             if (filled($value)) {

@@ -237,8 +237,8 @@ class FinancialSnapshotServiceTest extends TestCase
         ]);
 
         foreach ([
-            ['order_id' => 1, 'confirmed_at' => now()->subMonth()->endOfMonth(), 'value' => 4000],
-            ['order_id' => 2, 'confirmed_at' => now()->startOfMonth()->addDay(), 'value' => 3000],
+            ['order_id' => 1, 'confirmed_at' => now()->subMonth()->endOfMonth()->subHours(2), 'dispatched_at' => now()->subMonth()->endOfMonth()->subHour(), 'value' => 4000],
+            ['order_id' => 2, 'confirmed_at' => now()->startOfMonth()->addDay(), 'dispatched_at' => now()->startOfMonth()->addDays(2), 'value' => 3000],
         ] as $row) {
             OperationalEvent::query()->create([
                 'business_id' => $business->id,
@@ -249,6 +249,17 @@ class FinancialSnapshotServiceTest extends TestCase
                 'quantity' => 1,
                 'payload' => ['order_id' => $row['order_id']],
                 'occurred_at' => $row['confirmed_at'],
+            ]);
+
+            OperationalEvent::query()->create([
+                'business_id' => $business->id,
+                'source' => 'stock_app',
+                'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+                'external_id' => 'dispatch-'.$row['order_id'],
+                'channel' => 'cod',
+                'quantity' => 1,
+                'payload' => ['order_id' => $row['order_id'], 'sale_amount' => $row['value']],
+                'occurred_at' => $row['dispatched_at'],
             ]);
 
             OperationalEvent::query()->create([
@@ -277,10 +288,15 @@ class FinancialSnapshotServiceTest extends TestCase
         ]);
 
         $cohorts = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business)['metrics']['delivered_cohorts'];
+        $dispatchCohorts = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business)['metrics']['delivered_dispatch_cohorts'];
 
         $this->assertSame(['count' => 1, 'value' => 3000.0], $cohorts['confirmed_this_month']);
         $this->assertSame(['count' => 1, 'value' => 4000.0], $cohorts['carryover_from_earlier_months']);
         $this->assertSame(['count' => 1, 'value' => 2000.0], $cohorts['confirmation_missing']);
         $this->assertSame(['count' => 0, 'value' => 0.0], $cohorts['invalid_confirmation_sequence']);
+        $this->assertSame(['count' => 1, 'value' => 3000.0], $dispatchCohorts['dispatched_this_period']);
+        $this->assertSame(['count' => 1, 'value' => 4000.0], $dispatchCohorts['dispatched_before_period']);
+        $this->assertSame(['count' => 1, 'value' => 2000.0], $dispatchCohorts['dispatch_missing']);
+        $this->assertSame(['count' => 0, 'value' => 0.0], $dispatchCohorts['invalid_dispatch_sequence']);
     }
 }

@@ -196,9 +196,9 @@ class BusinessArchitectureTest extends TestCase
             ->assertSee('Courier costs')
             ->assertSee('Pending delivery')
             ->assertSee('Delivered sales')
-            ->assertSee('This month orders delivered')
-            ->assertSee('Carryover delivered')
-            ->assertSee('Delivered but month unknown')
+            ->assertSee('This period dispatches delivered')
+            ->assertSee('Earlier dispatches delivered')
+            ->assertSee('Delivered but dispatch unknown')
             ->assertSee('Estimated profit from known costs');
     }
 
