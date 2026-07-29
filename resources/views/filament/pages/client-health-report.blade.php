@@ -280,6 +280,82 @@
                             : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
                     ],
                 ];
+                $cardsByLabel = collect($cards)->keyBy('label');
+                $dashboardGroups = [
+                    [
+                        'title' => 'Revenue',
+                        'label' => 'Delivered sales counted as revenue',
+                        'value' => $money($deliveredRevenue),
+                        'helper' => $number($deliveredCount).' delivered parcels',
+                        'icon' => 'heroicon-o-banknotes',
+                        'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
+                        'open' => true,
+                        'details' => array_values(array_filter([
+                            $cardsByLabel->get('This period dispatches delivered'),
+                            $cardsByLabel->get('Earlier dispatches delivered'),
+                        ])),
+                    ],
+                    [
+                        'title' => 'Parcel movement',
+                        'label' => 'Dispatched, pending, and courier pressure',
+                        'value' => $money($dispatchedValue),
+                        'helper' => $number($dispatchCount).' dispatched parcels',
+                        'icon' => 'heroicon-o-truck',
+                        'style' => 'border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100',
+                        'open' => false,
+                        'details' => array_values(array_filter([
+                            $cardsByLabel->get('Dispatched this period'),
+                            $cardsByLabel->get('Pending delivery'),
+                            $cardsByLabel->get('Courier costs'),
+                        ])),
+                    ],
+                    [
+                        'title' => 'Company costs entered',
+                        'label' => 'Total company costs HELOS is subtracting',
+                        'value' => $money($companyCostsEntered),
+                        'helper' => 'Expenses + salaries + bank-review-only charges',
+                        'icon' => 'heroicon-o-building-office-2',
+                        'style' => 'border-slate-200 bg-slate-50 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100',
+                        'open' => true,
+                        'details' => array_values(array_filter([
+                            $cardsByLabel->get('Expenses entered'),
+                            $cardsByLabel->get('Marketing cost'),
+                            $cardsByLabel->get('Bank/payment charges'),
+                            $cardsByLabel->get('Staff salary pressure'),
+                            $cardsByLabel->get('Costs still to settle'),
+                        ])),
+                    ],
+                    [
+                        'title' => 'Production and packaging',
+                        'label' => 'Factory cost entered or estimated',
+                        'value' => $money($productionCostForOwner),
+                        'helper' => $productionCostTrusted ? 'Production entries are trusted' : 'Daily entries missing - estimate is used',
+                        'icon' => 'heroicon-o-cube',
+                        'style' => $productionCostTrusted
+                            ? 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100'
+                            : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
+                        'open' => ! $productionCostTrusted,
+                        'details' => array_values(array_filter([
+                            $cardsByLabel->get('Recorded production cost'),
+                            $cardsByLabel->get('Estimated missing production'),
+                            $cardsByLabel->get('Packaging cost'),
+                        ])),
+                    ],
+                    [
+                        'title' => 'Profit',
+                        'label' => 'Owner result after known costs',
+                        'value' => $money($profitForOwner),
+                        'helper' => $profitHelper,
+                        'icon' => $profitForOwner >= 0 && $productionCostTrusted ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-exclamation-triangle',
+                        'style' => $profitForOwner >= 0 && $productionCostTrusted
+                            ? 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100'
+                            : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
+                        'open' => false,
+                        'details' => array_values(array_filter([
+                            $cardsByLabel->get($profitLabel),
+                        ])),
+                    ],
+                ];
                 $bridge = [
                     ['label' => 'Delivered sales', 'value' => $deliveredRevenue, 'color' => 'bg-emerald-500'],
                     ['label' => 'Recorded production cost', 'value' => -$productCosts, 'color' => 'bg-violet-500'],
@@ -430,29 +506,64 @@
                     </div>
                 </div>
 
-                <div class="grid gap-4 md:grid-cols-2">
-                    @foreach ($cards as $card)
-                        <div class="rounded-2xl border p-5 shadow-sm {{ $card['style'] }}">
-                            <div class="flex items-start justify-between gap-4">
-                                <div class="text-sm font-black uppercase tracking-wide">{{ $card['label'] }}</div>
-                                <div class="rounded-xl bg-white/80 p-2 shadow-sm dark:bg-gray-950/60">
-                                    <x-filament::icon :icon="$card['icon']" class="h-5 w-5" />
+                <div class="grid gap-4">
+                    @foreach ($dashboardGroups as $group)
+                        <div
+                            x-data="{ open: {{ $group['open'] ? 'true' : 'false' }} }"
+                            class="overflow-hidden rounded-2xl border shadow-sm {{ $group['style'] }}"
+                        >
+                            <button
+                                type="button"
+                                x-on:click="open = ! open"
+                                class="flex w-full items-center justify-between gap-4 p-5 text-left"
+                            >
+                                <div class="flex min-w-0 items-center gap-4">
+                                    <div class="rounded-xl bg-white/80 p-2 shadow-sm dark:bg-gray-950/60">
+                                        <x-filament::icon :icon="$group['icon']" class="h-6 w-6" />
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-black uppercase tracking-wide opacity-70">{{ $group['title'] }}</div>
+                                        <div class="mt-1 text-sm font-semibold opacity-80">{{ $group['label'] }}</div>
+                                    </div>
+                                </div>
+                                <div class="shrink-0 text-right">
+                                    <div class="text-2xl font-black text-gray-950 dark:text-white">{{ $group['value'] }}</div>
+                                    <div class="mt-1 text-xs font-bold opacity-75">{{ $group['helper'] }}</div>
+                                </div>
+                                <x-filament::icon
+                                    icon="heroicon-o-chevron-down"
+                                    class="h-5 w-5 shrink-0 transition"
+                                    x-bind:class="open ? 'rotate-180' : ''"
+                                />
+                            </button>
+
+                            <div x-show="open" class="border-t border-current/10 bg-white/55 p-4 dark:bg-gray-950/35">
+                                <div class="grid gap-3">
+                                    @foreach ($group['details'] as $card)
+                                        <div class="rounded-xl border border-current/10 bg-white/75 p-4 dark:bg-gray-950/60">
+                                            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                                <div class="min-w-0">
+                                                    <div class="text-sm font-black text-gray-950 dark:text-white">{{ $card['label'] }}</div>
+                                                    <div class="mt-1 text-xs font-semibold opacity-75">{{ $card['count'] }}</div>
+                                                    <div class="mt-2 text-xs leading-5 opacity-75">{{ $card['hint'] }}</div>
+                                                </div>
+                                                <div class="shrink-0 text-left lg:text-right">
+                                                    <div class="text-xl font-black text-gray-950 dark:text-white">{{ $card['value'] }}</div>
+                                                    @if (filled($card['action_url'] ?? null))
+                                                        <a
+                                                            href="{{ $card['action_url'] }}"
+                                                            class="mt-3 inline-flex items-center gap-2 rounded-lg border border-current/20 bg-white/80 px-3 py-2 text-xs font-bold shadow-sm transition hover:bg-white dark:bg-gray-950/70 dark:hover:bg-gray-950"
+                                                        >
+                                                            <x-filament::icon icon="heroicon-o-pencil-square" class="h-4 w-4" />
+                                                            {{ $card['action_label'] ?? 'Open records' }}
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
                             </div>
-                            <div class="mt-5 text-2xl font-black text-gray-950 dark:text-white">{{ $card['value'] }}</div>
-                            <div class="mt-2 text-sm font-bold">{{ $card['count'] }}</div>
-                            <div class="mt-4 border-t border-current/10 pt-3 text-xs leading-5 opacity-75">{{ $card['hint'] }}</div>
-                            @if (filled($card['action_url'] ?? null))
-                                <div class="mt-4">
-                                    <a
-                                        href="{{ $card['action_url'] }}"
-                                        class="inline-flex items-center gap-2 rounded-lg border border-current/20 bg-white/70 px-3 py-2 text-xs font-bold shadow-sm transition hover:bg-white dark:bg-gray-950/60 dark:hover:bg-gray-950"
-                                    >
-                                        <x-filament::icon icon="heroicon-o-pencil-square" class="h-4 w-4" />
-                                        {{ $card['action_label'] ?? 'Open records' }}
-                                    </a>
-                                </div>
-                            @endif
                         </div>
                     @endforeach
                 </div>
