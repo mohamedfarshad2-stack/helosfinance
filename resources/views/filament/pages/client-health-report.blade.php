@@ -45,6 +45,11 @@
                 $carryoverDeliveredCount = (int) data_get($deliveredCohorts, 'carryover_from_earlier_months.count', 0);
                 $carryoverDeliveredValue = (float) data_get($deliveredCohorts, 'carryover_from_earlier_months.value', 0);
                 $missingConfirmationDeliveredCount = (int) data_get($deliveredCohorts, 'confirmation_missing.count', 0);
+                $missingConfirmationDeliveredValue = (float) data_get($deliveredCohorts, 'confirmation_missing.value', 0);
+                $invalidConfirmationDeliveredCount = (int) data_get($deliveredCohorts, 'invalid_confirmation_sequence.count', 0);
+                $invalidConfirmationDeliveredValue = (float) data_get($deliveredCohorts, 'invalid_confirmation_sequence.value', 0);
+                $unknownMonthDeliveredCount = $missingConfirmationDeliveredCount + $invalidConfirmationDeliveredCount;
+                $unknownMonthDeliveredValue = $missingConfirmationDeliveredValue + $invalidConfirmationDeliveredValue;
                 $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($deliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
@@ -63,7 +68,7 @@
                     [
                         'label' => 'Delivered sales',
                         'value' => $money($deliveredRevenue),
-                        'helper' => $number($currentMonthDeliveredCount).' this month / '.$number($carryoverDeliveredCount).' carryover',
+                        'helper' => $number($currentMonthDeliveredCount).' this month / '.$number($carryoverDeliveredCount).' carryover / '.$number($unknownMonthDeliveredCount).' unknown',
                         'icon' => 'heroicon-o-check-circle',
                         'style' => 'from-emerald-500 to-teal-500',
                     ],
@@ -147,7 +152,7 @@
                         'label' => 'Delivered sales',
                         'count' => $number($deliveredCount).' parcels',
                         'value' => $money($deliveredRevenue),
-                        'hint' => 'All parcels delivered in this period, including current-month orders and old carryovers.',
+                        'hint' => 'All parcels delivered in this period: current-month, carryover, and any delivered parcels missing original order dates.',
                         'icon' => 'heroicon-o-check-badge',
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
                     ],
@@ -166,6 +171,16 @@
                         'hint' => 'Older orders confirmed before this period but delivered now. Keep separate from pure current-month delivery.',
                         'icon' => 'heroicon-o-arrow-path',
                         'style' => 'border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100',
+                    ],
+                    [
+                        'label' => 'Delivered but month unknown',
+                        'count' => $number($unknownMonthDeliveredCount).' parcels',
+                        'value' => $money($unknownMonthDeliveredValue),
+                        'hint' => 'Delivered now, but HELOS cannot find the original confirmed/order date, so it cannot call these pure this-month or carryover yet.',
+                        'icon' => 'heroicon-o-question-mark-circle',
+                        'style' => $unknownMonthDeliveredCount > 0
+                            ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'
+                            : 'border-gray-200 bg-gray-50 text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100',
                     ],
                     [
                         'label' => $profitLabel,

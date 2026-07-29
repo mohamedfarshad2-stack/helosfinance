@@ -198,6 +198,7 @@ class BusinessArchitectureTest extends TestCase
             ->assertSee('Delivered sales')
             ->assertSee('This month orders delivered')
             ->assertSee('Carryover delivered')
+            ->assertSee('Delivered but month unknown')
             ->assertSee('Estimated profit from known costs');
     }
 
