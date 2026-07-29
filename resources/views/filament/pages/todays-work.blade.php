@@ -3,6 +3,51 @@
         @if (! empty($workQueue['employee_guide']))
             @php
                 $guide = $workQueue['employee_guide'];
+                $summary = $workQueue['summary'] ?? [];
+                $metricCards = [
+                    [
+                        'label' => 'Due today',
+                        'value' => $summary['Tasks due today'] ?? 0,
+                        'icon' => 'heroicon-o-calendar-days',
+                        'tone' => 'from-sky-500 to-cyan-500',
+                        'ring' => 'ring-sky-200',
+                    ],
+                    [
+                        'label' => 'High priority',
+                        'value' => $summary['High priority'] ?? 0,
+                        'icon' => 'heroicon-o-bolt',
+                        'tone' => 'from-amber-400 to-orange-500',
+                        'ring' => 'ring-amber-200',
+                    ],
+                    [
+                        'label' => 'Overdue',
+                        'value' => $summary['Overdue'] ?? 0,
+                        'icon' => 'heroicon-o-exclamation-triangle',
+                        'tone' => 'from-rose-500 to-red-500',
+                        'ring' => 'ring-rose-200',
+                    ],
+                    [
+                        'label' => 'Done today',
+                        'value' => $summary['Completed today'] ?? 0,
+                        'icon' => 'heroicon-o-check-circle',
+                        'tone' => 'from-emerald-500 to-lime-500',
+                        'ring' => 'ring-emerald-200',
+                    ],
+                    [
+                        'label' => 'Waiting review',
+                        'value' => $summary['Waiting for review'] ?? 0,
+                        'icon' => 'heroicon-o-eye',
+                        'tone' => 'from-violet-500 to-fuchsia-500',
+                        'ring' => 'ring-violet-200',
+                    ],
+                    [
+                        'label' => 'Progress',
+                        'value' => $summary['Completion rate'] ?? '0%',
+                        'icon' => 'heroicon-o-chart-bar',
+                        'tone' => 'from-indigo-500 to-blue-500',
+                        'ring' => 'ring-indigo-200',
+                    ],
+                ];
             @endphp
             <x-filament::section>
                 @if ($guide['is_supervisor'])
@@ -18,81 +63,85 @@
                         </div>
                     </div>
                 @else
-                <div class="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-                    <div>
-                        <div class="text-xs uppercase tracking-wide text-emerald-600">My guided dashboard</div>
-                        <h1 class="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">Welcome, {{ $guide['name'] }}</h1>
-                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                            You report to <span class="font-semibold text-gray-950 dark:text-white">{{ $guide['reports_to'] }}</span>.
-                            HELOAS ranks your work by urgency, business impact, and due date.
-                        </p>
+                    <div class="grid gap-4">
+                        <div class="rounded-2xl bg-gray-950 p-5 text-white shadow-xl ring-1 ring-black/10 dark:bg-gray-900">
+                            <div class="grid gap-5 xl:grid-cols-[0.85fr_1.15fr] xl:items-center">
+                                <div>
+                                    <div class="text-xs font-bold uppercase text-emerald-300">My work dashboard</div>
+                                    <h1 class="mt-2 text-2xl font-black leading-tight">Welcome, {{ $guide['name'] }}</h1>
+                                    <p class="mt-2 max-w-xl text-sm font-medium text-gray-300">
+                                        Report to <span class="text-white">{{ $guide['reports_to'] }}</span>. Start from the strongest color, finish the task, then come back for the next one.
+                                    </p>
+                                </div>
 
-                        @if (! empty($guide['direct_reports']))
-                            <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
-                                <div class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">People you guide</div>
-                                <div class="mt-1 text-sm text-blue-900 dark:text-blue-100">{{ implode(', ', $guide['direct_reports']) }}</div>
-                            </div>
-                        @endif
-                    </div>
-
-                    <div class="grid gap-3 sm:grid-cols-2">
-                        @forelse ($guide['responsibilities'] as $responsibility)
-                            <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                                <div class="font-semibold text-gray-950 dark:text-white">{{ $responsibility['label'] }}</div>
-                                <div class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ $responsibility['direction'] }}</div>
-                                <div class="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-                                    <span class="font-semibold">Profit outcome:</span> {{ $responsibility['profit_outcome'] }}
+                                <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
+                                    @foreach ($metricCards as $card)
+                                        <div class="rounded-xl bg-white p-3 text-gray-950 shadow-sm ring-1 {{ $card['ring'] }}">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <div class="text-[11px] font-black uppercase text-gray-500">{{ $card['label'] }}</div>
+                                                <div class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br {{ $card['tone'] }} text-white shadow-sm">
+                                                    <x-filament::icon :icon="$card['icon']" class="h-4 w-4" />
+                                                </div>
+                                            </div>
+                                            <div class="mt-2 text-2xl font-black leading-none">{{ $card['value'] }}</div>
+                                        </div>
+                                    @endforeach
                                 </div>
                             </div>
-                        @empty
-                            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 sm:col-span-2">
-                                Your owner or team leader still needs to assign your responsibility areas.
-                            </div>
-                        @endforelse
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            @forelse ($guide['responsibilities'] as $responsibility)
+                                <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                                    {{ $responsibility['label'] }}
+                                </span>
+                            @empty
+                                <span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                                    No responsibility areas assigned yet
+                                </span>
+                            @endforelse
+                        </div>
                     </div>
-                </div>
                 @endif
             </x-filament::section>
 
             @if (! empty($employeeContribution))
                 <x-filament::section>
-                    <div class="overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-blue-700 p-5 text-white shadow-lg">
-                        <div class="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+                    <div class="overflow-hidden rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm dark:border-emerald-900 dark:bg-gray-900">
+                        <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
                             <div>
-                                <div class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-100">Your contribution today</div>
-                                <h2 class="mt-2 text-2xl font-bold">{{ $employeeContribution['status'] }}</h2>
-                                <p class="mt-2 max-w-2xl text-sm text-emerald-50">
-                                    Complete the work below to keep your daily contribution on track. HELOAS calculated this from the company workload and remaining operational gap without showing private financial information.
-                                </p>
+                                <div class="text-xs font-black uppercase text-emerald-600">Your contribution today</div>
+                                <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">{{ $employeeContribution['status'] }}</h2>
+                                <p class="mt-1 max-w-2xl text-sm text-gray-600 dark:text-gray-300">Only your work numbers are shown here. Owner finance stays private.</p>
                             </div>
-                            <div class="grid grid-cols-3 gap-3 text-center">
-                                <div class="rounded-xl bg-white/15 px-4 py-3 backdrop-blur">
+                            <div class="grid grid-cols-3 gap-2 text-center">
+                                <div class="rounded-xl bg-sky-50 px-4 py-3 text-sky-900 ring-1 ring-sky-100">
                                     <div class="text-2xl font-black">{{ $employeeContribution['target'] }}</div>
-                                    <div class="text-xs text-emerald-100">Today&apos;s actions</div>
+                                    <div class="text-xs font-bold">Actions</div>
                                 </div>
-                                <div class="rounded-xl bg-white/15 px-4 py-3 backdrop-blur">
+                                <div class="rounded-xl bg-emerald-50 px-4 py-3 text-emerald-900 ring-1 ring-emerald-100">
                                     <div class="text-2xl font-black">{{ $employeeContribution['completed'] }}</div>
-                                    <div class="text-xs text-emerald-100">Completed</div>
+                                    <div class="text-xs font-bold">Done</div>
                                 </div>
-                                <div class="rounded-xl bg-white/15 px-4 py-3 backdrop-blur">
+                                <div class="rounded-xl bg-amber-50 px-4 py-3 text-amber-900 ring-1 ring-amber-100">
                                     <div class="text-2xl font-black">{{ $employeeContribution['remaining'] }}</div>
-                                    <div class="text-xs text-emerald-100">Remaining</div>
+                                    <div class="text-xs font-bold">Left</div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="mt-5">
-                            <div class="mb-2 flex items-center justify-between text-xs font-semibold">
+                        <div class="mt-4">
+                            <div class="mb-2 flex items-center justify-between text-xs font-bold text-gray-600 dark:text-gray-300">
                                 <span>Daily progress</span>
                                 <span>{{ $employeeContribution['progress'] }}%</span>
                             </div>
-                            <div class="h-3 overflow-hidden rounded-full bg-black/20">
-                                <div class="h-full rounded-full bg-gradient-to-r from-lime-300 to-yellow-300 transition-all" style="width: {{ $employeeContribution['progress'] }}%"></div>
+                            <div class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                                <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-lime-400 to-yellow-300 transition-all" style="width: {{ $employeeContribution['progress'] }}%"></div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                    <div class="mt-4 grid gap-3 lg:grid-cols-3">
                         @foreach ($employeeContribution['goals'] as $goal)
                             @php
                                 $goalClasses = match ($goal['tone']) {
@@ -105,10 +154,10 @@
                                     default => 'border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100',
                                 };
                             @endphp
-                            <div class="rounded-xl border p-4 {{ $goalClasses }}">
+                            <div class="rounded-xl border p-3 {{ $goalClasses }}">
                                 <div class="text-xs font-bold uppercase tracking-wide opacity-70">{{ $goal['label'] }}</div>
-                                <div class="mt-2 text-lg font-bold">{{ $goal['target'] }}</div>
-                                <div class="mt-2 text-sm opacity-80">{{ $goal['action'] }}</div>
+                                <div class="mt-1 text-base font-black">{{ $goal['target'] }}</div>
+                                <div class="mt-1 text-sm opacity-80">{{ $goal['action'] }}</div>
                             </div>
                         @endforeach
                     </div>
