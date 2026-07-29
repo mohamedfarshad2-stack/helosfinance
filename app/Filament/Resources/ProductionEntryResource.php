@@ -344,7 +344,7 @@ class ProductionEntryResource extends Resource
         $user = Auth::user();
 
         return Auth::check()
-            && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false))
+            && (($user?->isOwner() ?? false) || ($user?->isInternalAdmin() ?? false) || ($user?->canAccessProductionWork() ?? false))
             && static::currentBusinessSupportsProductionTracking();
     }
 

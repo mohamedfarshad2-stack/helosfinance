@@ -591,7 +591,7 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertFalse(BankStatementImport::shouldRegisterNavigation());
         $this->assertFalse(BankTransactionResource::shouldRegisterNavigation());
         $this->assertFalse(ExpenseResource::shouldRegisterNavigation());
-        $this->assertFalse(ProductionEntryResource::shouldRegisterNavigation());
+        $this->assertTrue(ProductionEntryResource::shouldRegisterNavigation());
         $this->assertFalse(MaterialLedgerResource::shouldRegisterNavigation());
 
         $this->actingAs($employee)
