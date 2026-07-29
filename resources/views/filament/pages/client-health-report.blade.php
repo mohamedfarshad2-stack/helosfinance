@@ -40,8 +40,16 @@
                 $variableExpenses = (float) data_get($metrics, 'variable_expenses', 0);
                 $manualOverheadCosts = (float) data_get($metrics, 'manual_overhead_costs', 0);
                 $salaryPressure = (float) data_get($metrics, 'salary_pressure', 0);
+                $packagingCosts = (float) data_get($metrics, 'packaging_costs', 0);
+                $initialPackagingReferenceCosts = (float) data_get($metrics, 'initial_packaging_reference_costs', 0);
+                $returnPackagingCosts = (float) data_get($metrics, 'return_packaging_costs', 0);
+                $resendPackagingCosts = (float) data_get($metrics, 'resend_packaging_costs', 0);
+                $marketingSpend = (float) data_get($metrics, 'marketing_spend', 0);
+                $bankPaymentCharges = (float) data_get($metrics, 'bank_payment_charges', 0);
+                $bankPaymentChargeExpenses = (float) data_get($metrics, 'bank_payment_charge_expenses', 0);
+                $bankPaymentChargeBankRows = (float) data_get($metrics, 'bank_payment_charge_bank_rows', 0);
                 $toSettle = (float) data_get($metrics, 'to_settle', 0);
-                $companyCostsEntered = $manualOverheadCosts + $salaryPressure;
+                $companyCostsEntered = $manualOverheadCosts + $salaryPressure + $bankPaymentChargeBankRows;
                 $deliveredCount = (int) data_get($metrics, 'order_counts.delivered', 0);
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
@@ -115,7 +123,7 @@
                         'title' => 'Finance view',
                         'kicker' => 'Cost control',
                         'value' => $money($companyCostsEntered + $courierCosts + $productionCostForOwner),
-                        'body' => 'Owner costs are split into company expenses, salaries, courier costs, recorded production, and estimated missing production. Final profit is trusted only when those entries are complete.',
+                        'body' => 'Owner costs are split into expenses, salaries, courier, packaging, marketing, bank charges, recorded production, and estimated missing production. Final profit is trusted only when entries are complete.',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
                     ],
@@ -131,9 +139,9 @@
                     ],
                     [
                         'label' => 'Company costs entered',
-                        'count' => 'Expenses + staff salary pressure',
+                        'count' => 'Expenses + staff salary + bank review charges',
                         'value' => $money($companyCostsEntered),
-                        'hint' => 'Costs entered in HELOS for running the company: expenses plus active staff salaries for this period.',
+                        'hint' => 'Costs entered in HELOS for running the company: expenses, active staff salaries, and bank charges classified in Bank Review.',
                         'icon' => 'heroicon-o-building-office-2',
                         'style' => 'border-slate-200 bg-slate-50 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100',
                         'action_label' => 'Open expenses',
@@ -143,11 +151,41 @@
                         'label' => 'Expenses entered',
                         'count' => $money($fixedExpenses).' fixed / '.$money($variableExpenses).' variable',
                         'value' => $money($manualOverheadCosts),
-                        'hint' => 'Rent, marketing, utilities, supplier bills, admin costs, and other expenses entered in HELOS.',
+                        'hint' => 'Rent, marketing, utilities, supplier bills, admin costs, payment fees, and other expenses entered in HELOS.',
                         'icon' => 'heroicon-o-receipt-percent',
                         'style' => 'border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100',
                         'action_label' => 'Open expenses',
                         'action_url' => \App\Filament\Resources\ExpenseResource::getUrl('index'),
+                    ],
+                    [
+                        'label' => 'Packaging cost',
+                        'count' => $money($initialPackagingReferenceCosts).' parcel / '.$money($returnPackagingCosts + $resendPackagingCosts).' return-resend',
+                        'value' => $money($packagingCosts),
+                        'hint' => 'Packaging from SKU cost references plus return and resend packaging recorded on parcel events. Shown separately for owner clarity; HELOS avoids subtracting it twice.',
+                        'icon' => 'heroicon-o-cube',
+                        'style' => 'border-teal-200 bg-teal-50 text-teal-950 dark:border-teal-900 dark:bg-teal-950/30 dark:text-teal-100',
+                        'action_label' => 'Open products',
+                        'action_url' => \App\Filament\Resources\SkuResource::getUrl('index'),
+                    ],
+                    [
+                        'label' => 'Marketing cost',
+                        'count' => 'Expense rows tagged marketing',
+                        'value' => $money($marketingSpend),
+                        'hint' => 'Marketing and ad spend entered as expenses for this period. This is already included inside expenses entered.',
+                        'icon' => 'heroicon-o-megaphone',
+                        'style' => 'border-pink-200 bg-pink-50 text-pink-950 dark:border-pink-900 dark:bg-pink-950/30 dark:text-pink-100',
+                        'action_label' => 'Open expenses',
+                        'action_url' => \App\Filament\Resources\ExpenseResource::getUrl('index'),
+                    ],
+                    [
+                        'label' => 'Bank/payment charges',
+                        'count' => $money($bankPaymentChargeExpenses).' expenses / '.$money($bankPaymentChargeBankRows).' bank review',
+                        'value' => $money($bankPaymentCharges),
+                        'hint' => 'Payment gateway, COD handling, and bank charge rows. Expense rows are already in expenses; bank-review-only charges are added to owner cost.',
+                        'icon' => 'heroicon-o-credit-card',
+                        'style' => 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
+                        'action_label' => 'Open bank review',
+                        'action_url' => \App\Filament\Resources\BankTransactionResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Staff salary pressure',

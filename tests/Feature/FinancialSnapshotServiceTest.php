@@ -3,9 +3,12 @@
 namespace Tests\Feature;
 
 use App\Domains\FinancialClarity\Services\BusinessHealthSnapshotService;
+use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Models\Sku;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -183,6 +186,117 @@ class FinancialSnapshotServiceTest extends TestCase
         $this->assertSame(1, (int) $summary['metrics']['order_counts']['returned']);
         $this->assertSame(1, (int) $summary['metrics']['order_activity_counts']['delivered']);
         $this->assertSame(1, (int) $summary['metrics']['order_activity_counts']['returned']);
+    }
+
+    public function test_snapshot_separates_packaging_marketing_and_bank_payment_charges(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Owner Cost Buckets Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $sku = Sku::query()->create([
+            'business_id' => $business->id,
+            'code' => 'PKG-001',
+            'name' => 'Packed Item',
+            'material_cost' => 0,
+            'packaging_cost' => 100,
+            'labor_rate' => 0,
+            'finishing_cost' => 0,
+            'expected_sale_price' => 0,
+            'active' => true,
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'sku_id' => $sku->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'dispatch-with-packaging',
+            'channel' => 'cod',
+            'quantity' => 2,
+            'payload' => ['order_id' => 'PACKAGING-1'],
+            'occurred_at' => now(),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_RETURNED,
+            'external_id' => 'returned-with-packaging',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'leakage_amount' => 40,
+            'payload' => [
+                'order_id' => 'PACKAGING-2',
+                'economics' => ['return_packaging_amount' => 40],
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_RESENT,
+            'external_id' => 'resent-with-packaging',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'direct_cost_amount' => 30,
+            'payload' => [
+                'order_id' => 'PACKAGING-3',
+                'economics' => ['resend_packaging_amount' => 30],
+            ],
+            'occurred_at' => now(),
+        ]);
+
+        Expense::query()->create([
+            'business_id' => $business->id,
+            'category' => 'Marketing',
+            'expense_type' => 'variable',
+            'suggested_key' => 'marketing',
+            'description' => 'Ads',
+            'amount' => 500,
+            'paid_amount' => 500,
+            'spent_on' => now()->toDateString(),
+        ]);
+
+        Expense::query()->create([
+            'business_id' => $business->id,
+            'category' => 'Payment gateway',
+            'expense_type' => 'variable',
+            'suggested_key' => 'payment_gateway',
+            'description' => 'Gateway fee',
+            'amount' => 25,
+            'paid_amount' => 25,
+            'spent_on' => now()->toDateString(),
+        ]);
+
+        BankTransaction::query()->create([
+            'business_id' => $business->id,
+            'transaction_date' => now()->toDateString(),
+            'description' => 'Bank service fee',
+            'debit' => 15,
+            'credit' => 0,
+            'classification' => 'bank_charge',
+            'transaction_type' => null,
+            'status' => 'reviewed',
+        ]);
+
+        $summary = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business);
+
+        $this->assertSame(200.0, (float) $summary['metrics']['initial_packaging_reference_costs']);
+        $this->assertSame(40.0, (float) $summary['metrics']['return_packaging_costs']);
+        $this->assertSame(30.0, (float) $summary['metrics']['resend_packaging_costs']);
+        $this->assertSame(270.0, (float) $summary['metrics']['packaging_costs']);
+        $this->assertSame(500.0, (float) $summary['metrics']['marketing_spend']);
+        $this->assertSame(25.0, (float) $summary['metrics']['bank_payment_charge_expenses']);
+        $this->assertSame(15.0, (float) $summary['metrics']['bank_payment_charge_bank_rows']);
+        $this->assertSame(40.0, (float) $summary['metrics']['bank_payment_charges']);
+        $this->assertSame(610.0, (float) $summary['cost_total']);
+        $this->assertSame(-610.0, (float) $summary['estimated_profit']);
     }
 
     public function test_snapshot_matches_delivery_and_return_with_stable_stock_order_id(): void

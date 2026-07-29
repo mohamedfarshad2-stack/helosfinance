@@ -2,6 +2,7 @@
 
 namespace App\Domains\FinancialClarity\Services;
 
+use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
@@ -135,7 +136,8 @@ class BusinessHealthSnapshotService
         $dispatchedParcelValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->orderValue($event));
         $productionEntries = ProductionEntry::query()
             ->where('business_id', $business->id)
-            ->whereBetween('produced_on', [$start->toDateString(), $end->toDateString()]);
+            ->whereDate('produced_on', '>=', $start->toDateString())
+            ->whereDate('produced_on', '<=', $end->toDateString());
         $productionCosts = (float) (clone $events)
             ->where('source', 'manufacturing')
             ->where('event_type', OperationalEvent::SKU_PRODUCED)
@@ -165,7 +167,10 @@ class BusinessHealthSnapshotService
         $expenseQuery = Expense::query()
             ->where('business_id', $business->id)
             ->where(function ($query) use ($start, $end): void {
-                $query->whereBetween('spent_on', [$start->toDateString(), $end->toDateString()])
+                $query->where(function ($query) use ($start, $end): void {
+                    $query->whereDate('spent_on', '>=', $start->toDateString())
+                        ->whereDate('spent_on', '<=', $end->toDateString());
+                })
                     ->orWhere(function ($query) use ($end): void {
                         $query->where('recurring', true)
                             ->where('expense_type', 'fixed')
@@ -175,6 +180,26 @@ class BusinessHealthSnapshotService
         $expenses = (clone $expenseQuery)->sum('amount');
         $fixedExpenses = (clone $expenseQuery)->where('expense_type', 'fixed')->sum('amount');
         $variableExpenses = (clone $expenseQuery)->where('expense_type', 'variable')->sum('amount');
+        $marketingSpend = $this->expenseCategoryTotal(
+            clone $expenseQuery,
+            ['marketing'],
+            ['marketing', 'ad spend', 'advertising', 'ads']
+        );
+        $bankPaymentChargeExpenses = $this->expenseCategoryTotal(
+            clone $expenseQuery,
+            ['bank_charge', 'payment_gateway', 'payment_fee', 'cod_fee'],
+            ['bank charge', 'bank charges', 'payment fee', 'payment fees', 'payment gateway', 'cod handling fee']
+        );
+        $bankPaymentChargeBankRows = (float) BankTransaction::query()
+            ->where(function ($query) use ($business): void {
+                $query->where('business_id', $business->id)
+                    ->orWhere('allocated_business_id', $business->id);
+            })
+            ->whereDate('transaction_date', '>=', $start->toDateString())
+            ->whereDate('transaction_date', '<=', $end->toDateString())
+            ->where('classification', 'bank_charge')
+            ->sum('debit');
+        $bankPaymentCharges = $bankPaymentChargeExpenses + $bankPaymentChargeBankRows;
         $cashPaid = (clone $expenseQuery)->sum('paid_amount');
         $toSettle = max($expenses - $cashPaid, 0);
         $salaryPressure = Employee::query()
@@ -193,6 +218,14 @@ class BusinessHealthSnapshotService
         $returnImpact = (clone $events)->where('event_type', OperationalEvent::ORDER_RETURNED)->sum('leakage_amount');
         $resendImpact = (clone $events)->where('event_type', OperationalEvent::ORDER_RESENT)->sum('leakage_amount');
         $fakeImpact = (clone $events)->where('event_type', OperationalEvent::FAKE_ORDER_DETECTED)->sum('leakage_amount');
+        $initialPackagingReferenceCosts = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->packagingCostReference($event));
+        $returnPackagingCosts = (float) $orderEvents
+            ->where('event_type', OperationalEvent::ORDER_RETURNED)
+            ->sum(fn (OperationalEvent $event): float => (float) data_get($event->payload, 'economics.return_packaging_amount', 0));
+        $resendPackagingCosts = (float) $orderEvents
+            ->where('event_type', OperationalEvent::ORDER_RESENT)
+            ->sum(fn (OperationalEvent $event): float => (float) data_get($event->payload, 'economics.resend_packaging_amount', 0));
+        $packagingCosts = $initialPackagingReferenceCosts + $returnPackagingCosts + $resendPackagingCosts;
         $courierImpact = (clone $events)
             ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT, OperationalEvent::ORDER_RETURNED])
             ->sum('direct_cost_amount');
@@ -225,7 +258,8 @@ class BusinessHealthSnapshotService
         $topRevenueSku = $this->topSkuByField($latestDeliveredOrderEvents, 'revenue_amount');
         $topExpenseCategories = Expense::query()
             ->where('business_id', $business->id)
-            ->whereBetween('spent_on', [$start->toDateString(), $end->toDateString()])
+            ->whereDate('spent_on', '>=', $start->toDateString())
+            ->whereDate('spent_on', '<=', $end->toDateString())
             ->selectRaw('category, SUM(amount) as total_amount')
             ->groupBy('category')
             ->orderByDesc('total_amount')
@@ -238,7 +272,7 @@ class BusinessHealthSnapshotService
             ->values()
             ->all();
 
-        $costTotal = $directCosts + $expenses + $salaryPressure + $leakage - $recovery;
+        $costTotal = $directCosts + $expenses + $salaryPressure + $bankPaymentChargeBankRows + $leakage - $recovery;
         $profit = $revenue - $costTotal;
         $profitAfterEstimatedProductionCosts = $profit - $missingEstimatedProductionCosts;
 
@@ -277,6 +311,14 @@ class BusinessHealthSnapshotService
                 'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
                 'variable_expenses' => $variableExpenses,
+                'marketing_spend' => $marketingSpend,
+                'bank_payment_charge_expenses' => $bankPaymentChargeExpenses,
+                'bank_payment_charge_bank_rows' => $bankPaymentChargeBankRows,
+                'bank_payment_charges' => $bankPaymentCharges,
+                'packaging_costs' => $packagingCosts,
+                'initial_packaging_reference_costs' => $initialPackagingReferenceCosts,
+                'return_packaging_costs' => $returnPackagingCosts,
+                'resend_packaging_costs' => $resendPackagingCosts,
                 'salary_pressure' => $salaryPressure,
                 'manual_overhead_costs' => $expenses,
                 'cash_paid' => $cashPaid,
@@ -363,6 +405,37 @@ class BusinessHealthSnapshotService
             ?? data_get($event->payload, 'economics.product_cost_amount')
             ?? 0
         ), 0);
+    }
+
+    private function packagingCostReference(OperationalEvent $event): float
+    {
+        if ($event->sku) {
+            return max((float) $event->sku->packaging_cost * max((int) ($event->quantity ?? 1), 1), 0);
+        }
+
+        return max((float) data_get($event->payload, 'economics.packaging_amount', 0), 0);
+    }
+
+    /**
+     * @param  array<int, string>  $keys
+     * @param  array<int, string>  $categories
+     */
+    private function expenseCategoryTotal(mixed $query, array $keys, array $categories): float
+    {
+        $normalizedKeys = array_map(fn (string $key): string => strtolower($key), $keys);
+        $normalizedCategories = array_map(fn (string $category): string => strtolower($category), $categories);
+
+        return (float) $query->get()
+            ->filter(function (Expense $expense) use ($normalizedKeys, $normalizedCategories): bool {
+                $key = strtolower((string) $expense->suggested_key);
+                $category = strtolower((string) $expense->category);
+
+                return in_array($key, $normalizedKeys, true)
+                    || collect($normalizedCategories)->contains(
+                        fn (string $needle): bool => str_contains($category, $needle)
+                    );
+            })
+            ->sum('amount');
     }
 
     private function deliveredCohorts(Business $business, Collection $deliveredEvents, Carbon $start, Carbon $end): array
