@@ -489,7 +489,7 @@
                 <div class="border-b border-gray-200 bg-gradient-to-r from-gray-950 via-cyan-950 to-emerald-950 px-4 py-3 text-white dark:border-gray-800">
                     <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div class="min-w-0">
-                            <div class="text-xs font-black uppercase tracking-wide text-cyan-100">Owner cockpit</div>
+                            <div class="text-xs font-black uppercase tracking-wide text-cyan-100">Owner parcel dashboard</div>
                             <div class="truncate text-xl font-black">{{ $business->name }}</div>
                         </div>
                         <div class="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold text-cyan-100">
