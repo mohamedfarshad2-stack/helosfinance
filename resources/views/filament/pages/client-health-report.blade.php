@@ -642,69 +642,73 @@
                 </div>
             @endif
 
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+            <div class="rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-slate-50 to-cyan-50 p-5 shadow-sm dark:border-gray-800 dark:from-gray-950 dark:via-gray-950 dark:to-cyan-950/20">
                 <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
                         <div class="text-xs font-black uppercase tracking-wide text-gray-500">More detail if needed</div>
                         <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">Open a group only when you want the records behind the total</div>
                     </div>
-                    <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                    <div class="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-950 shadow-sm dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100">
                         One total first, details underneath
                     </div>
                 </div>
 
-                <div class="mt-5 grid gap-4">
+                <div class="mt-5 grid gap-5">
                     @foreach ($dashboardGroups as $group)
                         <div
                             x-data="{ open: {{ $group['open'] ? 'true' : 'false' }} }"
-                            class="overflow-hidden rounded-2xl border shadow-sm ring-1 ring-black/5 dark:ring-white/5 {{ $group['style'] }}"
+                            class="overflow-hidden rounded-2xl border bg-white shadow-md ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:bg-gray-950 dark:ring-white/5 {{ $group['style'] }}"
                         >
+                            <div class="h-2 bg-gradient-to-r {{ $group['accent'] }}"></div>
                             <button
                                 type="button"
                                 x-on:click="open = ! open"
-                                class="grid w-full gap-4 p-5 text-left md:grid-cols-[minmax(0,1fr)_minmax(13rem,auto)_auto] md:items-center"
+                                class="grid w-full gap-5 p-5 text-left md:grid-cols-[minmax(0,1fr)_minmax(18rem,auto)_auto] md:items-center"
                             >
                                 <div class="flex min-w-0 items-center gap-4">
-                                    <div class="rounded-xl bg-gradient-to-br {{ $group['accent'] }} p-3 text-white shadow-sm">
-                                        <x-filament::icon :icon="$group['icon']" class="h-6 w-6" />
+                                    <div class="rounded-2xl bg-gradient-to-br {{ $group['accent'] }} p-4 text-white shadow-lg shadow-black/10">
+                                        <x-filament::icon :icon="$group['icon']" class="h-7 w-7" />
                                     </div>
                                     <div class="min-w-0">
-                                        <div class="text-xs font-black uppercase tracking-wide opacity-70">{{ $group['title'] }}</div>
-                                        <div class="mt-1 text-sm font-semibold leading-5 opacity-80">{{ $group['label'] }}</div>
+                                        <div class="inline-flex rounded-full bg-white/70 px-3 py-1 text-xs font-black uppercase tracking-wide shadow-sm dark:bg-gray-950/50">{{ $group['title'] }}</div>
+                                        <div class="mt-3 text-lg font-black leading-6 text-gray-950 dark:text-white">{{ $group['label'] }}</div>
                                     </div>
                                 </div>
-                                <div class="rounded-xl bg-white/70 px-4 py-3 text-left shadow-sm dark:bg-gray-950/50 md:text-right">
-                                    <div class="text-2xl font-black text-gray-950 dark:text-white">{{ $group['value'] }}</div>
-                                    <div class="mt-1 text-xs font-bold opacity-75">{{ $group['helper'] }}</div>
+                                <div class="rounded-2xl border border-current/15 bg-white/85 px-5 py-4 text-left shadow-sm dark:bg-gray-950/65 md:text-right">
+                                    <div class="text-xs font-black uppercase tracking-wide opacity-60">Total</div>
+                                    <div class="mt-1 text-3xl font-black leading-tight text-gray-950 dark:text-white">{{ $group['value'] }}</div>
+                                    <div class="mt-2 text-sm font-black opacity-80">{{ $group['helper'] }}</div>
                                 </div>
-                                <x-filament::icon
-                                    icon="heroicon-o-chevron-down"
-                                    class="h-5 w-5 shrink-0 justify-self-end transition"
-                                    x-bind:class="open ? 'rotate-180' : ''"
-                                />
+                                <div class="rounded-full bg-white/70 p-2 shadow-sm dark:bg-gray-950/60">
+                                    <x-filament::icon
+                                        icon="heroicon-o-chevron-down"
+                                        class="h-5 w-5 shrink-0 transition"
+                                        x-bind:class="open ? 'rotate-180' : ''"
+                                    />
+                                </div>
                             </button>
 
-                            <div x-show="open" class="border-t border-current/10 bg-white/55 p-4 dark:bg-gray-950/35">
+                            <div x-show="open" class="border-t border-current/10 bg-white/70 p-4 dark:bg-gray-950/45">
                                 <div class="grid gap-3 xl:grid-cols-2">
                                     @foreach ($group['details'] as $card)
-                                        <div class="rounded-xl border border-current/10 bg-white/80 p-4 shadow-sm dark:bg-gray-950/60">
+                                        <div class="rounded-xl border p-4 shadow-sm {{ $card['style'] ?? 'border-gray-200 bg-white text-gray-950 dark:border-gray-800 dark:bg-gray-950 dark:text-white' }}">
                                             <div class="grid h-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(9rem,auto)]">
                                                 <div class="min-w-0">
                                                     <div class="flex items-center gap-2">
-                                                        <div class="rounded-lg bg-gray-100 p-1.5 text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                                        <div class="rounded-lg bg-white/75 p-1.5 text-gray-700 shadow-sm dark:bg-gray-950/60 dark:text-gray-200">
                                                             <x-filament::icon :icon="$card['icon']" class="h-4 w-4" />
                                                         </div>
-                                                        <div class="text-sm font-black text-gray-950 dark:text-white">{{ $card['label'] }}</div>
+                                                        <div class="text-sm font-black">{{ $card['label'] }}</div>
                                                     </div>
                                                     <div class="mt-2 text-xs font-semibold opacity-75">{{ $card['count'] }}</div>
                                                     <div class="mt-2 text-xs leading-5 opacity-75">{{ $card['hint'] }}</div>
                                                 </div>
                                                 <div class="flex flex-col items-start justify-between gap-3 lg:items-end lg:text-right">
-                                                    <div class="text-xl font-black text-gray-950 dark:text-white">{{ $card['value'] }}</div>
+                                                    <div class="text-2xl font-black">{{ $card['value'] }}</div>
                                                     @if (filled($card['action_url'] ?? null))
                                                         <a
                                                             href="{{ $card['action_url'] }}"
-                                                            class="mt-3 inline-flex items-center gap-2 rounded-lg border border-current/20 bg-white/80 px-3 py-2 text-xs font-bold shadow-sm transition hover:bg-white dark:bg-gray-950/70 dark:hover:bg-gray-950"
+                                                            class="mt-3 inline-flex items-center gap-2 rounded-lg border border-current/20 bg-white/80 px-3 py-2 text-xs font-black shadow-sm transition hover:bg-white dark:bg-gray-950/70 dark:hover:bg-gray-950"
                                                         >
                                                             <x-filament::icon icon="heroicon-o-pencil-square" class="h-4 w-4" />
                                                             {{ $card['action_label'] ?? 'Open records' }}
