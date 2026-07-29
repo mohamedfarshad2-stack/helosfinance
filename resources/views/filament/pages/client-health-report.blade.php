@@ -53,6 +53,8 @@
                 $deliveredCount = (int) data_get($metrics, 'order_counts.delivered', 0);
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
+                $returnCourierCosts = (float) data_get($metrics, 'return_courier_costs', 0);
+                $averageReturnCourierCost = $returnedCount > 0 ? $returnCourierCosts / $returnedCount : 0;
                 $dispatchCount = (int) data_get($metrics, 'dispatched_parcel_count', 0);
                 $deliveredDispatchCohorts = (array) data_get($metrics, 'delivered_dispatch_cohorts', data_get($metrics, 'delivered_cohorts', []));
                 $currentMonthDeliveredCount = (int) data_get($deliveredDispatchCohorts, 'dispatched_this_period.count', data_get($deliveredDispatchCohorts, 'confirmed_this_month.count', 0));
@@ -73,7 +75,7 @@
                 $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($ownerDeliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
-                $ownerCourierCosts = $currentMonthDeliveredCourierCosts + (float) data_get($metrics, 'return_courier_costs', 0);
+                $ownerCourierCosts = $currentMonthDeliveredCourierCosts + $returnCourierCosts;
                 $salesAfterDeliveryCourier = $ownerDeliveredRevenue - $currentMonthDeliveredCourierCosts;
                 $deliveredAfterCourier = $ownerDeliveredRevenue - $ownerCourierCosts;
                 $grossAfterProduction = $deliveredAfterCourier - $productionCostForOwner;
@@ -111,9 +113,11 @@
                     ],
                     [
                         'label' => 'Return courier loss',
-                        'amount' => -(float) data_get($metrics, 'return_courier_costs', 0),
-                        'display' => '- '.$money(data_get($metrics, 'return_courier_costs', 0)),
-                        'note' => 'Courier loss from returned parcels in this selected period.',
+                        'amount' => -$returnCourierCosts,
+                        'display' => '- '.$money($returnCourierCosts),
+                        'note' => $returnedCount > 0
+                            ? $number($returnedCount).' returned parcel(s) x '.$money($averageReturnCourierCost).' average return charge.'
+                            : 'Courier loss from returned parcels in this selected period.',
                         'tone' => 'text-rose-700 dark:text-rose-300',
                         'icon' => 'heroicon-o-arrow-uturn-left',
                     ],
@@ -323,9 +327,9 @@
                     ],
                     [
                         'label' => 'Courier costs',
-                        'count' => 'Delivered + returned charges',
+                        'count' => $number($ownerDeliveredCount).' delivered / '.$number($returnedCount).' returned',
                         'value' => $money($ownerCourierCosts),
-                        'hint' => $money($currentMonthDeliveredCourierCosts).' verified delivered / '.$money(data_get($metrics, 'return_courier_costs', 0)).' returned. Total delivered-status courier in data: '.$money(data_get($metrics, 'delivered_courier_costs', 0)).'.',
+                        'hint' => $money($currentMonthDeliveredCourierCosts).' verified delivery courier + '.$money($returnCourierCosts).' return courier. Return average: '.$money($averageReturnCourierCost).' per returned parcel.',
                         'icon' => 'heroicon-o-map-pin',
                         'style' => 'border-orange-200 bg-orange-50 text-orange-950 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-100',
                         'action_label' => 'Open courier setup',
