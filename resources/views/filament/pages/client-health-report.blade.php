@@ -39,6 +39,12 @@
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
                 $dispatchCount = (int) data_get($metrics, 'dispatched_parcel_count', 0);
+                $deliveredCohorts = (array) data_get($metrics, 'delivered_cohorts', []);
+                $currentMonthDeliveredCount = (int) data_get($deliveredCohorts, 'confirmed_this_month.count', 0);
+                $currentMonthDeliveredValue = (float) data_get($deliveredCohorts, 'confirmed_this_month.value', 0);
+                $carryoverDeliveredCount = (int) data_get($deliveredCohorts, 'carryover_from_earlier_months.count', 0);
+                $carryoverDeliveredValue = (float) data_get($deliveredCohorts, 'carryover_from_earlier_months.value', 0);
+                $missingConfirmationDeliveredCount = (int) data_get($deliveredCohorts, 'confirmation_missing.count', 0);
                 $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($deliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
@@ -57,7 +63,7 @@
                     [
                         'label' => 'Delivered sales',
                         'value' => $money($deliveredRevenue),
-                        'helper' => $number($deliveredCount).' delivered parcel(s)',
+                        'helper' => $number($currentMonthDeliveredCount).' this month / '.$number($carryoverDeliveredCount).' carryover',
                         'icon' => 'heroicon-o-check-circle',
                         'style' => 'from-emerald-500 to-teal-500',
                     ],
@@ -141,9 +147,25 @@
                         'label' => 'Delivered sales',
                         'count' => $number($deliveredCount).' parcels',
                         'value' => $money($deliveredRevenue),
-                        'hint' => 'Only successfully delivered parcels are counted as sales.',
+                        'hint' => 'All parcels delivered in this period, including current-month orders and old carryovers.',
                         'icon' => 'heroicon-o-check-badge',
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
+                    ],
+                    [
+                        'label' => 'This month orders delivered',
+                        'count' => $number($currentMonthDeliveredCount).' parcels',
+                        'value' => $money($currentMonthDeliveredValue),
+                        'hint' => 'Pure current-month orders: confirmed in this period and delivered in this period.',
+                        'icon' => 'heroicon-o-calendar-days',
+                        'style' => 'border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100',
+                    ],
+                    [
+                        'label' => 'Carryover delivered',
+                        'count' => $number($carryoverDeliveredCount).' parcels',
+                        'value' => $money($carryoverDeliveredValue),
+                        'hint' => 'Older orders confirmed before this period but delivered now. Keep separate from pure current-month delivery.',
+                        'icon' => 'heroicon-o-arrow-path',
+                        'style' => 'border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100',
                     ],
                     [
                         'label' => $profitLabel,
@@ -233,7 +255,12 @@
 
                         <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
                             <div class="font-black text-gray-950 dark:text-white">Simple owner rule</div>
-                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Dispatched this period can be lower than delivered sales when older parcels are delivered now.</p>
+                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Pure this-month delivery is separated from carryover delivery so old parcel recovery does not hide current-month performance.</p>
+                            @if ($missingConfirmationDeliveredCount > 0)
+                                <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                                    {{ $number($missingConfirmationDeliveredCount) }} delivered parcel(s) are missing confirmation dates, so HELOS cannot classify them as this-month or carryover yet.
+                                </p>
+                            @endif
                         </div>
                     </div>
                 </div>
