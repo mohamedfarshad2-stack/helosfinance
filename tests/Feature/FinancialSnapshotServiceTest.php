@@ -404,13 +404,13 @@ class FinancialSnapshotServiceTest extends TestCase
         $cohorts = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business)['metrics']['delivered_cohorts'];
         $dispatchCohorts = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business)['metrics']['delivered_dispatch_cohorts'];
 
-        $this->assertSame(['count' => 1, 'value' => 3000.0], $cohorts['confirmed_this_month']);
-        $this->assertSame(['count' => 1, 'value' => 4000.0], $cohorts['carryover_from_earlier_months']);
-        $this->assertSame(['count' => 1, 'value' => 2000.0], $cohorts['confirmation_missing']);
-        $this->assertSame(['count' => 0, 'value' => 0.0], $cohorts['invalid_confirmation_sequence']);
-        $this->assertSame(['count' => 1, 'value' => 3000.0], $dispatchCohorts['dispatched_this_period']);
-        $this->assertSame(['count' => 1, 'value' => 4000.0], $dispatchCohorts['dispatched_before_period']);
-        $this->assertSame(['count' => 1, 'value' => 2000.0], $dispatchCohorts['dispatch_missing']);
-        $this->assertSame(['count' => 0, 'value' => 0.0], $dispatchCohorts['invalid_dispatch_sequence']);
+        $this->assertSame(['count' => 1, 'value' => 3000.0, 'courier_cost' => 0.0], $cohorts['confirmed_this_month']);
+        $this->assertSame(['count' => 1, 'value' => 4000.0, 'courier_cost' => 0.0], $cohorts['carryover_from_earlier_months']);
+        $this->assertSame(['count' => 1, 'value' => 2000.0, 'courier_cost' => 0.0], $cohorts['confirmation_missing']);
+        $this->assertSame(['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0], $cohorts['invalid_confirmation_sequence']);
+        $this->assertSame(['count' => 1, 'value' => 3000.0, 'courier_cost' => 0.0], $dispatchCohorts['dispatched_this_period']);
+        $this->assertSame(['count' => 1, 'value' => 4000.0, 'courier_cost' => 0.0], $dispatchCohorts['dispatched_before_period']);
+        $this->assertSame(['count' => 1, 'value' => 2000.0, 'courier_cost' => 0.0], $dispatchCohorts['dispatch_missing']);
+        $this->assertSame(['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0], $dispatchCohorts['invalid_dispatch_sequence']);
     }
 }

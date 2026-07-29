@@ -448,10 +448,10 @@ class BusinessHealthSnapshotService
             ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event));
 
         $cohorts = [
-            'confirmed_this_month' => ['count' => 0, 'value' => 0.0],
-            'carryover_from_earlier_months' => ['count' => 0, 'value' => 0.0],
-            'confirmation_missing' => ['count' => 0, 'value' => 0.0],
-            'invalid_confirmation_sequence' => ['count' => 0, 'value' => 0.0],
+            'confirmed_this_month' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
+            'carryover_from_earlier_months' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
+            'confirmation_missing' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
+            'invalid_confirmation_sequence' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
         ];
 
         foreach ($deliveredEvents as $delivered) {
@@ -471,12 +471,14 @@ class BusinessHealthSnapshotService
 
             $cohorts[$key]['count']++;
             $cohorts[$key]['value'] += $value;
+            $cohorts[$key]['courier_cost'] += max((float) $delivered->direct_cost_amount, 0);
         }
 
         return collect($cohorts)
             ->map(fn (array $cohort): array => [
                 'count' => (int) $cohort['count'],
                 'value' => round((float) $cohort['value'], 2),
+                'courier_cost' => round((float) $cohort['courier_cost'], 2),
             ])
             ->all();
     }
@@ -494,10 +496,10 @@ class BusinessHealthSnapshotService
             ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event));
 
         $cohorts = [
-            'dispatched_this_period' => ['count' => 0, 'value' => 0.0],
-            'dispatched_before_period' => ['count' => 0, 'value' => 0.0],
-            'dispatch_missing' => ['count' => 0, 'value' => 0.0],
-            'invalid_dispatch_sequence' => ['count' => 0, 'value' => 0.0],
+            'dispatched_this_period' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
+            'dispatched_before_period' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
+            'dispatch_missing' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
+            'invalid_dispatch_sequence' => ['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0],
         ];
 
         foreach ($deliveredEvents as $delivered) {
@@ -517,12 +519,14 @@ class BusinessHealthSnapshotService
 
             $cohorts[$key]['count']++;
             $cohorts[$key]['value'] += $value;
+            $cohorts[$key]['courier_cost'] += max((float) $delivered->direct_cost_amount, 0);
         }
 
         return collect($cohorts)
             ->map(fn (array $cohort): array => [
                 'count' => (int) $cohort['count'],
                 'value' => round((float) $cohort['value'], 2),
+                'courier_cost' => round((float) $cohort['courier_cost'], 2),
             ])
             ->all();
     }

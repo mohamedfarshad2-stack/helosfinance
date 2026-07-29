@@ -65,29 +65,36 @@
                 $invalidDispatchDeliveredValue = (float) data_get($deliveredDispatchCohorts, 'invalid_dispatch_sequence.value', data_get($deliveredDispatchCohorts, 'invalid_confirmation_sequence.value', 0));
                 $unknownMonthDeliveredCount = $missingDispatchDeliveredCount + $invalidDispatchDeliveredCount;
                 $unknownMonthDeliveredValue = $missingDispatchDeliveredValue + $invalidDispatchDeliveredValue;
-                $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($deliveredCount / $dispatchCount) * 100)) : 0;
+                $currentMonthDeliveredCourierCosts = (float) data_get($deliveredDispatchCohorts, 'dispatched_this_period.courier_cost', 0);
+                $ownerDeliveredRevenue = $currentMonthDeliveredValue;
+                $ownerDeliveredCount = $currentMonthDeliveredCount;
+                $deliveredDataCheckValue = max($deliveredRevenue - $ownerDeliveredRevenue, 0);
+                $deliveredDataCheckCount = max($deliveredCount - $ownerDeliveredCount, 0);
+                $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($ownerDeliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
-                $deliveredAfterCourier = $deliveredRevenue - $courierCosts;
+                $ownerCourierCosts = $currentMonthDeliveredCourierCosts + (float) data_get($metrics, 'return_courier_costs', 0);
+                $deliveredAfterCourier = $ownerDeliveredRevenue - $ownerCourierCosts;
                 $grossAfterProduction = $deliveredAfterCourier - $productionCostForOwner;
-                $otherParcelAdjustments = $allCosts - $courierCosts - $productionCostForOwner - $companyCostsEntered;
+                $otherParcelAdjustments = (float) $snapshot->leakage_total - (float) data_get($metrics, 'recovered_value', 0);
+                $profitForOwner = $grossAfterProduction - $companyCostsEntered - $otherParcelAdjustments;
                 $otherParcelAdjustmentLabel = $otherParcelAdjustments >= 0 ? 'Other parcel losses / adjustments' : 'Recoveries reducing costs';
                 $profitTrustNote = $productionCostTrusted
                     ? 'Not final company net profit. HELOS can only subtract overheads, salaries, marketing, utilities, rent, expenses, leakage and recoveries that are entered.'
                     : 'Not fully trusted until Nifras enters production data for this period.';
                 $profitStatementRows = [
                     [
-                        'label' => 'Delivered sales before courier',
-                        'amount' => $deliveredRevenue,
-                        'display' => $money($deliveredRevenue),
-                        'note' => $number($deliveredCount).' delivered parcels. This is revenue before courier cost.',
+                        'label' => 'Verified period delivered sales',
+                        'amount' => $ownerDeliveredRevenue,
+                        'display' => $money($ownerDeliveredRevenue),
+                        'note' => $number($ownerDeliveredCount).' parcel(s) dispatched in this period and delivered in this period. This is the owner revenue input.',
                         'tone' => 'text-emerald-700 dark:text-emerald-300',
                     ],
                     [
                         'label' => 'Delivery + return courier cost',
-                        'amount' => -$courierCosts,
-                        'display' => '- '.$money($courierCosts),
-                        'note' => $money(data_get($metrics, 'delivered_courier_costs', 0)).' delivery / '.$money(data_get($metrics, 'return_courier_costs', 0)).' return',
+                        'amount' => -$ownerCourierCosts,
+                        'display' => '- '.$money($ownerCourierCosts),
+                        'note' => $money($currentMonthDeliveredCourierCosts).' delivery for verified period sales / '.$money(data_get($metrics, 'return_courier_costs', 0)).' return',
                         'tone' => 'text-orange-700 dark:text-orange-300',
                     ],
                     [
@@ -146,8 +153,8 @@
                         : 'The selected period is negative after known HELOS costs. This can happen when delivered sales are lower than recorded courier, production, salary, overhead, expense, leakage, and estimated missing production costs.');
                 $heroStats = [
                     [
-                        'label' => 'Delivered sales before courier',
-                        'value' => $money($deliveredRevenue),
+                        'label' => 'Verified delivered sales',
+                        'value' => $money($ownerDeliveredRevenue),
                         'helper' => 'Courier is deducted below',
                         'icon' => 'heroicon-o-check-circle',
                         'style' => 'from-emerald-500 to-teal-500',
@@ -187,7 +194,7 @@
                     [
                         'title' => 'Finance view',
                         'kicker' => 'Cost control',
-                        'value' => $money($companyCostsEntered + $courierCosts + $productionCostForOwner),
+                        'value' => $money($companyCostsEntered + $ownerCourierCosts + $productionCostForOwner),
                         'body' => 'Owner costs are split into expenses, salaries, courier, packaging, marketing, bank charges, recorded production, and estimated missing production. Final profit is trusted only when entries are complete.',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
@@ -291,8 +298,8 @@
                     [
                         'label' => 'Courier costs',
                         'count' => 'Delivered + returned charges',
-                        'value' => $money($courierCosts),
-                        'hint' => $money(data_get($metrics, 'delivered_courier_costs', 0)).' delivered / '.$money(data_get($metrics, 'return_courier_costs', 0)).' returned',
+                        'value' => $money($ownerCourierCosts),
+                        'hint' => $money($currentMonthDeliveredCourierCosts).' verified delivered / '.$money(data_get($metrics, 'return_courier_costs', 0)).' returned. Total delivered-status courier in data: '.$money(data_get($metrics, 'delivered_courier_costs', 0)).'.',
                         'icon' => 'heroicon-o-map-pin',
                         'style' => 'border-orange-200 bg-orange-50 text-orange-950 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-100',
                         'action_label' => 'Open courier setup',
@@ -335,6 +342,16 @@
                         'style' => 'border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100',
                     ],
                     [
+                        'label' => 'Delivered rows not used for owner profit',
+                        'count' => $number($deliveredDataCheckCount).' parcels',
+                        'value' => $money($deliveredDataCheckValue),
+                        'hint' => 'Delivered status rows outside the verified period-dispatch rule. HELOS keeps them visible for audit, but does not use them as the owner profit revenue input.',
+                        'icon' => 'heroicon-o-exclamation-triangle',
+                        'style' => $deliveredDataCheckValue > 0
+                            ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'
+                            : 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100',
+                    ],
+                    [
                         'label' => $profitLabel,
                         'count' => $profitHelper,
                         'value' => $money($profitForOwner),
@@ -349,9 +366,9 @@
                 $dashboardGroups = [
                     [
                         'title' => 'Revenue',
-                        'label' => 'Delivered sales counted as revenue',
-                        'value' => $money($deliveredRevenue),
-                        'helper' => $number($deliveredCount).' delivered parcels',
+                        'label' => 'Verified period delivered sales used for owner profit',
+                        'value' => $money($ownerDeliveredRevenue),
+                        'helper' => $number($ownerDeliveredCount).' parcel(s) dispatched and delivered in this period',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
                         'accent' => 'from-emerald-500 to-teal-500',
@@ -359,6 +376,7 @@
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('This period dispatches delivered'),
                             $cardsByLabel->get('Earlier dispatches delivered'),
+                            $cardsByLabel->get('Delivered rows not used for owner profit'),
                         ])),
                     ],
                     [
@@ -427,14 +445,14 @@
                     ],
                 ];
                 $bridge = [
-                    ['label' => 'Delivered sales', 'value' => $deliveredRevenue, 'color' => 'bg-emerald-500'],
+                    ['label' => 'Verified delivered sales', 'value' => $ownerDeliveredRevenue, 'color' => 'bg-emerald-500'],
                     ['label' => 'Recorded production cost', 'value' => -$productCosts, 'color' => 'bg-violet-500'],
                     ['label' => 'Estimated missing production', 'value' => -$missingEstimatedProductionCosts, 'color' => 'bg-rose-500'],
                     ['label' => 'Other known HELOS costs', 'value' => -$otherKnownCosts, 'color' => 'bg-orange-500'],
                     ['label' => $profitLabel, 'value' => $profitForOwner, 'color' => $profitForOwner >= 0 && $productionCostTrusted ? 'bg-lime-500' : 'bg-rose-500'],
                     ['label' => 'Parcel gross before overhead', 'value' => $grossProfit, 'color' => $grossProfit >= 0 ? 'bg-cyan-500' : 'bg-rose-400'],
                 ];
-                $maxBridge = max(abs($deliveredRevenue), abs($allCosts), abs($profitForOwner), abs($grossProfit), 1);
+                $maxBridge = max(abs($ownerDeliveredRevenue), abs($allCosts), abs($profitForOwner), abs($grossProfit), 1);
             @endphp
 
             <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
