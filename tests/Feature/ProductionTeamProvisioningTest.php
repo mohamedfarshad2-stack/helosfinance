@@ -84,7 +84,7 @@ class ProductionTeamProvisioningTest extends TestCase
         $this->assertSame($nifras->id, $arafath->supervisor_user_id);
         $this->assertSame($nifras->id, $sandamali->supervisor_user_id);
         $this->assertEqualsCanonicalizing(
-            ['supervisor_review', 'order_confirmation', 'return_recovery'],
+            ['supervisor_review', 'order_confirmation', 'delivery_follow_up', 'return_recovery'],
             StaffResponsibilityAssignment::query()
                 ->where('user_id', $sandamali->id)
                 ->where('is_active', true)

@@ -250,6 +250,7 @@ class User extends Authenticatable implements FilamentUser
         return [
             'order_confirmation' => 'Order confirmation',
             'dispatch' => 'Dispatch',
+            'delivery_follow_up' => 'Delivery follow-up',
             'return_recovery' => 'Returns and resends',
             'production' => 'Production and piece pay',
             'material_stock' => 'Material stock',
@@ -340,11 +341,11 @@ class User extends Authenticatable implements FilamentUser
         }
 
         return match ($this->employeeAccessProfileValue()) {
-            'work_only' => ['order_confirmation', 'dispatch', 'return_recovery'],
-            'operations' => ['order_confirmation', 'dispatch', 'return_recovery', 'production', 'material_stock', 'product_repair'],
+            'work_only' => ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'],
+            'operations' => ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery', 'production', 'material_stock', 'product_repair'],
             'finance_ops' => ['expense_recording', 'collections', 'bank_exceptions', 'product_repair'],
             'full_staff' => array_values(array_diff($valid, ['supervisor_review'])),
-            default => ['order_confirmation', 'dispatch', 'return_recovery'],
+            default => ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'],
         };
     }
 
@@ -359,7 +360,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessOrderWork(?int $businessId = null): bool
     {
-        return $this->hasStaffResponsibility(['order_confirmation', 'dispatch', 'return_recovery'], $businessId);
+        return $this->hasStaffResponsibility(['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'], $businessId);
     }
 
     public function canAccessProductionWork(?int $businessId = null): bool

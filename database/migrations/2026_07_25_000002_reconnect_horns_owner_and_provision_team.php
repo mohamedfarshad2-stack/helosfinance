@@ -59,7 +59,7 @@ return new class extends Migration
                 'name' => 'sandamali',
                 'email' => 'nisansalasandamalinew1@gmail.com',
                 'role' => 'CSR Team Leader',
-                'responsibilities' => ['supervisor_review', 'order_confirmation', 'return_recovery'],
+                'responsibilities' => ['supervisor_review', 'order_confirmation', 'delivery_follow_up', 'return_recovery'],
                 'supervisor' => 'Nifras',
                 'supervisor_access' => true,
             ],

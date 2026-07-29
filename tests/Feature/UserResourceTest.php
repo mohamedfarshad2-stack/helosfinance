@@ -626,6 +626,18 @@ class UserResourceTest extends TestCase
         $this->assertSame('full_staff', $supervisor['employee_access_profile']);
         $this->assertSame(['supervisor_review'], $supervisor['staff_responsibilities']);
         $this->assertTrue($supervisor['is_staff_supervisor']);
+
+        $deliveryFollowUp = $this->mutateCreateUserData([
+            'name' => 'Delivery Follow Up',
+            'email' => 'delivery-follow-up@example.com',
+            'password' => 'password',
+            'business_id' => $business->id,
+            'staff_role_preset' => 'delivery_follow_up',
+        ]);
+
+        $this->assertSame('operations', $deliveryFollowUp['employee_access_profile']);
+        $this->assertSame(['delivery_follow_up'], $deliveryFollowUp['staff_responsibilities']);
+        $this->assertFalse($deliveryFollowUp['is_staff_supervisor']);
     }
 
     public function test_invalid_responsibility_codes_are_rejected(): void

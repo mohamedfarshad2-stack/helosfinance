@@ -407,7 +407,7 @@ class TodaysWork extends Page
                     ->where('due_at', '<', today())
                     ->count();
 
-                if (in_array('dispatch', $responsibilities, true)) {
+                if (in_array('dispatch', $responsibilities, true) || in_array('delivery_follow_up', $responsibilities, true)) {
                     $signals[] = ['label' => 'Delivery contribution required', 'display' => $requiredDeliveries === null ? 'Waiting for enough delivery and cost data' : number_format($requiredDeliveries).' additional deliveries shared across operations'];
                 }
 
@@ -503,7 +503,7 @@ class TodaysWork extends Page
             : null;
 
         $responsibilities = $user->staffResponsibilities($this->business->id);
-        $deliveryRoles = ['order_confirmation', 'dispatch', 'return_recovery'];
+        $deliveryRoles = ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'];
         $supportsDeliveries = array_intersect($responsibilities, $deliveryRoles) !== [];
         $deliveryStaffCount = User::query()
             ->where('business_id', $this->business->id)
@@ -540,9 +540,15 @@ class TodaysWork extends Page
                         'tone' => 'blue',
                     ],
                     'dispatch' => [
-                        'label' => 'Protect today\'s deliveries',
-                        'target' => $personalDeliveryTarget ? $personalDeliveryTarget.' deliveries to support' : 'Clear today\'s dispatch missions',
+                        'label' => 'Move confirmed orders to courier',
+                        'target' => 'Clear today\'s dispatch missions',
                         'action' => 'Add tracking and move confirmed parcels to the courier without delay.',
+                        'tone' => 'emerald',
+                    ],
+                    'delivery_follow_up' => [
+                        'label' => 'Push not-delivered parcels to delivered',
+                        'target' => $personalDeliveryTarget ? $personalDeliveryTarget.' deliveries to support' : 'Clear today\'s delivery follow-up missions',
+                        'action' => 'Check dispatched parcels, call customers, solve courier/address issues, and update delivery status in Stock App.',
                         'tone' => 'emerald',
                     ],
                     'return_recovery' => [
@@ -643,7 +649,8 @@ class TodaysWork extends Page
         return match ($responsibility) {
             'order_confirmation' => 'Verify customer intent, phone, address, product, size, and value quickly; resolve no-answer orders through structured follow-up.',
             'return_recovery' => 'Contact returned and failed-delivery customers, identify the real cause, and recover suitable orders through correction or resend.',
-            'dispatch' => 'Move confirmed orders to courier without avoidable delay and ensure tracking and delivery status are complete.',
+            'dispatch' => 'Move confirmed orders to courier without avoidable delay and make sure tracking is complete.',
+            'delivery_follow_up' => 'Follow dispatched parcels that are not delivered yet, solve customer or courier blockers, and push them to delivered status.',
             'product_repair' => 'Link missing Stock App product descriptions to the correct HELOAS SKU so product cost and profit become trustworthy.',
             'material_stock' => 'Keep material receipts, usage, waste, and stock balances accurate before shortages interrupt production.',
             'supervisor_review' => 'Review overdue, blocked, and submitted work; coach the responsible employee and escalate only unresolved business risks.',
@@ -660,7 +667,8 @@ class TodaysWork extends Page
         return match ($responsibility) {
             'order_confirmation' => 'Increase valid confirmed sales and reduce fake, duplicate, or unreachable orders.',
             'return_recovery' => 'Reduce return leakage and recover revenue that would otherwise be lost.',
-            'dispatch' => 'Shorten order-to-courier time and prevent confirmed revenue from getting stuck.',
+            'dispatch' => 'Shorten order-to-courier time and prevent confirmed orders from getting stuck before dispatch.',
+            'delivery_follow_up' => 'Convert dispatched parcel value into delivered revenue while keeping the employee view action-only.',
             'product_repair' => 'Make SKU-level margin reliable and expose loss-making products.',
             'material_stock' => 'Avoid emergency buying, excess stock, shortages, and unrecorded waste.',
             'supervisor_review' => 'Prevent overdue work and repeated employee blockers from becoming revenue or cost leakage.',
@@ -709,7 +717,7 @@ class TodaysWork extends Page
 
     private function missionWorkplace(Mission $mission): string
     {
-        return in_array($mission->responsibility_code, ['order_confirmation', 'return_recovery', 'dispatch'], true)
+        return in_array($mission->responsibility_code, ['order_confirmation', 'return_recovery', 'dispatch', 'delivery_follow_up'], true)
             ? 'stock_app'
             : 'helos';
     }
@@ -732,7 +740,8 @@ class TodaysWork extends Page
     private function taskResponsibility(array $task): ?string
     {
         return match ((string) ($task['work_type'] ?? 'general')) {
-            'order_tracking', 'tracking_added', 'delivery_follow_up', 'order_delivery' => 'dispatch',
+            'order_tracking', 'tracking_added' => 'dispatch',
+            'delivery_follow_up', 'order_delivery' => 'delivery_follow_up',
             'return_action', 'resend_follow_up' => 'return_recovery',
             'fake_order_check' => 'order_confirmation',
             'wholesale_collection', 'service_collection' => 'collections',
@@ -743,7 +752,7 @@ class TodaysWork extends Page
             'bank_transfer_destination',
             'bank_transfer_confirmation' => 'bank_exceptions',
             'expense_settlement' => 'expense_recording',
-            'production_payout', 'production_waste' => 'production',
+            'production_daily_entry', 'production_payout', 'production_waste' => 'production',
             'missing_material_sku', 'stock_movement' => 'material_stock',
             'missing_product_links' => 'product_repair',
             default => null,

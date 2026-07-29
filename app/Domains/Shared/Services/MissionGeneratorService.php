@@ -171,7 +171,8 @@ class MissionGeneratorService
     private function responsibilityForTask(array $task): ?string
     {
         return match ((string) ($task['work_type'] ?? 'general')) {
-            'order_tracking', 'tracking_added', 'delivery_follow_up', 'order_delivery' => 'dispatch',
+            'order_tracking', 'tracking_added' => 'dispatch',
+            'delivery_follow_up', 'order_delivery' => 'delivery_follow_up',
             'return_action', 'resend_follow_up' => 'return_recovery',
             'fake_order_check' => 'order_confirmation',
             'wholesale_collection', 'service_collection' => 'collections',
@@ -182,7 +183,7 @@ class MissionGeneratorService
             'bank_transfer_destination',
             'bank_transfer_confirmation' => 'bank_exceptions',
             'expense_settlement' => 'expense_recording',
-            'production_payout', 'production_waste' => 'production',
+            'production_daily_entry', 'production_payout', 'production_waste' => 'production',
             'missing_material_sku', 'stock_movement' => 'material_stock',
             'missing_product_links' => 'product_repair',
             default => null,
@@ -226,7 +227,7 @@ class MissionGeneratorService
     private function impactTypeForResponsibility(?string $responsibility): ?string
     {
         return match ($responsibility) {
-            'dispatch' => 'revenue_protected',
+            'dispatch', 'delivery_follow_up' => 'revenue_protected',
             'return_recovery' => 'revenue_recoverable',
             'collections' => 'cash_collectible',
             'bank_exceptions', 'product_repair' => 'financial_truth_blocked',

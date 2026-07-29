@@ -46,7 +46,7 @@ class CodOrderResource extends Resource
 
     protected static function businessScopeResponsibilities(): array
     {
-        return ['order_confirmation', 'dispatch', 'return_recovery'];
+        return ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'];
     }
 
     public static function form(Form $form): Form

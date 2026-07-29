@@ -22,7 +22,7 @@ return new class extends Migration
         $approved = [
             'nifras@helos.com' => ['supervisor_review', 'production', 'expense_recording'],
             'arafath@helos.com' => ['dispatch', 'product_repair', 'material_stock'],
-            'sandhamali@helos.com' => ['supervisor_review', 'order_confirmation', 'return_recovery'],
+            'sandhamali@helos.com' => ['supervisor_review', 'order_confirmation', 'delivery_follow_up', 'return_recovery'],
         ];
 
         $canonicalIds = [];

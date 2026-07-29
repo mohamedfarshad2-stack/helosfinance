@@ -348,6 +348,10 @@ class WorkQueueService
 
     private function productionTasks(Business $business): array
     {
+        $hasTodayProduction = ProductionEntry::query()
+            ->where('business_id', $business->id)
+            ->whereDate('produced_on', today())
+            ->exists();
         $openRows = ProductionEntry::query()
             ->where('business_id', $business->id)
             ->where('payment_status', 'pending')
@@ -363,6 +367,22 @@ class WorkQueueService
             ->get();
 
         return [
+            ...(! $hasTodayProduction ? [$this->makeTask([
+                'id' => 'production-daily-entry-'.today()->toDateString(),
+                'queue' => 'pending',
+                'state' => 'open',
+                'priority' => 'high',
+                'title' => 'Enter today\'s completed production',
+                'why_it_matters' => 'Owner production cost is not trusted until daily output, waste, material use, and piece-pay are entered.',
+                'recommended_action' => 'Open Production and add today\'s item code, quantity, worker, waste, and piece-pay details.',
+                'related_record' => $this->relatedRecord('production_entry', 'new', 'Create today\'s production entry', ProductionEntryResource::getUrl('create')),
+                'assigned_team' => 'Production',
+                'assigned_user' => $this->assignedUserLabel($business, ['production', 'factory', 'line', 'supervisor']),
+                'created_at' => today()->toDateString(),
+                'due_on' => today()->toDateString(),
+                'status_label' => 'Due today',
+                'work_type' => 'production_daily_entry',
+            ])] : []),
             ...$openRows->map(fn (ProductionEntry $entry): array => $this->makeTask([
                 'id' => 'production-payout-'.$entry->id,
                 'queue' => 'approval',

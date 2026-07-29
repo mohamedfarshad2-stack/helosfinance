@@ -48,7 +48,7 @@ return new class extends Migration
                 'password' => '$2y$10$ErUcZgbYwCODTunSCOgK8OG/tVZAzrRZ1Fpf5W.ehrG/WcONmHDIa',
                 'profile' => 'full_staff',
                 'supervisor' => null,
-                'responsibilities' => ['supervisor_review', 'order_confirmation', 'return_recovery'],
+                'responsibilities' => ['supervisor_review', 'order_confirmation', 'delivery_follow_up', 'return_recovery'],
             ],
         ];
 

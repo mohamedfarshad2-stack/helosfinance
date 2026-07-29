@@ -214,6 +214,8 @@ class UserResource extends Resource
     {
         return [
             'daily_operations' => 'Daily operations - orders, dispatch, returns',
+            'dispatch_only' => 'Dispatch - confirmed to courier',
+            'delivery_follow_up' => 'Delivery follow-up - not delivered',
             'production_store' => 'Production and stock',
             'money_admin' => 'Money admin - expenses, collections, bank exceptions',
             'supervisor' => 'Supervisor - review team work',
@@ -334,6 +336,16 @@ class UserResource extends Resource
     private static function staffRolePresetConfig(string $preset): array
     {
         return match ($preset) {
+            'dispatch_only' => [
+                'employee_access_profile' => 'operations',
+                'staff_responsibilities' => ['dispatch'],
+                'is_staff_supervisor' => false,
+            ],
+            'delivery_follow_up' => [
+                'employee_access_profile' => 'operations',
+                'staff_responsibilities' => ['delivery_follow_up'],
+                'is_staff_supervisor' => false,
+            ],
             'production_store' => [
                 'employee_access_profile' => 'operations',
                 'staff_responsibilities' => ['production', 'material_stock', 'product_repair'],
@@ -356,7 +368,7 @@ class UserResource extends Resource
             ],
             default => [
                 'employee_access_profile' => 'operations',
-                'staff_responsibilities' => ['order_confirmation', 'dispatch', 'return_recovery', 'product_repair'],
+                'staff_responsibilities' => ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery', 'product_repair'],
                 'is_staff_supervisor' => false,
             ],
         };

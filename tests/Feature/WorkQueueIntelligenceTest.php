@@ -815,7 +815,7 @@ class WorkQueueIntelligenceTest extends TestCase
             'is_employee' => true,
             'is_platform_admin' => false,
             'employee_access_profile' => 'operations',
-            'staff_responsibilities' => ['dispatch', 'return_recovery'],
+            'staff_responsibilities' => ['delivery_follow_up', 'return_recovery'],
             'responsibilities_configured' => true,
             'is_staff_supervisor' => false,
         ]);
@@ -839,7 +839,7 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertOk()
             ->assertSee('Your contribution today')
             ->assertSee('Daily progress')
-            ->assertSee('Protect today')
+            ->assertSee('Push not-delivered parcels to delivered')
             ->assertSee('deliveries to support')
             ->assertDontSee('estimated_profit')
             ->assertDontSee('Monthly salary')
