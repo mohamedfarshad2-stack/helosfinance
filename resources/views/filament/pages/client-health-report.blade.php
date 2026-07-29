@@ -36,6 +36,12 @@
                 $netProfit = (float) $snapshot->estimated_profit;
                 $allCosts = (float) $snapshot->cost_total + $missingEstimatedProductionCosts;
                 $otherKnownCosts = max($allCosts - $productionCostForOwner, 0);
+                $fixedExpenses = (float) data_get($metrics, 'fixed_expenses', 0);
+                $variableExpenses = (float) data_get($metrics, 'variable_expenses', 0);
+                $manualOverheadCosts = (float) data_get($metrics, 'manual_overhead_costs', 0);
+                $salaryPressure = (float) data_get($metrics, 'salary_pressure', 0);
+                $toSettle = (float) data_get($metrics, 'to_settle', 0);
+                $companyCostsEntered = $manualOverheadCosts + $salaryPressure;
                 $deliveredCount = (int) data_get($metrics, 'order_counts.delivered', 0);
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
@@ -69,7 +75,7 @@
                     [
                         'label' => 'Delivered sales',
                         'value' => $money($deliveredRevenue),
-                        'helper' => $number($currentMonthDeliveredCount).' this month / '.$number($carryoverDeliveredCount).' carryover / '.$number($unknownMonthDeliveredCount).' unknown',
+                        'helper' => $number($deliveredCount).' delivered parcel(s) in selected period',
                         'icon' => 'heroicon-o-check-circle',
                         'style' => 'from-emerald-500 to-teal-500',
                     ],
@@ -108,8 +114,8 @@
                     [
                         'title' => 'Finance view',
                         'kicker' => 'Cost control',
-                        'value' => $money($productionCostForOwner + $courierCosts),
-                        'body' => 'Recorded production is shown separately from estimated missing production. Delivery only reduces courier cost when the parcel is delivered. Company expenses must be entered before final net profit is trusted.',
+                        'value' => $money($companyCostsEntered + $courierCosts + $productionCostForOwner),
+                        'body' => 'Owner costs are split into company expenses, salaries, courier costs, recorded production, and estimated missing production. Final profit is trusted only when those entries are complete.',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
                     ],
@@ -124,14 +130,28 @@
                         'style' => 'border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100',
                     ],
                     [
-                        'label' => 'Production costs',
-                        'count' => $productionCostTrusted ? 'Raw material + labour entered daily' : 'Daily entries missing - using estimate',
-                        'value' => $money($productionCostForOwner),
-                        'hint' => $productionCostTrusted
-                            ? 'Total used in owner estimate. All production cost here is recorded from daily production entries.'
-                            : 'Total used in owner estimate: recorded production plus estimated missing production.',
-                        'icon' => 'heroicon-o-cube',
-                        'style' => 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100',
+                        'label' => 'Company costs entered',
+                        'count' => 'Expenses + staff salary pressure',
+                        'value' => $money($companyCostsEntered),
+                        'hint' => 'Costs entered in HELOS for running the company: expenses plus active staff salaries for this period.',
+                        'icon' => 'heroicon-o-building-office-2',
+                        'style' => 'border-slate-200 bg-slate-50 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100',
+                    ],
+                    [
+                        'label' => 'Expenses entered',
+                        'count' => $money($fixedExpenses).' fixed / '.$money($variableExpenses).' variable',
+                        'value' => $money($manualOverheadCosts),
+                        'hint' => 'Rent, marketing, utilities, supplier bills, admin costs, and other expenses entered in HELOS.',
+                        'icon' => 'heroicon-o-receipt-percent',
+                        'style' => 'border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100',
+                    ],
+                    [
+                        'label' => 'Staff salary pressure',
+                        'count' => 'Active staff monthly salaries',
+                        'value' => $money($salaryPressure),
+                        'hint' => 'Salary pressure from active employees. Piece-work production pay is shown separately under recorded production.',
+                        'icon' => 'heroicon-o-users',
+                        'style' => 'border-purple-200 bg-purple-50 text-purple-950 dark:border-purple-900 dark:bg-purple-950/30 dark:text-purple-100',
                     ],
                     [
                         'label' => 'Recorded production cost',
@@ -164,20 +184,22 @@
                         'style' => 'border-orange-200 bg-orange-50 text-orange-950 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-100',
                     ],
                     [
+                        'label' => 'Costs still to settle',
+                        'count' => 'Unpaid entered expenses',
+                        'value' => $money($toSettle),
+                        'hint' => 'Expenses entered in HELOS that are not fully paid yet. This affects cash planning, not delivered revenue.',
+                        'icon' => 'heroicon-o-clock',
+                        'style' => $toSettle > 0
+                            ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'
+                            : 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100',
+                    ],
+                    [
                         'label' => 'Pending delivery',
                         'count' => $number($pendingCount).' parcels',
                         'value' => $money($pendingValue),
                         'hint' => 'The team must push these parcels toward successful delivery.',
                         'icon' => 'heroicon-o-clock',
                         'style' => 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100',
-                    ],
-                    [
-                        'label' => 'Delivered sales',
-                        'count' => $number($deliveredCount).' parcels',
-                        'value' => $money($deliveredRevenue),
-                        'hint' => 'All parcels delivered in this period: current-month, carryover, and any delivered parcels missing original order dates.',
-                        'icon' => 'heroicon-o-check-badge',
-                        'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
                     ],
                     [
                         'label' => 'This period dispatches delivered',
@@ -194,16 +216,6 @@
                         'hint' => 'Parcels dispatched before this selected period but delivered now.',
                         'icon' => 'heroicon-o-arrow-path',
                         'style' => 'border-indigo-200 bg-indigo-50 text-indigo-950 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100',
-                    ],
-                    [
-                        'label' => 'Delivered but dispatch unknown',
-                        'count' => $number($unknownMonthDeliveredCount).' parcels',
-                        'value' => $money($unknownMonthDeliveredValue),
-                        'hint' => 'Delivered now, but HELOS cannot find the original dispatch/tracking date, so it cannot compare these against this period dispatches yet.',
-                        'icon' => 'heroicon-o-question-mark-circle',
-                        'style' => $unknownMonthDeliveredCount > 0
-                            ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'
-                            : 'border-gray-200 bg-gray-50 text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100',
                     ],
                     [
                         'label' => $profitLabel,
@@ -295,12 +307,7 @@
 
                         <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
                             <div class="font-black text-gray-950 dark:text-white">Simple owner rule</div>
-                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Delivery is split by dispatch date so the 390 dispatched this period can be compared against parcels from the same dispatch period.</p>
-                            @if ($unknownMonthDeliveredCount > 0)
-                                <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-                                    {{ $number($unknownMonthDeliveredCount) }} delivered parcel(s) are missing dispatch dates, so HELOS cannot classify them against this selected period's dispatches yet.
-                                </p>
-                            @endif
+                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Company costs below show what HELOS has recorded and what is still estimated.</p>
                         </div>
                     </div>
                 </div>

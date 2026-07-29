@@ -224,7 +224,8 @@ class BreakEvenIntelligenceTest extends TestCase
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
             ->assertSee('Owner parcel dashboard')
-            ->assertSee('Production costs')
+            ->assertSee('Company costs entered')
+            ->assertSee('Recorded production cost')
             ->assertSee('Courier costs')
             ->assertDontSee('Money Needed To Cover The Month');
     }
