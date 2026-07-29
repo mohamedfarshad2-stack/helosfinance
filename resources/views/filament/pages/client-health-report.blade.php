@@ -68,12 +68,77 @@
                 $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($deliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
-                $profitTone = $profitForOwner >= 0 ? 'emerald' : 'rose';
-                $profitLabel = 'Estimated profit from known costs';
-                $profitHelper = $productionCostTrusted ? 'Delivered sales - recorded costs in HELOS' : 'Includes estimated missing production cost';
+                $deliveredAfterCourier = $deliveredRevenue - $courierCosts;
+                $grossAfterProduction = $deliveredAfterCourier - $productionCostForOwner;
+                $otherParcelAdjustments = $allCosts - $courierCosts - $productionCostForOwner - $companyCostsEntered;
+                $otherParcelAdjustmentLabel = $otherParcelAdjustments >= 0 ? 'Other parcel losses / adjustments' : 'Recoveries reducing costs';
                 $profitTrustNote = $productionCostTrusted
                     ? 'Not final company net profit. HELOS can only subtract overheads, salaries, marketing, utilities, rent, expenses, leakage and recoveries that are entered.'
                     : 'Not fully trusted until Nifras enters production data for this period.';
+                $profitStatementRows = [
+                    [
+                        'label' => 'Delivered sales before courier',
+                        'amount' => $deliveredRevenue,
+                        'display' => $money($deliveredRevenue),
+                        'note' => $number($deliveredCount).' delivered parcels. This is revenue before courier cost.',
+                        'tone' => 'text-emerald-700 dark:text-emerald-300',
+                    ],
+                    [
+                        'label' => 'Delivery + return courier cost',
+                        'amount' => -$courierCosts,
+                        'display' => '- '.$money($courierCosts),
+                        'note' => $money(data_get($metrics, 'delivered_courier_costs', 0)).' delivery / '.$money(data_get($metrics, 'return_courier_costs', 0)).' return',
+                        'tone' => 'text-orange-700 dark:text-orange-300',
+                    ],
+                    [
+                        'label' => 'Sales after courier',
+                        'amount' => $deliveredAfterCourier,
+                        'display' => $money($deliveredAfterCourier),
+                        'note' => 'Delivered sales minus delivery and return courier charges.',
+                        'tone' => $deliveredAfterCourier >= 0 ? 'text-cyan-700 dark:text-cyan-300' : 'text-rose-700 dark:text-rose-300',
+                        'total' => true,
+                    ],
+                    [
+                        'label' => 'Production cost',
+                        'amount' => -$productionCostForOwner,
+                        'display' => '- '.$money($productionCostForOwner),
+                        'note' => $productionCostTrusted ? 'Recorded production entries.' : 'Recorded production plus missing estimate until Nifras enters daily production.',
+                        'tone' => 'text-violet-700 dark:text-violet-300',
+                    ],
+                    [
+                        'label' => 'Gross profit after production',
+                        'amount' => $grossAfterProduction,
+                        'display' => $money($grossAfterProduction),
+                        'note' => 'Sales after courier minus production cost.',
+                        'tone' => $grossAfterProduction >= 0 ? 'text-lime-700 dark:text-lime-300' : 'text-rose-700 dark:text-rose-300',
+                        'total' => true,
+                    ],
+                    [
+                        'label' => 'Company costs entered',
+                        'amount' => -$companyCostsEntered,
+                        'display' => '- '.$money($companyCostsEntered),
+                        'note' => 'Expenses, staff salary pressure, and bank-review-only charges.',
+                        'tone' => 'text-slate-700 dark:text-slate-300',
+                    ],
+                    [
+                        'label' => $otherParcelAdjustmentLabel,
+                        'amount' => -$otherParcelAdjustments,
+                        'display' => ($otherParcelAdjustments >= 0 ? '- ' : '+ ').$money(abs($otherParcelAdjustments)),
+                        'note' => 'Leakage, resend costs, recoveries, and any remaining event costs not listed above.',
+                        'tone' => $otherParcelAdjustments >= 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300',
+                    ],
+                    [
+                        'label' => 'Estimated profit',
+                        'amount' => $profitForOwner,
+                        'display' => $money($profitForOwner),
+                        'note' => $profitTrustNote,
+                        'tone' => $profitForOwner >= 0 && $productionCostTrusted ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300',
+                        'final' => true,
+                    ],
+                ];
+                $profitTone = $profitForOwner >= 0 ? 'emerald' : 'rose';
+                $profitLabel = 'Estimated profit from known costs';
+                $profitHelper = $productionCostTrusted ? 'Delivered sales minus recorded costs' : 'Includes estimated missing production cost';
                 $decisionText = ! $productionCostTrusted
                     ? 'Production cost is not fully entered yet. HELOS is reducing owner profit using estimated missing production cost until daily entries catch up.'
                     : ($profitForOwner >= 0
@@ -81,9 +146,9 @@
                         : 'The selected period is negative after known HELOS costs. This can happen when delivered sales are lower than recorded courier, production, salary, overhead, expense, leakage, and estimated missing production costs.');
                 $heroStats = [
                     [
-                        'label' => 'Delivered sales',
+                        'label' => 'Delivered sales before courier',
                         'value' => $money($deliveredRevenue),
-                        'helper' => $number($deliveredCount).' delivered parcel(s) in selected period',
+                        'helper' => 'Courier is deducted below',
                         'icon' => 'heroicon-o-check-circle',
                         'style' => 'from-emerald-500 to-teal-500',
                     ],
@@ -290,7 +355,7 @@
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
                         'accent' => 'from-emerald-500 to-teal-500',
-                        'open' => true,
+                        'open' => false,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('This period dispatches delivered'),
                             $cardsByLabel->get('Earlier dispatches delivered'),
@@ -319,7 +384,7 @@
                         'icon' => 'heroicon-o-building-office-2',
                         'style' => 'border-slate-200 bg-slate-50 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100',
                         'accent' => 'from-slate-700 to-gray-500',
-                        'open' => true,
+                        'open' => false,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('Expenses entered'),
                             $cardsByLabel->get('Marketing cost'),
@@ -446,22 +511,44 @@
                 </div>
             </div>
 
-            <div class="grid gap-4 xl:grid-cols-3">
-                @foreach ($rolePanels as $panel)
-                    <div class="rounded-2xl border p-5 shadow-sm {{ $panel['style'] }}">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <div class="text-xs font-bold uppercase tracking-wide opacity-70">{{ $panel['kicker'] }}</div>
-                                <div class="mt-1 text-lg font-black">{{ $panel['title'] }}</div>
+            <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
+                <div class="grid gap-0 xl:grid-cols-[0.9fr_1.1fr]">
+                    <div class="bg-gradient-to-br from-gray-950 via-slate-900 to-emerald-950 p-6 text-white">
+                        <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-100">
+                            <x-filament::icon icon="heroicon-o-calculator" class="h-4 w-4" />
+                            Owner profit in one view
+                        </div>
+                        <div class="mt-5 text-4xl font-black leading-tight {{ $profitForOwner >= 0 && $productionCostTrusted ? 'text-emerald-200' : 'text-rose-200' }}">
+                            {{ $money($profitForOwner) }}
+                        </div>
+                        <div class="mt-2 text-sm font-semibold text-white/75">Estimated profit after the costs HELOS knows for this period.</div>
+
+                        <div class="mt-6 grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-xl border border-white/15 bg-white/10 p-4">
+                                <div class="text-xs font-bold uppercase tracking-wide text-white/60">Sales after courier</div>
+                                <div class="mt-2 text-2xl font-black">{{ $money($deliveredAfterCourier) }}</div>
                             </div>
-                            <div class="rounded-xl bg-white/80 p-2 shadow-sm dark:bg-gray-950/60">
-                                <x-filament::icon :icon="$panel['icon']" class="h-6 w-6" />
+                            <div class="rounded-xl border border-white/15 bg-white/10 p-4">
+                                <div class="text-xs font-bold uppercase tracking-wide text-white/60">Gross after production</div>
+                                <div class="mt-2 text-2xl font-black">{{ $money($grossAfterProduction) }}</div>
                             </div>
                         </div>
-                        <div class="mt-5 text-2xl font-black">{{ $panel['value'] }}</div>
-                        <p class="mt-3 text-sm leading-6 opacity-80">{{ $panel['body'] }}</p>
                     </div>
-                @endforeach
+
+                    <div class="p-5">
+                        <div class="grid gap-2">
+                            @foreach ($profitStatementRows as $row)
+                                <div class="grid gap-3 rounded-xl px-3 py-2.5 md:grid-cols-[minmax(0,1fr)_12rem] md:items-center {{ ($row['final'] ?? false) ? 'border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900' : (($row['total'] ?? false) ? 'bg-gray-50 dark:bg-gray-900/70' : '') }}">
+                                    <div class="min-w-0">
+                                        <div class="text-sm font-black text-gray-950 dark:text-white">{{ $row['label'] }}</div>
+                                        <div class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ $row['note'] }}</div>
+                                    </div>
+                                    <div class="text-left text-xl font-black md:text-right {{ $row['tone'] }}">{{ $row['display'] }}</div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
             </div>
 
             @if (! empty($serviceClientNames))
@@ -484,8 +571,8 @@
             <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
                 <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <div class="text-xs font-black uppercase tracking-wide text-gray-500">Owner dashboard groups</div>
-                        <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">Click a group to see the breakdown</div>
+                        <div class="text-xs font-black uppercase tracking-wide text-gray-500">More detail if needed</div>
+                        <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">Open a group only when you want the records behind the total</div>
                     </div>
                     <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
                         One total first, details underneath
@@ -554,35 +641,6 @@
                                         </div>
                                     @endforeach
                                 </div>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
-                <div class="flex items-center justify-between gap-4">
-                    <div>
-                        <div class="text-xs font-bold uppercase tracking-wide text-gray-500">Profit bridge</div>
-                        <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">How the parcel result is built</div>
-                    </div>
-                    <div class="rounded-xl bg-gray-100 p-2 text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                        <x-filament::icon icon="heroicon-o-presentation-chart-line" class="h-6 w-6" />
-                    </div>
-                </div>
-
-                <div class="mt-6 grid gap-4 lg:grid-cols-2">
-                    @foreach ($bridge as $row)
-                        @php
-                            $width = min(100, max(4, (abs($row['value']) / $maxBridge) * 100));
-                        @endphp
-                        <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60">
-                            <div class="flex justify-between gap-4 text-sm">
-                                <span class="font-semibold text-gray-700 dark:text-gray-200">{{ $row['label'] }}</span>
-                                <strong class="{{ $row['value'] < 0 ? 'text-rose-600' : 'text-gray-950 dark:text-white' }}">{{ $money($row['value']) }}</strong>
-                            </div>
-                            <div class="mt-3 h-3 overflow-hidden rounded-full bg-white dark:bg-gray-950">
-                                <div class="h-full rounded-full {{ $row['color'] }}" style="width: {{ $width }}%"></div>
                             </div>
                         </div>
                     @endforeach
