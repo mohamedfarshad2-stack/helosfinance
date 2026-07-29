@@ -74,6 +74,7 @@
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
                 $ownerCourierCosts = $currentMonthDeliveredCourierCosts + (float) data_get($metrics, 'return_courier_costs', 0);
+                $salesAfterDeliveryCourier = $ownerDeliveredRevenue - $currentMonthDeliveredCourierCosts;
                 $deliveredAfterCourier = $ownerDeliveredRevenue - $ownerCourierCosts;
                 $grossAfterProduction = $deliveredAfterCourier - $productionCostForOwner;
                 $otherParcelAdjustments = (float) $snapshot->leakage_total - (float) data_get($metrics, 'recovered_value', 0);
@@ -89,20 +90,40 @@
                         'display' => $money($ownerDeliveredRevenue),
                         'note' => $number($ownerDeliveredCount).' parcel(s) dispatched in this period and delivered in this period. This is the owner revenue input.',
                         'tone' => 'text-emerald-700 dark:text-emerald-300',
+                        'icon' => 'heroicon-o-check-circle',
                     ],
                     [
-                        'label' => 'Delivery + return courier cost',
-                        'amount' => -$ownerCourierCosts,
-                        'display' => '- '.$money($ownerCourierCosts),
-                        'note' => $money($currentMonthDeliveredCourierCosts).' delivery for verified period sales / '.$money(data_get($metrics, 'return_courier_costs', 0)).' return',
+                        'label' => 'Delivery courier cost',
+                        'amount' => -$currentMonthDeliveredCourierCosts,
+                        'display' => '- '.$money($currentMonthDeliveredCourierCosts),
+                        'note' => 'Courier cost attached to verified delivered parcels only.',
                         'tone' => 'text-orange-700 dark:text-orange-300',
+                        'icon' => 'heroicon-o-truck',
                     ],
                     [
-                        'label' => 'Sales after courier',
+                        'label' => 'Sales after delivery courier',
+                        'amount' => $salesAfterDeliveryCourier,
+                        'display' => $money($salesAfterDeliveryCourier),
+                        'note' => 'Verified delivered sales minus delivery courier cost. Return loss is shown separately below.',
+                        'tone' => $salesAfterDeliveryCourier >= 0 ? 'text-cyan-700 dark:text-cyan-300' : 'text-rose-700 dark:text-rose-300',
+                        'icon' => 'heroicon-o-banknotes',
+                        'total' => true,
+                    ],
+                    [
+                        'label' => 'Return courier loss',
+                        'amount' => -(float) data_get($metrics, 'return_courier_costs', 0),
+                        'display' => '- '.$money(data_get($metrics, 'return_courier_costs', 0)),
+                        'note' => 'Courier loss from returned parcels in this selected period.',
+                        'tone' => 'text-rose-700 dark:text-rose-300',
+                        'icon' => 'heroicon-o-arrow-uturn-left',
+                    ],
+                    [
+                        'label' => 'Net parcel sales after courier',
                         'amount' => $deliveredAfterCourier,
                         'display' => $money($deliveredAfterCourier),
-                        'note' => 'Delivered sales minus delivery and return courier charges.',
+                        'note' => 'Verified delivered sales minus delivery courier and return courier loss.',
                         'tone' => $deliveredAfterCourier >= 0 ? 'text-cyan-700 dark:text-cyan-300' : 'text-rose-700 dark:text-rose-300',
+                        'icon' => 'heroicon-o-calculator',
                         'total' => true,
                     ],
                     [
@@ -111,6 +132,7 @@
                         'display' => '- '.$money($productionCostForOwner),
                         'note' => $productionCostTrusted ? 'Recorded production entries.' : 'Recorded production plus missing estimate until Nifras enters daily production.',
                         'tone' => 'text-violet-700 dark:text-violet-300',
+                        'icon' => 'heroicon-o-cube',
                     ],
                     [
                         'label' => 'Gross profit after production',
@@ -118,6 +140,7 @@
                         'display' => $money($grossAfterProduction),
                         'note' => 'Sales after courier minus production cost.',
                         'tone' => $grossAfterProduction >= 0 ? 'text-lime-700 dark:text-lime-300' : 'text-rose-700 dark:text-rose-300',
+                        'icon' => 'heroicon-o-arrow-trending-up',
                         'total' => true,
                     ],
                     [
@@ -126,6 +149,7 @@
                         'display' => '- '.$money($companyCostsEntered),
                         'note' => 'Expenses, staff salary pressure, and bank-review-only charges.',
                         'tone' => 'text-slate-700 dark:text-slate-300',
+                        'icon' => 'heroicon-o-building-office-2',
                     ],
                     [
                         'label' => $otherParcelAdjustmentLabel,
@@ -133,6 +157,7 @@
                         'display' => ($otherParcelAdjustments >= 0 ? '- ' : '+ ').$money(abs($otherParcelAdjustments)),
                         'note' => 'Leakage, resend costs, recoveries, and any remaining event costs not listed above.',
                         'tone' => $otherParcelAdjustments >= 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300',
+                        'icon' => $otherParcelAdjustments >= 0 ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-arrow-path',
                     ],
                     [
                         'label' => 'Estimated profit',
@@ -140,6 +165,7 @@
                         'display' => $money($profitForOwner),
                         'note' => $profitTrustNote,
                         'tone' => $profitForOwner >= 0 && $productionCostTrusted ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300',
+                        'icon' => $profitForOwner >= 0 && $productionCostTrusted ? 'heroicon-o-trophy' : 'heroicon-o-exclamation-circle',
                         'final' => true,
                     ],
                 ];
@@ -529,39 +555,65 @@
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
-                <div class="grid gap-0 xl:grid-cols-[0.9fr_1.1fr]">
+            <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm ring-1 ring-black/5 dark:border-gray-800 dark:bg-gray-950 dark:ring-white/5">
+                <div class="grid gap-0 xl:grid-cols-[0.82fr_1.18fr]">
                     <div class="bg-gradient-to-br from-gray-950 via-slate-900 to-emerald-950 p-6 text-white">
                         <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-100">
                             <x-filament::icon icon="heroicon-o-calculator" class="h-4 w-4" />
-                            Owner profit in one view
+                            Owner answer
                         </div>
-                        <div class="mt-5 text-4xl font-black leading-tight {{ $profitForOwner >= 0 && $productionCostTrusted ? 'text-emerald-200' : 'text-rose-200' }}">
-                            {{ $money($profitForOwner) }}
-                        </div>
-                        <div class="mt-2 text-sm font-semibold text-white/75">Estimated profit after the costs HELOS knows for this period.</div>
 
-                        <div class="mt-6 grid gap-3 sm:grid-cols-2">
-                            <div class="rounded-xl border border-white/15 bg-white/10 p-4">
-                                <div class="text-xs font-bold uppercase tracking-wide text-white/60">Sales after courier</div>
-                                <div class="mt-2 text-2xl font-black">{{ $money($deliveredAfterCourier) }}</div>
+                        <div class="mt-5 rounded-2xl border border-white/15 bg-white/10 p-5 shadow-2xl shadow-black/20 backdrop-blur">
+                            <div class="text-xs font-bold uppercase tracking-wide text-white/60">Estimated owner profit</div>
+                            <div class="mt-2 text-4xl font-black leading-tight md:text-5xl {{ $profitForOwner >= 0 && $productionCostTrusted ? 'text-emerald-200' : 'text-rose-200' }}">
+                                {{ $money($profitForOwner) }}
                             </div>
-                            <div class="rounded-xl border border-white/15 bg-white/10 p-4">
-                                <div class="text-xs font-bold uppercase tracking-wide text-white/60">Gross after production</div>
-                                <div class="mt-2 text-2xl font-black">{{ $money($grossAfterProduction) }}</div>
+                            <div class="mt-3 text-sm font-semibold leading-6 text-white/75">{{ $profitTrustNote }}</div>
+                        </div>
+
+                        <div class="mt-4 grid gap-3">
+                            <div class="rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-4">
+                                <div class="text-xs font-black uppercase tracking-wide text-emerald-100">Verified delivered sales</div>
+                                <div class="mt-2 text-2xl font-black">{{ $money($ownerDeliveredRevenue) }}</div>
+                                <div class="mt-1 text-xs font-semibold text-emerald-100/80">{{ $number($ownerDeliveredCount) }} parcel(s)</div>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div class="rounded-xl border border-cyan-300/20 bg-cyan-400/10 p-4">
+                                    <div class="text-xs font-black uppercase tracking-wide text-cyan-100">After delivery courier</div>
+                                    <div class="mt-2 text-xl font-black">{{ $money($salesAfterDeliveryCourier) }}</div>
+                                </div>
+                                <div class="rounded-xl border border-violet-300/20 bg-violet-400/10 p-4">
+                                    <div class="text-xs font-black uppercase tracking-wide text-violet-100">Gross after production</div>
+                                    <div class="mt-2 text-xl font-black">{{ $money($grossAfterProduction) }}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="p-5">
+                    <div class="bg-gradient-to-br from-white via-gray-50 to-cyan-50 p-5 dark:from-gray-950 dark:via-gray-950 dark:to-cyan-950/20">
+                        <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                            <div>
+                                <div class="text-xs font-black uppercase tracking-wide text-gray-500">Profit statement</div>
+                                <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">Verified period P&L</div>
+                            </div>
+                            <div class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                                {{ $money($deliveredDataCheckValue) }} excluded for audit
+                            </div>
+                        </div>
+
                         <div class="grid gap-2">
                             @foreach ($profitStatementRows as $row)
-                                <div class="grid gap-3 rounded-xl px-3 py-2.5 md:grid-cols-[minmax(0,1fr)_12rem] md:items-center {{ ($row['final'] ?? false) ? 'border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900' : (($row['total'] ?? false) ? 'bg-gray-50 dark:bg-gray-900/70' : '') }}">
-                                    <div class="min-w-0">
-                                        <div class="text-sm font-black text-gray-950 dark:text-white">{{ $row['label'] }}</div>
-                                        <div class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ $row['note'] }}</div>
+                                <div class="grid gap-3 rounded-xl border px-3 py-2.5 shadow-sm md:grid-cols-[minmax(0,1fr)_12rem] md:items-center {{ ($row['final'] ?? false) ? 'border-gray-300 bg-gray-950 text-white dark:border-gray-700 dark:bg-white dark:text-gray-950' : (($row['total'] ?? false) ? 'border-cyan-200 bg-cyan-50 dark:border-cyan-900 dark:bg-cyan-950/25' : 'border-gray-200 bg-white/85 dark:border-gray-800 dark:bg-gray-950/80') }}">
+                                    <div class="flex min-w-0 gap-3">
+                                        <div class="mt-0.5 rounded-lg p-1.5 {{ ($row['final'] ?? false) ? 'bg-white/10 dark:bg-gray-950/10' : 'bg-gray-100 text-gray-600 dark:bg-gray-900 dark:text-gray-300' }}">
+                                            <x-filament::icon :icon="$row['icon'] ?? 'heroicon-o-minus'" class="h-4 w-4" />
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-black {{ ($row['final'] ?? false) ? '' : 'text-gray-950 dark:text-white' }}">{{ $row['label'] }}</div>
+                                            <div class="mt-0.5 text-xs leading-5 {{ ($row['final'] ?? false) ? 'text-white/70 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400' }}">{{ $row['note'] }}</div>
+                                        </div>
                                     </div>
-                                    <div class="text-left text-xl font-black md:text-right {{ $row['tone'] }}">{{ $row['display'] }}</div>
+                                    <div class="text-left text-xl font-black md:text-right {{ ($row['final'] ?? false) ? '' : $row['tone'] }}">{{ $row['display'] }}</div>
                                 </div>
                             @endforeach
                         </div>
