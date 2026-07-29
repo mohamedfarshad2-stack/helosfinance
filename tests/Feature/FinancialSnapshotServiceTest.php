@@ -92,10 +92,10 @@ class FinancialSnapshotServiceTest extends TestCase
             'channel' => 'cod',
             'quantity' => 1,
             'revenue_amount' => 200000,
-            'direct_cost_amount' => 50000,
+            'direct_cost_amount' => 0,
             'leakage_amount' => 0,
             'recovery_amount' => 0,
-            'payload' => ['sale_amount' => 200000, 'economics' => ['product_cost_amount' => 50000]],
+            'payload' => ['sale_amount' => 200000, 'economics' => ['product_cost_amount' => 0, 'production_cost_reference_amount' => 50000]],
             'occurred_at' => now(),
         ]);
 
@@ -119,14 +119,15 @@ class FinancialSnapshotServiceTest extends TestCase
         $this->assertSame(3000.0, (float) $summary['revenue_total']);
         $this->assertSame(425.0, (float) $summary['metrics']['delivered_courier_costs']);
         $this->assertSame(2575.0, (float) $summary['metrics']['delivered_value_after_courier']);
-        $this->assertSame(50000.0, (float) $summary['metrics']['other_direct_operational_costs']);
+        $this->assertSame(0.0, (float) $summary['metrics']['other_direct_operational_costs']);
         $this->assertSame(1, (int) $summary['metrics']['pending_dispatch_count']);
         $this->assertSame(200000.0, (float) $summary['metrics']['pending_dispatch_value']);
-        $this->assertSame(50000.0, (float) $summary['metrics']['product_costs']);
+        $this->assertSame(0.0, (float) $summary['metrics']['product_costs']);
+        $this->assertSame(0.0, (float) $summary['metrics']['production_costs']);
         $this->assertSame(425.0, (float) $summary['metrics']['total_courier_costs']);
-        $this->assertSame(-47425.0, (float) $summary['metrics']['parcel_gross_profit']);
+        $this->assertSame(2575.0, (float) $summary['metrics']['parcel_gross_profit']);
         $this->assertSame(0, (int) $summary['metrics']['delivered_without_courier_cost_count']);
-        $this->assertSame(-47425.0, (float) $summary['estimated_profit']);
+        $this->assertSame(2575.0, (float) $summary['estimated_profit']);
         $this->assertSame(879979.0, (float) $summary['metrics']['unrecognized_order_revenue']);
     }
 

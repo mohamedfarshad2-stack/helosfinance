@@ -107,8 +107,9 @@ class OperationalEventRecalculationTest extends TestCase
         $event->refresh();
         $movement = SkuStockMovement::query()->where('operational_event_id', $event->id)->first();
 
-        $this->assertSame(707.0, (float) $event->direct_cost_amount);
-        $this->assertSame(707.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
+        $this->assertSame(0.0, (float) $event->direct_cost_amount);
+        $this->assertSame(0.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
+        $this->assertSame(707.0, (float) ($event->payload['economics']['production_cost_reference_amount'] ?? 0));
         $this->assertNotNull($movement);
         $this->assertSame(1, SkuStockMovement::query()->where('operational_event_id', $event->id)->count());
         $this->assertSame('PS476', $movement->payload['sku_code'] ?? null);
@@ -163,8 +164,9 @@ class OperationalEventRecalculationTest extends TestCase
         $event->refresh();
 
         $this->assertSame(1, $processed);
-        $this->assertSame(600.0, (float) $event->direct_cost_amount);
-        $this->assertSame(600.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
+        $this->assertSame(0.0, (float) $event->direct_cost_amount);
+        $this->assertSame(0.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
+        $this->assertSame(600.0, (float) ($event->payload['economics']['production_cost_reference_amount'] ?? 0));
     }
 
     public function test_editing_operational_event_sku_recalculates_costs_immediately(): void
@@ -243,8 +245,9 @@ class OperationalEventRecalculationTest extends TestCase
         $event->refresh();
 
         $this->assertSame($sku->id, $event->sku_id);
-        $this->assertSame(707.0, (float) $event->direct_cost_amount);
+        $this->assertSame(0.0, (float) $event->direct_cost_amount);
         $this->assertSame('PS476', $event->payload['sku_code'] ?? null);
-        $this->assertSame(707.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
+        $this->assertSame(0.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
+        $this->assertSame(707.0, (float) ($event->payload['economics']['production_cost_reference_amount'] ?? 0));
     }
 }

@@ -25,7 +25,8 @@
                 $dispatchedValue = (float) data_get($metrics, 'dispatched_parcel_value', 0);
                 $deliveredRevenue = (float) $snapshot->revenue_total;
                 $pendingValue = (float) data_get($metrics, 'pending_dispatch_value', 0);
-                $productCosts = (float) data_get($metrics, 'product_costs', 0);
+                $productCosts = (float) data_get($metrics, 'production_costs', data_get($metrics, 'product_costs', 0));
+                $productionPendingPay = (float) data_get($metrics, 'production_pending_pay', 0);
                 $courierCosts = (float) data_get($metrics, 'total_courier_costs', 0);
                 $grossProfit = (float) data_get($metrics, 'parcel_gross_profit', 0);
                 $netProfit = (float) $snapshot->estimated_profit;
@@ -85,7 +86,7 @@
                         'title' => 'Finance view',
                         'kicker' => 'Cost control',
                         'value' => $money($productCosts + $courierCosts),
-                        'body' => 'Product cost and courier cost must be checked before trusting month-end owner profit.',
+                        'body' => 'Production cost comes from Nifras daily entries. Delivery only reduces courier cost when the parcel is delivered.',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
                     ],
@@ -100,10 +101,10 @@
                         'style' => 'border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100',
                     ],
                     [
-                        'label' => 'Product costs',
-                        'count' => 'Cost of dispatched products',
+                        'label' => 'Production costs',
+                        'count' => 'Raw material + labour entered daily',
                         'value' => $money($productCosts),
-                        'hint' => 'Product costs recorded in this period. Delivered sales may include carryover parcels from earlier dispatches.',
+                        'hint' => 'Monthly factory cost from production entries. Pending piece-pay: '.$money($productionPendingPay).'.',
                         'icon' => 'heroicon-o-cube',
                         'style' => 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100',
                     ],

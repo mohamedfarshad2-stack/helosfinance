@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Domains\Manufacturing\Services\PartWipBalanceService;
+use App\Domains\FinancialClarity\Services\BusinessHealthSnapshotService;
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\ProductionWorkStep;
 use App\Domains\Shared\Models\Sku;
@@ -34,6 +36,9 @@ class PartWipProductionTest extends TestCase
             'business_id' => $business->id,
             'code' => 'PS364',
             'name' => 'Classic Slipper',
+            'material_cost' => 100,
+            'packaging_cost' => 20,
+            'finishing_cost' => 10,
             'expected_sale_price' => 1200,
         ]);
 
@@ -204,6 +209,30 @@ class PartWipProductionTest extends TestCase
                 'employee_payout' => 350.0,
                 'net_payable' => 350.0,
                 'paid_on' => now()->toDateString(),
-            ]);
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $entry = ProductionEntry::query()->where('employee_name', $employee->name)->first();
+
+        $this->assertNotNull($entry);
+        $this->assertSame(350.0, (float) $entry->estimated_total_cost);
+
+        $event = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->where('source', 'manufacturing')
+            ->where('event_type', OperationalEvent::SKU_PRODUCED)
+            ->where('external_id', 'production-entry-'.$entry->id)
+            ->first();
+
+        $this->assertNotNull($event);
+        $this->assertSame(350.0, (float) $event->direct_cost_amount);
+        $this->assertSame(now()->toDateString(), $event->occurred_at?->toDateString());
+
+        $summary = app(BusinessHealthSnapshotService::class)->previewCurrentMonth($business);
+
+        $this->assertSame(350.0, (float) $summary['metrics']['production_costs']);
+        $this->assertSame(350.0, (float) $summary['metrics']['product_costs']);
+        $this->assertSame(0.0, (float) $summary['metrics']['production_pending_pay']);
     }
 }

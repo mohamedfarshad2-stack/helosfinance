@@ -6,6 +6,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuRecipeItem;
+use Illuminate\Support\Carbon;
 
 class ProductionCostService
 {
@@ -42,17 +43,25 @@ class ProductionCostService
             'produced_on' => $data['produced_on'] ?? now()->toDateString(),
         ]);
 
-        OperationalEvent::query()->create([
+        $producedOn = Carbon::parse($entry->produced_on ?? now())->startOfDay();
+
+        OperationalEvent::query()->updateOrCreate([
+            'business_id' => $sku->business_id,
+            'source' => 'manufacturing',
+            'event_type' => OperationalEvent::SKU_PRODUCED,
+            'external_id' => 'production-entry-'.$entry->id,
+        ], [
             'business_id' => $sku->business_id,
             'sku_id' => $sku->id,
             'source' => 'manufacturing',
             'event_type' => OperationalEvent::SKU_PRODUCED,
+            'external_id' => 'production-entry-'.$entry->id,
             'department' => 'Manufacturing',
             'quantity' => $quantity,
             'direct_cost_amount' => $estimatedTotal,
             'leakage_amount' => $materialPerUnit * $waste,
             'payload' => ['production_entry_id' => $entry->id],
-            'occurred_at' => now(),
+            'occurred_at' => $producedOn,
         ]);
 
         return $entry;

@@ -75,7 +75,9 @@ class InternalCodOrderTest extends TestCase
 
         $this->assertSame('helos_internal_cod', $dispatchEvent->source);
         $this->assertSame('Courier A', $dispatchEvent->payload['courier_name']);
-        $this->assertSame(150.0, (float) $dispatchEvent->direct_cost_amount);
+        $this->assertSame(0.0, (float) $dispatchEvent->direct_cost_amount);
+        $this->assertSame(150.0, (float) $dispatchEvent->payload['economics']['production_cost_reference_amount']);
+        $this->assertSame(0.0, (float) $dispatchEvent->payload['economics']['product_cost_amount']);
         $this->assertSame(0.0, (float) $dispatchEvent->payload['economics']['courier_amount']);
         $this->assertSame(375.0, (float) $dispatchEvent->payload['economics']['delivery_charge_pending']);
 

@@ -151,8 +151,8 @@ class OperationalEventRecalculator
         }
 
         return match ($event->event_type) {
-            OperationalEvent::TRACKING_NUMBER_ADDED => (float) ($event->direct_cost_amount ?? 0) <= 0,
-            OperationalEvent::WHOLESALE_PARCEL_SENT => (float) ($economics['product_cost_amount'] ?? 0) <= 0,
+            OperationalEvent::TRACKING_NUMBER_ADDED => (float) ($economics['production_cost_reference_amount'] ?? 0) <= 0,
+            OperationalEvent::WHOLESALE_PARCEL_SENT => (float) ($economics['production_cost_reference_amount'] ?? 0) <= 0,
             OperationalEvent::ORDER_RETURNED => $this->isRestockable($payload)
                 && (float) ($event->recovery_amount ?? 0) <= 0,
             default => false,

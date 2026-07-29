@@ -192,7 +192,7 @@ class BusinessArchitectureTest extends TestCase
             ->assertOk()
             ->assertSee('Owner parcel dashboard')
             ->assertSee('Dispatched this period')
-            ->assertSee('Product costs')
+            ->assertSee('Production costs')
             ->assertSee('Courier costs')
             ->assertSee('Pending delivery')
             ->assertSee('Delivered sales')

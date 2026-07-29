@@ -74,7 +74,9 @@ class MissingSkuMappingTest extends TestCase
         $event->refresh();
 
         $this->assertSame($sku->id, $event->sku_id);
-        $this->assertSame(1300.0, (float) $event->direct_cost_amount);
+        $this->assertSame(0.0, (float) $event->direct_cost_amount);
+        $this->assertSame(1300.0, (float) ($event->payload['economics']['production_cost_reference_amount'] ?? 0));
+        $this->assertSame(0.0, (float) ($event->payload['economics']['product_cost_amount'] ?? 0));
         $this->assertSame('PS364', $event->payload['sku_code']);
 
         $movement = SkuStockMovement::query()->where('operational_event_id', $event->id)->first();

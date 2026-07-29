@@ -78,7 +78,7 @@ class StockAppWebhookTest extends TestCase
             ->assertJsonPath('impact.economics.verification_amount', 50);
     }
 
-    public function test_tracking_number_adds_delivery_and_product_costs(): void
+    public function test_tracking_number_keeps_product_cost_in_production_and_waits_for_delivery_cost(): void
     {
         $business = Business::query()->create(['name' => 'Test Business']);
         Sku::query()->create([
@@ -101,7 +101,9 @@ class StockAppWebhookTest extends TestCase
             'quantity' => 1,
         ])->assertCreated()
             ->assertJsonPath('impact.revenue_amount', 0)
-            ->assertJsonPath('impact.direct_cost_amount', 1350)
+            ->assertJsonPath('impact.direct_cost_amount', 0)
+            ->assertJsonPath('impact.economics.product_cost_amount', 0)
+            ->assertJsonPath('impact.economics.production_cost_reference_amount', 1350)
             ->assertJsonPath('impact.economics.courier_amount', 0)
             ->assertJsonPath('impact.economics.delivery_charge_pending', 350)
             ->assertJsonPath('impact.leakage_amount', 0);
@@ -132,7 +134,9 @@ class StockAppWebhookTest extends TestCase
             'quantity' => 1,
         ])->assertCreated()
             ->assertJsonPath('impact.revenue_amount', 0)
-            ->assertJsonPath('impact.direct_cost_amount', 1350)
+            ->assertJsonPath('impact.direct_cost_amount', 0)
+            ->assertJsonPath('impact.economics.product_cost_amount', 0)
+            ->assertJsonPath('impact.economics.production_cost_reference_amount', 1350)
             ->assertJsonPath('impact.economics.courier_amount', 0)
             ->assertJsonPath('impact.economics.delivery_charge_pending', 350)
             ->assertJsonPath('impact.leakage_amount', 0);
@@ -203,8 +207,9 @@ class StockAppWebhookTest extends TestCase
             'transport_cost_amount' => 600,
         ])->assertCreated()
             ->assertJsonPath('impact.revenue_amount', 0)
-            ->assertJsonPath('impact.direct_cost_amount', 1950)
-            ->assertJsonPath('impact.economics.product_cost_amount', 1350)
+            ->assertJsonPath('impact.direct_cost_amount', 600)
+            ->assertJsonPath('impact.economics.product_cost_amount', 0)
+            ->assertJsonPath('impact.economics.production_cost_reference_amount', 1350)
             ->assertJsonPath('impact.economics.courier_amount', 600)
             ->assertJsonPath('impact.economics.sale_amount', 5000);
 

@@ -7,6 +7,7 @@ use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
 use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\OperationalEvent;
+use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\ServiceClient;
 use Illuminate\Support\Carbon;
@@ -132,7 +133,17 @@ class BusinessHealthSnapshotService
             ->map(fn (Collection $group): OperationalEvent => $group->sortBy('occurred_at')->last())
             ->values();
         $dispatchedParcelValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->orderValue($event));
-        $productCosts = (float) $orderEvents->sum(fn (OperationalEvent $event): float => (float) data_get($event->payload, 'economics.product_cost_amount', 0));
+        $productionEntries = ProductionEntry::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('produced_on', [$start->toDateString(), $end->toDateString()]);
+        $productionCosts = (float) (clone $events)
+            ->where('source', 'manufacturing')
+            ->where('event_type', OperationalEvent::SKU_PRODUCED)
+            ->sum('direct_cost_amount');
+        $productionPendingPay = (float) (clone $productionEntries)
+            ->where('payment_status', '!=', 'paid')
+            ->sum('net_payable');
+        $productCosts = $productionCosts;
         $returnCourierCosts = (float) $orderEvents
             ->where('event_type', OperationalEvent::ORDER_RETURNED)
             ->sum(fn (OperationalEvent $event): float => (float) data_get($event->payload, 'economics.return_courier_amount', 0));
@@ -247,6 +258,8 @@ class BusinessHealthSnapshotService
                 'dispatched_parcel_count' => $dispatchEvents->count(),
                 'dispatched_parcel_value' => $dispatchedParcelValue,
                 'product_costs' => $productCosts,
+                'production_costs' => $productionCosts,
+                'production_pending_pay' => $productionPendingPay,
                 'return_courier_costs' => $returnCourierCosts,
                 'total_courier_costs' => $totalCourierCosts,
                 'parcel_gross_profit' => $parcelGrossProfit,
