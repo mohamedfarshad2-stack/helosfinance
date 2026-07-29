@@ -12,6 +12,7 @@ use App\Filament\Concerns\RespectsBusinessModules;
 use App\Filament\Resources\ProductionEntryResource\Pages;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
@@ -43,160 +44,176 @@ class ProductionEntryResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Select::make('business_id')
-                ->options(fn () => static::businessOptions())
-                ->default(fn () => Auth::user()?->defaultBusinessId())
-                ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
-                ->dehydrated()
-                ->required(),
-            Select::make('sku_id')
-                ->label('Product / SKU')
-                ->placeholder('Select SKU')
-                ->live()
-                ->options(fn (Get $get) => static::skuOptions((int) ($get('business_id') ?? 0)))
-                ->searchable()
-                ->preload()
-                ->helperText('Choose the finished product this work belongs to.')
-                ->afterStateUpdated(function (Get $get, Set $set): void {
-                    static::resetLaborSelection($set);
-                    static::applySuggestedLaborStep($get, $set);
-                })
-                ->required(),
-            Select::make('production_kind')
-                ->label('What was produced?')
-                ->options([
-                    'part_production' => 'Part production',
-                    'finished_product' => 'Finished product',
-                ])
-                ->default('part_production')
-                ->live()
-                ->helperText('Choose Part production for strap, sole, upper, cutting, stitching, or other separate work. Choose Finished product only when the full item was completed.')
-                ->required()
-                ->afterStateUpdated(function (Set $set): void {
-                    $set('part_name', null);
-                    static::resetLaborSelection($set);
-                }),
-            Select::make('part_name')
-                ->label('Product part')
-                ->placeholder('Select part')
-                ->options(fn (Get $get) => static::partOptions((int) ($get('sku_id') ?? 0)))
-                ->searchable()
-                ->preload()
-                ->live()
-                ->helperText('Example: strap, sole, upper, bottom, packing.')
-                ->visible(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
-                ->required(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
-                ->afterStateUpdated(function (Get $get, Set $set): void {
-                    static::resetLaborSelection($set);
-                    static::applySuggestedLaborStep($get, $set);
-                }),
-            Select::make('sku_recipe_item_id')
-                ->label('Production work / pay step')
-                ->placeholder('Select work step')
-                ->helperText('Choose the exact paid work, for example strap stitching, cutting, finishing, or packing.')
-                ->live()
-                ->options(fn (Get $get) => static::laborStepOptions((int) ($get('sku_id') ?? 0), (string) ($get('part_name') ?? ''), (string) ($get('production_kind') ?? 'part_production')))
-                ->searchable()
-                ->preload()
-                ->afterStateUpdated(function (Get $get, Set $set): void {
-                    $step = static::selectedLaborStep((int) ($get('sku_recipe_item_id') ?? 0));
-                    static::applySelectedLaborStep($get, $set, $step);
-                }),
-            TextInput::make('production_step')
-                ->label('Selected work')
-                ->readOnly()
-                ->dehydrated()
-                ->placeholder('Auto-filled from selected work step'),
-            TextInput::make('piece_rate')
-                ->label('Rate per piece')
-                ->numeric()
-                ->prefix('LKR')
-                ->helperText('Auto-filled from the SKU recipe labor line. Adjust only if this batch has a special rate.')
-                ->live(onBlur: true)
-                ->afterStateUpdated(function (Get $get, Set $set): void {
-                    $set('employee_payout', static::calculateGrossPay($get));
-                    $set('net_payable', static::calculateNetPayable($get));
-                }),
-            Select::make('employee_name')
-                ->label('Worker / employee')
-                ->searchable()
-                ->preload()
-                ->placeholder('Select worker')
-                ->options(fn (Get $get) => static::employeeOptions((int) ($get('business_id') ?? 0)))
-                ->helperText('Choose the person who did this work.')
-                ->required(),
-            TextInput::make('quantity_produced')
-                ->label('How many were completed?')
-                ->numeric()
-                ->live(onBlur: true)
-                ->afterStateUpdated(function (Get $get, Set $set): void {
-                    $set('employee_payout', static::calculateGrossPay($get));
-                    $set('net_payable', static::calculateNetPayable($get));
-                })
-                ->required()
-                ->minValue(1)
-                ->helperText('Enter the real finished quantity for this work step.'),
-            TextInput::make('waste_quantity')
-                ->label('Waste / damaged quantity')
-                ->numeric()
-                ->default(0)
-                ->helperText('Optional. Enter only the damaged or wasted quantity from this batch.'),
-            TextInput::make('employee_payout')
-                ->label('Gross payout')
-                ->helperText('HELOS calculates this from the selected SKU recipe and quantity. You can still adjust it if the client pays differently.')
-                ->numeric()
-                ->prefix('LKR')
-                ->required()
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
-            TextInput::make('advance_amount')
-                ->label('Advance already given')
-                ->numeric()
-                ->prefix('LKR')
-                ->default(0)
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
-            TextInput::make('deduction_amount')
-                ->label('Deduction')
-                ->numeric()
-                ->prefix('LKR')
-                ->default(0)
-                ->live(onBlur: true)
-                ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
-            TextInput::make('net_payable')
-                ->label('Net payable')
-                ->numeric()
-                ->prefix('LKR')
-                ->default(0)
-                ->readOnly()
-                ->dehydrated(),
-            TextInput::make('note')
-                ->label('Note')
-                ->placeholder('Optional')
-                ->helperText('Use this only for unusual situations, not for normal daily work.')
-                ->columnSpanFull(),
-            Select::make('payment_status')
-                ->options([
-                    'pending' => 'Pending',
-                    'paid' => 'Paid',
-                ])
-                ->default('pending')
-                ->live()
-                ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
-                    if ($state === 'paid' && blank($get('paid_on'))) {
-                        $set('paid_on', now()->toDateString());
-                    }
+            Section::make('Daily quick entry')
+                ->description('For weekly piece-pay workers: select the item code, work, worker, and completed quantity. HELOS calculates the pay.')
+                ->schema([
+                    Select::make('business_id')
+                        ->options(fn () => static::businessOptions())
+                        ->default(fn () => Auth::user()?->defaultBusinessId())
+                        ->disabled(fn (): bool => ! (Auth::user()?->isInternalAdmin() ?? false))
+                        ->dehydrated()
+                        ->required(),
+                    Select::make('sku_id')
+                        ->label('Product / SKU')
+                        ->placeholder('Select item code')
+                        ->live()
+                        ->options(fn (Get $get) => static::skuOptions((int) ($get('business_id') ?? 0)))
+                        ->searchable()
+                        ->preload()
+                        ->helperText('Start here. Choose the product code that was worked on.')
+                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                            static::resetLaborSelection($set);
+                            static::applySuggestedLaborStep($get, $set);
+                        })
+                        ->required(),
+                    Select::make('production_kind')
+                        ->label('What was produced?')
+                        ->options([
+                            'part_production' => 'Part production',
+                            'finished_product' => 'Finished product',
+                        ])
+                        ->default('part_production')
+                        ->live()
+                        ->helperText('Most daily entries are Part production. Use Finished product only when the full item was completed.')
+                        ->required()
+                        ->afterStateUpdated(function (Set $set): void {
+                            $set('part_name', null);
+                            static::resetLaborSelection($set);
+                        }),
+                    Select::make('part_name')
+                        ->label('Product part')
+                        ->placeholder('Select part')
+                        ->options(fn (Get $get) => static::partOptions((int) ($get('sku_id') ?? 0)))
+                        ->searchable()
+                        ->preload()
+                        ->live()
+                        ->helperText('Example: strap, sole, upper, bottom, packing.')
+                        ->visible(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
+                        ->required(fn (Get $get): bool => ($get('production_kind') ?? 'part_production') === 'part_production')
+                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                            static::resetLaborSelection($set);
+                            static::applySuggestedLaborStep($get, $set);
+                        }),
+                    Select::make('sku_recipe_item_id')
+                        ->label('Production work / pay step')
+                        ->placeholder('Select work step')
+                        ->helperText('This decides the rate per piece.')
+                        ->live()
+                        ->options(fn (Get $get) => static::laborStepOptions((int) ($get('sku_id') ?? 0), (string) ($get('part_name') ?? ''), (string) ($get('production_kind') ?? 'part_production')))
+                        ->searchable()
+                        ->preload()
+                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                            $step = static::selectedLaborStep((int) ($get('sku_recipe_item_id') ?? 0));
+                            static::applySelectedLaborStep($get, $set, $step);
+                        }),
+                    Select::make('employee_name')
+                        ->label('Worker / employee')
+                        ->searchable()
+                        ->preload()
+                        ->placeholder('Select worker')
+                        ->options(fn (Get $get) => static::employeeOptions((int) ($get('business_id') ?? 0)))
+                        ->helperText('Choose the person who did this work.')
+                        ->required(),
+                    TextInput::make('quantity_produced')
+                        ->label('Number completed')
+                        ->numeric()
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                            $set('employee_payout', static::calculateGrossPay($get));
+                            $set('net_payable', static::calculateNetPayable($get));
+                        })
+                        ->required()
+                        ->minValue(1)
+                        ->helperText('Enter only the completed quantity.')
+                        ->extraInputAttributes(['inputmode' => 'numeric']),
+                    DatePicker::make('produced_on')
+                        ->label('Production date')
+                        ->required()
+                        ->default(now()),
+                ])->columns(2),
+            Section::make('Calculated pay and adjustments')
+                ->description('Open only for waste, advance, deduction, special rate, or marking weekly pay as paid.')
+                ->schema([
+                    TextInput::make('production_step')
+                        ->label('Selected work')
+                        ->readOnly()
+                        ->dehydrated()
+                        ->placeholder('Auto-filled from selected work step'),
+                    TextInput::make('piece_rate')
+                        ->label('Rate per piece')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->helperText('Auto-filled from the SKU recipe labor line. Adjust only if this batch has a special rate.')
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                            $set('employee_payout', static::calculateGrossPay($get));
+                            $set('net_payable', static::calculateNetPayable($get));
+                        }),
+                    TextInput::make('waste_quantity')
+                        ->label('Waste / damaged quantity')
+                        ->numeric()
+                        ->default(0)
+                        ->helperText('Optional. Enter only damaged or wasted quantity.'),
+                    TextInput::make('employee_payout')
+                        ->label('Gross payout')
+                        ->helperText('HELOS calculates this from the selected work step and quantity.')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->required()
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
+                    TextInput::make('advance_amount')
+                        ->label('Advance already given')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->default(0)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
+                    TextInput::make('deduction_amount')
+                        ->label('Deduction')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->default(0)
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Get $get, Set $set) => $set('net_payable', static::calculateNetPayable($get))),
+                    TextInput::make('net_payable')
+                        ->label('Net payable')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->default(0)
+                        ->readOnly()
+                        ->dehydrated(),
+                    Select::make('payment_status')
+                        ->label('Weekly pay status')
+                        ->options([
+                            'pending' => 'Pending',
+                            'paid' => 'Paid',
+                        ])
+                        ->default('pending')
+                        ->live()
+                        ->afterStateUpdated(function (?string $state, Set $set, Get $get): void {
+                            if ($state === 'paid' && blank($get('paid_on'))) {
+                                $set('paid_on', now()->toDateString());
+                            }
 
-                    if ($state !== 'paid') {
-                        $set('paid_on', null);
-                    }
-                })
-                ->required(),
-            DatePicker::make('paid_on')
-                ->label('Paid on')
-                ->visible(fn (Get $get): bool => ($get('payment_status') ?? 'pending') === 'paid'),
-            DatePicker::make('produced_on')->required()->default(now()),
-        ])->columns(2);
+                            if ($state !== 'paid') {
+                                $set('paid_on', null);
+                            }
+                        })
+                        ->required(),
+                    DatePicker::make('paid_on')
+                        ->label('Paid on')
+                        ->visible(fn (Get $get): bool => ($get('payment_status') ?? 'pending') === 'paid'),
+                    TextInput::make('note')
+                        ->label('Note')
+                        ->placeholder('Optional')
+                        ->helperText('Use this only for unusual situations, not for normal daily work.')
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->collapsible()
+                ->collapsed(),
+        ]);
     }
 
     public static function table(Table $table): Table
