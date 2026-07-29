@@ -28,6 +28,8 @@
                 $productCosts = (float) data_get($metrics, 'product_costs', 0);
                 $courierCosts = (float) data_get($metrics, 'total_courier_costs', 0);
                 $grossProfit = (float) data_get($metrics, 'parcel_gross_profit', 0);
+                $netProfit = (float) $snapshot->estimated_profit;
+                $allCosts = (float) $snapshot->cost_total;
                 $deliveredCount = (int) data_get($metrics, 'order_counts.delivered', 0);
                 $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
@@ -35,10 +37,10 @@
                 $deliveryRate = $dispatchCount > 0 ? min(100, max(0, ($deliveredCount / $dispatchCount) * 100)) : 0;
                 $pendingRate = $dispatchCount > 0 ? min(100, max(0, ($pendingCount / $dispatchCount) * 100)) : 0;
                 $returnRate = $dispatchCount > 0 ? min(100, max(0, ($returnedCount / $dispatchCount) * 100)) : 0;
-                $profitTone = $grossProfit >= 0 ? 'emerald' : 'rose';
-                $decisionText = $grossProfit >= 0
-                    ? 'Keep pushing delivery quality and protect this margin.'
-                    : 'Profit is under pressure. Fix pending delivery, returns, product cost, or courier cost first.';
+                $profitTone = $netProfit >= 0 ? 'emerald' : 'rose';
+                $decisionText = $netProfit >= 0
+                    ? 'The selected period is profitable after recorded costs. Protect delivery quality and keep cost entries complete.'
+                    : 'The selected period is losing money after recorded costs. Fix delivery recovery, returns, product costs, courier costs, and overhead leakage first.';
                 $heroStats = [
                     [
                         'label' => 'Delivered sales',
@@ -55,18 +57,18 @@
                         'style' => 'from-amber-400 to-orange-500',
                     ],
                     [
-                        'label' => 'Gross profit',
-                        'value' => $money($grossProfit),
-                        'helper' => 'Delivered sales - product costs - courier costs',
+                        'label' => 'Net profit after all costs',
+                        'value' => $money($netProfit),
+                        'helper' => 'Delivered sales - all recorded costs',
                         'icon' => 'heroicon-o-arrow-trending-up',
-                        'style' => $grossProfit >= 0 ? 'from-lime-400 to-emerald-500' : 'from-rose-500 to-red-500',
+                        'style' => $netProfit >= 0 ? 'from-lime-400 to-emerald-500' : 'from-rose-500 to-red-500',
                     ],
                 ];
                 $rolePanels = [
                     [
                         'title' => 'Owner view',
                         'kicker' => 'Decision',
-                        'value' => $grossProfit >= 0 ? 'Protect profit' : 'Recover margin',
+                        'value' => $netProfit >= 0 ? 'Protect profit' : 'Recover margin',
                         'body' => $decisionText,
                         'icon' => 'heroicon-o-sparkles',
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
@@ -90,10 +92,10 @@
                 ];
                 $cards = [
                     [
-                        'label' => 'Total parcels dispatched',
+                        'label' => 'Dispatched this period',
                         'count' => $number($dispatchCount).' parcels',
                         'value' => $money($dispatchedValue),
-                        'hint' => 'Parcel value sent to courier. This is not revenue yet.',
+                        'hint' => 'Parcel value sent to courier during this period. This is not revenue yet.',
                         'icon' => 'heroicon-o-truck',
                         'style' => 'border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100',
                     ],
@@ -101,7 +103,7 @@
                         'label' => 'Product costs',
                         'count' => 'Cost of dispatched products',
                         'value' => $money($productCosts),
-                        'hint' => 'Product cost attached to parcels dispatched in this period.',
+                        'hint' => 'Product costs recorded in this period. Delivered sales may include carryover parcels from earlier dispatches.',
                         'icon' => 'heroicon-o-cube',
                         'style' => 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100',
                     ],
@@ -130,23 +132,23 @@
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
                     ],
                     [
-                        'label' => 'Gross profit',
-                        'count' => 'Delivered sales - product costs - courier costs',
-                        'value' => $money($grossProfit),
-                        'hint' => 'First-stage parcel profit before salaries, overheads and other company costs.',
-                        'icon' => $grossProfit >= 0 ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-exclamation-triangle',
-                        'style' => $grossProfit >= 0
+                        'label' => 'Net profit after all costs',
+                        'count' => 'Delivered sales - all recorded costs',
+                        'value' => $money($netProfit),
+                        'hint' => 'Owner profit after parcel costs, overheads, salaries, expenses, leakage and recoveries recorded in HELOS.',
+                        'icon' => $netProfit >= 0 ? 'heroicon-o-arrow-trending-up' : 'heroicon-o-exclamation-triangle',
+                        'style' => $netProfit >= 0
                             ? 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100'
                             : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
                     ],
                 ];
                 $bridge = [
                     ['label' => 'Delivered sales', 'value' => $deliveredRevenue, 'color' => 'bg-emerald-500'],
-                    ['label' => 'Product costs', 'value' => -$productCosts, 'color' => 'bg-violet-500'],
-                    ['label' => 'Courier costs', 'value' => -$courierCosts, 'color' => 'bg-orange-500'],
-                    ['label' => 'Gross profit', 'value' => $grossProfit, 'color' => $grossProfit >= 0 ? 'bg-lime-500' : 'bg-rose-500'],
+                    ['label' => 'All recorded costs', 'value' => -$allCosts, 'color' => 'bg-orange-500'],
+                    ['label' => 'Net profit after all costs', 'value' => $netProfit, 'color' => $netProfit >= 0 ? 'bg-lime-500' : 'bg-rose-500'],
+                    ['label' => 'Parcel gross before overhead', 'value' => $grossProfit, 'color' => $grossProfit >= 0 ? 'bg-cyan-500' : 'bg-rose-400'],
                 ];
-                $maxBridge = max(abs($deliveredRevenue), abs($productCosts), abs($courierCosts), abs($grossProfit), 1);
+                $maxBridge = max(abs($deliveredRevenue), abs($allCosts), abs($netProfit), abs($grossProfit), 1);
             @endphp
 
             <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
@@ -163,7 +165,7 @@
                             </div>
                             <div class="rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-right backdrop-blur">
                                 <div class="text-xs uppercase tracking-wide text-cyan-100">Owner action</div>
-                                <div class="mt-1 text-sm font-bold">{{ $grossProfit >= 0 ? 'Scale what is working' : 'Fix margin leakage first' }}</div>
+                                <div class="mt-1 text-sm font-bold">{{ $netProfit >= 0 ? 'Scale what is working' : 'Fix margin leakage first' }}</div>
                             </div>
                         </div>
 
@@ -217,7 +219,7 @@
 
                         <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
                             <div class="font-black text-gray-950 dark:text-white">Simple owner rule</div>
-                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Gross profit shows whether parcel economics are working before company overheads.</p>
+                            <p class="mt-2 leading-6">Delivered is revenue. Pending is opportunity. Returned is loss pressure. Dispatched this period can be lower than delivered sales when older parcels are delivered now.</p>
                         </div>
                     </div>
                 </div>

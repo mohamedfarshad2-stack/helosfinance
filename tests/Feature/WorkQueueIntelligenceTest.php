@@ -723,9 +723,9 @@ class WorkQueueIntelligenceTest extends TestCase
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
             ->assertSee('Owner parcel dashboard')
-            ->assertSee('Total parcels dispatched')
+            ->assertSee('Dispatched this period')
             ->assertSee('Pending delivery')
-            ->assertSee('Gross profit');
+            ->assertSee('Net profit after all costs');
     }
 
     public function test_generated_mission_refresh_does_not_cancel_owner_assigned_tasks(): void

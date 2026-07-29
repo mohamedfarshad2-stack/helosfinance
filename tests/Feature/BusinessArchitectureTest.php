@@ -191,12 +191,12 @@ class BusinessArchitectureTest extends TestCase
             ->get(ClientHealthReport::getUrl())
             ->assertOk()
             ->assertSee('Owner parcel dashboard')
-            ->assertSee('Total parcels dispatched')
+            ->assertSee('Dispatched this period')
             ->assertSee('Product costs')
             ->assertSee('Courier costs')
             ->assertSee('Pending delivery')
             ->assertSee('Delivered sales')
-            ->assertSee('Gross profit');
+            ->assertSee('Net profit after all costs');
     }
 
     public function test_client_health_report_surfaces_weekly_reminders(): void

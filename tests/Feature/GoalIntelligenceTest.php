@@ -75,7 +75,7 @@ class GoalIntelligenceTest extends TestCase
             ->assertSee('From date')
             ->assertSee('To date')
             ->assertSee('Delivered sales')
-            ->assertSee('Gross profit');
+            ->assertSee('Net profit after all costs');
     }
 
     public function test_completed_setup_steps_drop_out_of_live_checklist_and_progress_moves_up(): void
