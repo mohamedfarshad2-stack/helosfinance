@@ -289,6 +289,7 @@
                         'helper' => $number($deliveredCount).' delivered parcels',
                         'icon' => 'heroicon-o-banknotes',
                         'style' => 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
+                        'accent' => 'from-emerald-500 to-teal-500',
                         'open' => true,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('This period dispatches delivered'),
@@ -302,6 +303,7 @@
                         'helper' => $number($dispatchCount).' dispatched parcels',
                         'icon' => 'heroicon-o-truck',
                         'style' => 'border-cyan-200 bg-cyan-50 text-cyan-950 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100',
+                        'accent' => 'from-cyan-500 to-sky-500',
                         'open' => false,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('Dispatched this period'),
@@ -316,6 +318,7 @@
                         'helper' => 'Expenses + salaries + bank-review-only charges',
                         'icon' => 'heroicon-o-building-office-2',
                         'style' => 'border-slate-200 bg-slate-50 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100',
+                        'accent' => 'from-slate-700 to-gray-500',
                         'open' => true,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('Expenses entered'),
@@ -334,6 +337,7 @@
                         'style' => $productionCostTrusted
                             ? 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100'
                             : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
+                        'accent' => $productionCostTrusted ? 'from-violet-500 to-fuchsia-500' : 'from-rose-500 to-orange-500',
                         'open' => ! $productionCostTrusted,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('Recorded production cost'),
@@ -350,6 +354,7 @@
                         'style' => $profitForOwner >= 0 && $productionCostTrusted
                             ? 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100'
                             : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100',
+                        'accent' => $profitForOwner >= 0 && $productionCostTrusted ? 'from-lime-500 to-emerald-500' : 'from-rose-500 to-red-500',
                         'open' => false,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get($profitLabel),
@@ -476,78 +481,64 @@
                 </div>
             @endif
 
-            <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
-                    <div class="flex items-center justify-between gap-4">
-                        <div>
-                            <div class="text-xs font-bold uppercase tracking-wide text-gray-500">Profit bridge</div>
-                            <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">How the parcel result is built</div>
-                        </div>
-                        <div class="rounded-xl bg-gray-100 p-2 text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                            <x-filament::icon icon="heroicon-o-presentation-chart-line" class="h-6 w-6" />
-                        </div>
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+                <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <div class="text-xs font-black uppercase tracking-wide text-gray-500">Owner dashboard groups</div>
+                        <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">Click a group to see the breakdown</div>
                     </div>
-
-                    <div class="mt-6 grid gap-4">
-                        @foreach ($bridge as $row)
-                            @php
-                                $width = min(100, max(4, (abs($row['value']) / $maxBridge) * 100));
-                            @endphp
-                            <div>
-                                <div class="flex justify-between gap-4 text-sm">
-                                    <span class="font-semibold text-gray-700 dark:text-gray-200">{{ $row['label'] }}</span>
-                                    <strong class="{{ $row['value'] < 0 ? 'text-rose-600' : 'text-gray-950 dark:text-white' }}">{{ $money($row['value']) }}</strong>
-                                </div>
-                                <div class="mt-2 h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-900">
-                                    <div class="h-full rounded-full {{ $row['color'] }}" style="width: {{ $width }}%"></div>
-                                </div>
-                            </div>
-                        @endforeach
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                        One total first, details underneath
                     </div>
                 </div>
 
-                <div class="grid gap-4">
+                <div class="mt-5 grid gap-4">
                     @foreach ($dashboardGroups as $group)
                         <div
                             x-data="{ open: {{ $group['open'] ? 'true' : 'false' }} }"
-                            class="overflow-hidden rounded-2xl border shadow-sm {{ $group['style'] }}"
+                            class="overflow-hidden rounded-2xl border shadow-sm ring-1 ring-black/5 dark:ring-white/5 {{ $group['style'] }}"
                         >
                             <button
                                 type="button"
                                 x-on:click="open = ! open"
-                                class="flex w-full items-center justify-between gap-4 p-5 text-left"
+                                class="grid w-full gap-4 p-5 text-left md:grid-cols-[minmax(0,1fr)_minmax(13rem,auto)_auto] md:items-center"
                             >
                                 <div class="flex min-w-0 items-center gap-4">
-                                    <div class="rounded-xl bg-white/80 p-2 shadow-sm dark:bg-gray-950/60">
+                                    <div class="rounded-xl bg-gradient-to-br {{ $group['accent'] }} p-3 text-white shadow-sm">
                                         <x-filament::icon :icon="$group['icon']" class="h-6 w-6" />
                                     </div>
                                     <div class="min-w-0">
                                         <div class="text-xs font-black uppercase tracking-wide opacity-70">{{ $group['title'] }}</div>
-                                        <div class="mt-1 text-sm font-semibold opacity-80">{{ $group['label'] }}</div>
+                                        <div class="mt-1 text-sm font-semibold leading-5 opacity-80">{{ $group['label'] }}</div>
                                     </div>
                                 </div>
-                                <div class="shrink-0 text-right">
+                                <div class="rounded-xl bg-white/70 px-4 py-3 text-left shadow-sm dark:bg-gray-950/50 md:text-right">
                                     <div class="text-2xl font-black text-gray-950 dark:text-white">{{ $group['value'] }}</div>
                                     <div class="mt-1 text-xs font-bold opacity-75">{{ $group['helper'] }}</div>
                                 </div>
                                 <x-filament::icon
                                     icon="heroicon-o-chevron-down"
-                                    class="h-5 w-5 shrink-0 transition"
+                                    class="h-5 w-5 shrink-0 justify-self-end transition"
                                     x-bind:class="open ? 'rotate-180' : ''"
                                 />
                             </button>
 
                             <div x-show="open" class="border-t border-current/10 bg-white/55 p-4 dark:bg-gray-950/35">
-                                <div class="grid gap-3">
+                                <div class="grid gap-3 xl:grid-cols-2">
                                     @foreach ($group['details'] as $card)
-                                        <div class="rounded-xl border border-current/10 bg-white/75 p-4 dark:bg-gray-950/60">
-                                            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                        <div class="rounded-xl border border-current/10 bg-white/80 p-4 shadow-sm dark:bg-gray-950/60">
+                                            <div class="grid h-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(9rem,auto)]">
                                                 <div class="min-w-0">
-                                                    <div class="text-sm font-black text-gray-950 dark:text-white">{{ $card['label'] }}</div>
-                                                    <div class="mt-1 text-xs font-semibold opacity-75">{{ $card['count'] }}</div>
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="rounded-lg bg-gray-100 p-1.5 text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                                            <x-filament::icon :icon="$card['icon']" class="h-4 w-4" />
+                                                        </div>
+                                                        <div class="text-sm font-black text-gray-950 dark:text-white">{{ $card['label'] }}</div>
+                                                    </div>
+                                                    <div class="mt-2 text-xs font-semibold opacity-75">{{ $card['count'] }}</div>
                                                     <div class="mt-2 text-xs leading-5 opacity-75">{{ $card['hint'] }}</div>
                                                 </div>
-                                                <div class="shrink-0 text-left lg:text-right">
+                                                <div class="flex flex-col items-start justify-between gap-3 lg:items-end lg:text-right">
                                                     <div class="text-xl font-black text-gray-950 dark:text-white">{{ $card['value'] }}</div>
                                                     @if (filled($card['action_url'] ?? null))
                                                         <a
@@ -563,6 +554,35 @@
                                         </div>
                                     @endforeach
                                 </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <div class="text-xs font-bold uppercase tracking-wide text-gray-500">Profit bridge</div>
+                        <div class="mt-1 text-xl font-black text-gray-950 dark:text-white">How the parcel result is built</div>
+                    </div>
+                    <div class="rounded-xl bg-gray-100 p-2 text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                        <x-filament::icon icon="heroicon-o-presentation-chart-line" class="h-6 w-6" />
+                    </div>
+                </div>
+
+                <div class="mt-6 grid gap-4 lg:grid-cols-2">
+                    @foreach ($bridge as $row)
+                        @php
+                            $width = min(100, max(4, (abs($row['value']) / $maxBridge) * 100));
+                        @endphp
+                        <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60">
+                            <div class="flex justify-between gap-4 text-sm">
+                                <span class="font-semibold text-gray-700 dark:text-gray-200">{{ $row['label'] }}</span>
+                                <strong class="{{ $row['value'] < 0 ? 'text-rose-600' : 'text-gray-950 dark:text-white' }}">{{ $money($row['value']) }}</strong>
+                            </div>
+                            <div class="mt-3 h-3 overflow-hidden rounded-full bg-white dark:bg-gray-950">
+                                <div class="h-full rounded-full {{ $row['color'] }}" style="width: {{ $width }}%"></div>
                             </div>
                         </div>
                     @endforeach
