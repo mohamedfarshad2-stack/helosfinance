@@ -7,6 +7,7 @@ use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\Mission;
+use App\Filament\Resources\MissionResource;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\MissionGeneratorService;
 use App\Domains\Shared\Services\MissionSourceActionService;
@@ -620,22 +621,34 @@ class TodaysWork extends Page
             ->active()
             ->get();
 
+        $reports = $user->directReports()->orderBy('name')->get();
+
         return [
             'people' => $reportIds->count(),
             'open' => $missions->count(),
             'overdue' => $missions->filter(fn (Mission $mission): bool => $mission->due_at?->isPast() ?? false)->count(),
             'blocked' => $missions->whereIn('status', [Mission::STATUS_BLOCKED, Mission::STATUS_ESCALATED])->count(),
             'waiting_review' => $missions->where('status', Mission::STATUS_WAITING_REVIEW)->count(),
-            'members' => $missions
-                ->groupBy('assigned_user_id')
-                ->map(function (Collection $memberMissions, int|string $userId): array {
-                    $employee = User::query()->find($userId);
+            'members' => $reports
+                ->map(function (User $employee) use ($missions): array {
+                    $memberMissions = $missions->where('assigned_user_id', $employee->id);
+
+                    $url = MissionResource::canAccess()
+                        ? MissionResource::getUrl('index', [
+                            'tableFilters' => [
+                                'assigned_user_id' => [
+                                    'value' => $employee->id,
+                                ],
+                            ],
+                        ])
+                        : null;
 
                     return [
-                        'name' => $employee?->name ?? 'Unassigned employee',
+                        'name' => $employee->name,
                         'open' => $memberMissions->count(),
                         'overdue' => $memberMissions->filter(fn (Mission $mission): bool => $mission->due_at?->isPast() ?? false)->count(),
                         'blocked' => $memberMissions->whereIn('status', [Mission::STATUS_BLOCKED, Mission::STATUS_ESCALATED])->count(),
+                        'url' => $url,
                     ];
                 })
                 ->sortByDesc('overdue')

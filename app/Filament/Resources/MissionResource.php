@@ -124,6 +124,9 @@ class MissionResource extends Resource
                 Tables\Filters\SelectFilter::make('responsibility_code')
                     ->label('Area')
                     ->options(User::staffResponsibilityOptions()),
+                Tables\Filters\SelectFilter::make('assigned_user_id')
+                    ->label('Employee')
+                    ->options(fn (): array => static::staffFilterOptions()),
             ])
             ->actions([
                 Action::make('reassign')
@@ -258,6 +261,23 @@ class MissionResource extends Resource
         $query = User::query()
             ->where('is_employee', true)
             ->whereIn('business_id', $record ? [$record->business_id] : ($user?->accessibleBusinessIds() ?? []));
+
+        if ($user?->isStaff()) {
+            $query->whereIn('id', $user->directReportIds());
+        }
+
+        return $query
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    private static function staffFilterOptions(): array
+    {
+        $user = Auth::user();
+        $query = User::query()
+            ->where('is_employee', true)
+            ->whereIn('business_id', $user?->accessibleBusinessIds() ?? []);
 
         if ($user?->isStaff()) {
             $query->whereIn('id', $user->directReportIds());

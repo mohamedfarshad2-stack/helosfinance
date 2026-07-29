@@ -11,6 +11,7 @@
                         'icon' => 'heroicon-o-calendar-days',
                         'tone' => 'from-sky-500 to-cyan-500',
                         'ring' => 'ring-sky-200',
+                        'href' => '#todays-missions',
                     ],
                     [
                         'label' => 'High priority',
@@ -18,6 +19,7 @@
                         'icon' => 'heroicon-o-bolt',
                         'tone' => 'from-amber-400 to-orange-500',
                         'ring' => 'ring-amber-200',
+                        'href' => '#todays-missions',
                     ],
                     [
                         'label' => 'Overdue',
@@ -25,6 +27,7 @@
                         'icon' => 'heroicon-o-exclamation-triangle',
                         'tone' => 'from-rose-500 to-red-500',
                         'ring' => 'ring-rose-200',
+                        'href' => '#problems',
                     ],
                     [
                         'label' => 'Done today',
@@ -32,6 +35,7 @@
                         'icon' => 'heroicon-o-check-circle',
                         'tone' => 'from-emerald-500 to-lime-500',
                         'ring' => 'ring-emerald-200',
+                        'href' => '#completed-today',
                     ],
                     [
                         'label' => 'Waiting review',
@@ -39,6 +43,7 @@
                         'icon' => 'heroicon-o-eye',
                         'tone' => 'from-violet-500 to-fuchsia-500',
                         'ring' => 'ring-violet-200',
+                        'href' => '#waiting-review',
                     ],
                     [
                         'label' => 'Progress',
@@ -46,6 +51,7 @@
                         'icon' => 'heroicon-o-chart-bar',
                         'tone' => 'from-indigo-500 to-blue-500',
                         'ring' => 'ring-indigo-200',
+                        'href' => '#todays-missions',
                     ],
                 ];
             @endphp
@@ -76,7 +82,7 @@
 
                                 <div class="grid grid-cols-2 gap-3 md:grid-cols-3">
                                     @foreach ($metricCards as $card)
-                                        <div class="rounded-xl bg-white p-3 text-gray-950 shadow-sm ring-1 {{ $card['ring'] }}">
+                                        <a href="{{ $card['href'] }}" class="rounded-xl bg-white p-3 text-gray-950 shadow-sm ring-1 {{ $card['ring'] }} transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-300">
                                             <div class="flex items-center justify-between gap-2">
                                                 <div class="text-[11px] font-black uppercase text-gray-500">{{ $card['label'] }}</div>
                                                 <div class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br {{ $card['tone'] }} text-white shadow-sm">
@@ -84,7 +90,7 @@
                                                 </div>
                                             </div>
                                             <div class="mt-2 text-2xl font-black leading-none">{{ $card['value'] }}</div>
-                                        </div>
+                                        </a>
                                     @endforeach
                                 </div>
                             </div>
@@ -261,15 +267,20 @@
                     </div>
                     @if (! empty($workQueue['team_summary']['members']))
                         <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
-                            <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900">
-                                <span>Employee</span><span>Open</span><span>Overdue</span><span>Blocked</span>
+                            <div class="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900">
+                                <span>Employee</span><span>Open</span><span>Overdue</span><span>Blocked</span><span>Open</span>
                             </div>
                             @foreach ($workQueue['team_summary']['members'] as $member)
-                                <div class="grid grid-cols-[1fr_auto_auto_auto] gap-3 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-800">
+                                <div class="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3 border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-800">
                                     <span class="font-medium text-gray-950 dark:text-white">{{ $member['name'] }}</span>
                                     <span>{{ $member['open'] }}</span>
                                     <span class="{{ $member['overdue'] > 0 ? 'font-semibold text-red-600' : '' }}">{{ $member['overdue'] }}</span>
                                     <span>{{ $member['blocked'] }}</span>
+                                    @if (! empty($member['url']))
+                                        <a href="{{ $member['url'] }}" class="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">View work</a>
+                                    @else
+                                        <span class="text-xs text-gray-400">-</span>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
@@ -507,7 +518,7 @@ HTML;
         </div>
 
         <x-filament::section>
-            <div class="grid gap-4">
+            <div id="todays-missions" class="scroll-mt-24 grid gap-4">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Today's Missions</h2>
                     <span class="sr-only">Tasks Due Today</span>
@@ -528,7 +539,7 @@ HTML;
 
         <div class="grid gap-6 xl:grid-cols-2">
             <x-filament::section>
-                <div class="grid gap-4">
+                <div id="problems" class="scroll-mt-24 grid gap-4">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Problems</h2>
                         <span class="sr-only">High Priority</span>
@@ -566,7 +577,7 @@ HTML;
         </div>
 
         <x-filament::section>
-            <div class="grid gap-4">
+            <div id="waiting-review" class="scroll-mt-24 grid gap-4">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Waiting For Review</h2>
                     <p class="text-sm text-gray-500 dark:text-gray-400">Submitted work waiting for a supervisor or owner decision.</p>
@@ -584,7 +595,7 @@ HTML;
         </x-filament::section>
 
         <x-filament::section>
-            <div class="grid gap-4">
+            <div id="completed-today" class="scroll-mt-24 grid gap-4">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Completed Today</h2>
                     <p class="text-sm text-gray-500 dark:text-gray-400">A quick look at what the team already finished today.</p>
