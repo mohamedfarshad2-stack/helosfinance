@@ -136,6 +136,8 @@
                         'hint' => 'Costs entered in HELOS for running the company: expenses plus active staff salaries for this period.',
                         'icon' => 'heroicon-o-building-office-2',
                         'style' => 'border-slate-200 bg-slate-50 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100',
+                        'action_label' => 'Open expenses',
+                        'action_url' => \App\Filament\Resources\ExpenseResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Expenses entered',
@@ -144,6 +146,8 @@
                         'hint' => 'Rent, marketing, utilities, supplier bills, admin costs, and other expenses entered in HELOS.',
                         'icon' => 'heroicon-o-receipt-percent',
                         'style' => 'border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100',
+                        'action_label' => 'Open expenses',
+                        'action_url' => \App\Filament\Resources\ExpenseResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Staff salary pressure',
@@ -152,6 +156,8 @@
                         'hint' => 'Salary pressure from active employees. Piece-work production pay is shown separately under recorded production.',
                         'icon' => 'heroicon-o-users',
                         'style' => 'border-purple-200 bg-purple-50 text-purple-950 dark:border-purple-900 dark:bg-purple-950/30 dark:text-purple-100',
+                        'action_label' => 'Open staff',
+                        'action_url' => \App\Filament\Resources\EmployeeResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Recorded production cost',
@@ -162,6 +168,8 @@
                         'style' => $productCosts > 0
                             ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100'
                             : 'border-gray-200 bg-gray-50 text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100',
+                        'action_label' => 'Open production',
+                        'action_url' => \App\Filament\Resources\ProductionEntryResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Estimated missing production',
@@ -174,6 +182,8 @@
                         'style' => $missingEstimatedProductionCosts > 0
                             ? 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100'
                             : 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100',
+                        'action_label' => 'Open production',
+                        'action_url' => \App\Filament\Resources\ProductionEntryResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Courier costs',
@@ -182,6 +192,8 @@
                         'hint' => $money(data_get($metrics, 'delivered_courier_costs', 0)).' delivered / '.$money(data_get($metrics, 'return_courier_costs', 0)).' returned',
                         'icon' => 'heroicon-o-map-pin',
                         'style' => 'border-orange-200 bg-orange-50 text-orange-950 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-100',
+                        'action_label' => 'Open courier setup',
+                        'action_url' => \App\Filament\Resources\CourierRateResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Costs still to settle',
@@ -192,6 +204,8 @@
                         'style' => $toSettle > 0
                             ? 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'
                             : 'border-lime-200 bg-lime-50 text-lime-950 dark:border-lime-900 dark:bg-lime-950/30 dark:text-lime-100',
+                        'action_label' => 'Open unpaid expenses',
+                        'action_url' => \App\Filament\Resources\ExpenseResource::getUrl('index'),
                     ],
                     [
                         'label' => 'Pending delivery',
@@ -390,6 +404,17 @@
                             <div class="mt-5 text-2xl font-black text-gray-950 dark:text-white">{{ $card['value'] }}</div>
                             <div class="mt-2 text-sm font-bold">{{ $card['count'] }}</div>
                             <div class="mt-4 border-t border-current/10 pt-3 text-xs leading-5 opacity-75">{{ $card['hint'] }}</div>
+                            @if (filled($card['action_url'] ?? null))
+                                <div class="mt-4">
+                                    <a
+                                        href="{{ $card['action_url'] }}"
+                                        class="inline-flex items-center gap-2 rounded-lg border border-current/20 bg-white/70 px-3 py-2 text-xs font-bold shadow-sm transition hover:bg-white dark:bg-gray-950/60 dark:hover:bg-gray-950"
+                                    >
+                                        <x-filament::icon icon="heroicon-o-pencil-square" class="h-4 w-4" />
+                                        {{ $card['action_label'] ?? 'Open records' }}
+                                    </a>
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>
