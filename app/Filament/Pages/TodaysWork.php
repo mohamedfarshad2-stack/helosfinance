@@ -368,6 +368,8 @@ class TodaysWork extends Page
         $recommendedGap = max(-$profit, $leakage, 0);
         $gap = $configured ? $ownerGap : $recommendedGap;
         $isRecommended = ! $configured;
+        $operatingLoss = max(-$profit, 0);
+        $recoveryPressure = max($operatingLoss, $leakage, (float) ($gap ?? 0));
         $contributionPool = max($revenue - $directCosts - $leakage, 0);
         $averageContribution = $delivered > 0 ? $contributionPool / $delivered : 0;
         $averageRevenue = $delivered > 0 ? $revenue / $delivered : 0;
@@ -395,6 +397,7 @@ class TodaysWork extends Page
             ->map(function (User $employee) use ($leakage, $requiredDeliveries, $dailyDeliveries, $teamOverdue): array {
                 $responsibilities = $employee->staffResponsibilities($this->business?->id);
                 $signals = [];
+                $primaryCommand = 'Clear assigned missions and report blockers before end of day.';
                 $isManager = $employee->is(Auth::user());
                 $openMissions = Mission::query()
                     ->where('assigned_user_id', $employee->id)
@@ -410,6 +413,9 @@ class TodaysWork extends Page
 
                 if (in_array('dispatch', $responsibilities, true) || in_array('delivery_follow_up', $responsibilities, true)) {
                     $signals[] = ['label' => 'Delivery contribution required', 'display' => $requiredDeliveries === null ? 'Waiting for enough delivery and cost data' : number_format($requiredDeliveries).' additional deliveries shared across operations'];
+                    $primaryCommand = in_array('delivery_follow_up', $responsibilities, true)
+                        ? 'Push not-delivered parcels to delivered; call, solve address/courier issues, and update Stock App.'
+                        : 'Clear confirmed orders waiting for dispatch; add tracking and move parcels to courier.';
                 }
 
                 if (in_array('return_recovery', $responsibilities, true)) {
@@ -422,6 +428,7 @@ class TodaysWork extends Page
 
                 if (in_array('production', $responsibilities, true) || in_array('material_stock', $responsibilities, true)) {
                     $signals[] = ['label' => 'Production and material control', 'display' => 'Keep output, waste, material use, and piece-pay records current'];
+                    $primaryCommand = 'Enter today\'s production before day end; item code, part/work step, worker, quantity, waste, and pay.';
                 }
 
                 if (in_array('expense_recording', $responsibilities, true)) {
@@ -434,28 +441,58 @@ class TodaysWork extends Page
 
                 if (in_array('supervisor_review', $responsibilities, true)) {
                     $signals[] = ['label' => 'Overdue work reduction', 'display' => $isManager ? number_format($teamOverdue).' overdue direct-report missions to triage' : number_format($overdueMissions).' overdue assigned missions to clear'];
+                    if ($isManager) {
+                        $primaryCommand = 'Reduce overdue team missions first; assign one clear outcome to each direct report.';
+                    }
                 }
 
                 return [
                     'name' => $employee->name,
                     'is_manager' => $isManager,
                     'responsibilities' => collect($responsibilities)->map(fn (string $code): string => $this->responsibilityLabel($code))->values()->all(),
+                    'primary_command' => $primaryCommand,
+                    'open_missions' => $openMissions,
+                    'overdue_missions' => $overdueMissions,
                     'signals' => $signals,
                 ];
             })
             ->values()
             ->all();
 
+        $deliveryCommand = $dailyDeliveries === null
+            ? 'First make delivery and cost data trusted, then HELOS can calculate the exact delivery pace.'
+            : 'Target at least '.number_format($dailyDeliveries).' extra delivered parcels per day for the remaining '.$daysRemaining.' day(s).';
+        $cfoActions = [
+            [
+                'label' => '1. Stop silent backlog',
+                'body' => number_format($teamOverdue).' overdue team missions must be triaged today. Anything impossible should be blocked or escalated, not left open.',
+                'tone' => 'rose',
+            ],
+            [
+                'label' => '2. Convert parcel value',
+                'body' => $deliveryCommand,
+                'tone' => 'emerald',
+            ],
+            [
+                'label' => '3. Make cost truth trusted',
+                'body' => 'Production output, waste, material use, piece-pay, expenses, and bank review must be entered daily so owner profit is not guessed.',
+                'tone' => 'violet',
+            ],
+        ];
+
         return [
             'period' => now()->format('F Y'),
             'as_of' => $savedSnapshot?->period_end?->format('M j, Y') ?? now()->format('M j, Y'),
             'configured' => $configured,
             'is_recommended' => $isRecommended,
+            'operating_loss' => $operatingLoss,
+            'recovery_pressure' => $recoveryPressure,
+            'recovery_status' => $recoveryPressure > 0 || $teamOverdue > 0 ? 'Recovery mode' : 'Controlled',
             'goal_label' => match ($goalType) {
                 'revenue' => 'Monthly sales target gap',
                 'deliveries' => 'Monthly delivery target gap',
                 'collections' => 'Monthly collection target gap',
-                default => $isRecommended ? 'HELOAS recommended recovery gap' : 'Monthly company target gap',
+                default => $isRecommended ? 'Minimum operational recovery gap' : 'Monthly company target gap',
             },
             'gap' => $gap,
             'gap_is_count' => $goalType === 'deliveries',
@@ -465,12 +502,15 @@ class TodaysWork extends Page
             'leakage' => $leakage,
             'team_overdue' => $teamOverdue,
             'headline' => ! $configured
-                ? 'HELOAS calculated a recommended recovery target from the current loss, leakage, contribution, and remaining days.'
+                ? 'Company is in recovery mode. HELOS is showing the manager the minimum operational gap it can act on today.'
                 : ($gap !== null && $gap <= 0
                     ? 'The company target is covered. Protect it by reducing leakage and overdue work.'
                     : 'Close the remaining target gap through the operational numbers below.'),
             'employees' => $employees,
-            'warning' => 'HELOAS uses private company financials to calculate this plan. Managers see only the remaining operational gap and assigned recovery actions. Shared targets must not be added together.',
+            'cfo_actions' => $cfoActions,
+            'warning' => $configured
+                ? 'Managers see only the remaining operational gap and assigned recovery actions. HELOS uses the owner-approved target to calculate this manager plan. Shared targets must not be added together.'
+                : 'Managers see only the remaining operational gap and assigned recovery actions. No owner target is set, so this is a minimum operational recovery plan. If the owner expects about LKR 500,000 recovery, set that as the monthly target so the manager plan becomes stronger.',
         ];
     }
 
