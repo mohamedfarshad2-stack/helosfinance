@@ -384,16 +384,18 @@ class TodaysWork extends Page
         };
         $daysRemaining = max((int) now()->startOfDay()->diffInDays(now()->endOfMonth()->startOfDay()) + 1, 1);
         $dailyDeliveries = $requiredDeliveries === null ? null : (int) ceil($requiredDeliveries / $daysRemaining);
-        $directReportIds = $user->directReports()->pluck('id');
+        $businessId = (int) $this->business->id;
+        $directReports = $this->directReportsForBusiness($user, $businessId);
+        $directReportIds = $directReports->pluck('id');
         $teamOverdue = Mission::query()
             ->whereIn('assigned_user_id', $directReportIds)
-            ->whereIn('business_id', $user->accessibleBusinessIds())
+            ->where('business_id', $businessId)
             ->active()
             ->where('due_at', '<', today())
             ->count();
 
         $employees = collect([$user])
-            ->merge($user->directReports()->orderBy('name')->get())
+            ->merge($directReports)
             ->map(function (User $employee) use ($leakage, $requiredDeliveries, $dailyDeliveries, $teamOverdue): array {
                 $responsibilities = $employee->staffResponsibilities($this->business?->id);
                 $signals = [];
@@ -645,23 +647,23 @@ class TodaysWork extends Page
     {
         $user = Auth::user();
 
-        if (! $user instanceof User || ! $user->is_staff_supervisor) {
+        if (! $user instanceof User || ! $user->is_staff_supervisor || ! $this->business) {
             return [];
         }
 
-        $reportIds = $user->directReports()->pluck('id');
+        $businessId = (int) $this->business->id;
+        $reports = $this->directReportsForBusiness($user, $businessId);
+        $reportIds = $reports->pluck('id');
 
         if ($reportIds->isEmpty()) {
             return [];
         }
 
         $missions = Mission::query()
-            ->whereIn('business_id', $user->accessibleBusinessIds())
+            ->where('business_id', $businessId)
             ->whereIn('assigned_user_id', $reportIds)
             ->active()
             ->get();
-
-        $reports = $user->directReports()->orderBy('name')->get();
 
         return [
             'people' => $reportIds->count(),
@@ -695,6 +697,18 @@ class TodaysWork extends Page
                 ->values()
                 ->all(),
         ];
+    }
+
+    private function directReportsForBusiness(User $user, int $businessId): Collection
+    {
+        return $user->directReports()
+            ->where('is_employee', true)
+            ->where(function ($query) use ($businessId): void {
+                $query->where('business_id', $businessId)
+                    ->orWhereHas('activeStaffResponsibilityAssignments', fn ($query) => $query->where('business_id', $businessId));
+            })
+            ->orderBy('name')
+            ->get();
     }
 
     private function responsibilityDirection(string $responsibility): string

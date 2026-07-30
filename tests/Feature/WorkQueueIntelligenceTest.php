@@ -13,6 +13,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\SkuStockMovement;
+use App\Domains\Shared\Models\StaffResponsibilityAssignment;
 use App\Domains\Shared\Services\MissionGeneratorService;
 use App\Domains\Shared\Services\WorkQueueService;
 use App\Filament\Pages\BankStatementImport;
@@ -530,6 +531,103 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertDontSee('{{ $task', false)
             ->assertDontSee('@if (($task', false)
             ->assertDontSee('@endif', false);
+    }
+
+    public function test_manager_team_summary_counts_only_current_business_missions(): void
+    {
+        $horns = Business::query()->create([
+            'name' => 'Horns England Pvt Ltd',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+        $otherBusiness = Business::query()->create([
+            'name' => 'Other Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_SERVICE,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $manager = User::query()->create([
+            'name' => 'Nifras',
+            'email' => 'nifras-scope@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $horns->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'is_staff_supervisor' => true,
+            'employee_access_profile' => 'operations',
+            'staff_responsibilities' => ['supervisor_review'],
+            'responsibilities_configured' => true,
+        ]);
+        $sandhamali = User::query()->create([
+            'name' => 'Sandhamali',
+            'email' => 'sandhamali-scope@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $horns->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'supervisor_user_id' => $manager->id,
+            'employee_access_profile' => 'operations',
+            'staff_responsibilities' => ['delivery_follow_up'],
+        ]);
+
+        foreach ([$horns->id, $otherBusiness->id] as $businessId) {
+            StaffResponsibilityAssignment::query()->create([
+                'user_id' => $manager->id,
+                'business_id' => $businessId,
+                'responsibility_code' => 'supervisor_review',
+                'can_view' => true,
+                'can_review' => true,
+                'team_records_allowed' => true,
+                'is_active' => true,
+            ]);
+        }
+
+        Mission::query()->create([
+            'source_key' => 'horns-delivery-1',
+            'mission_type' => 'delivery_follow_up',
+            'responsibility_code' => 'delivery_follow_up',
+            'business_id' => $horns->id,
+            'title' => 'Horns delivery follow-up',
+            'summary' => 'Only this mission belongs on Horns dashboard.',
+            'priority' => 'high',
+            'due_at' => today()->subDay(),
+            'assigned_user_id' => $sandhamali->id,
+            'status' => Mission::STATUS_OPEN,
+        ]);
+
+        foreach (range(1, 2) as $index) {
+            Mission::query()->create([
+                'source_key' => 'other-delivery-'.$index,
+                'mission_type' => 'delivery_follow_up',
+                'responsibility_code' => 'delivery_follow_up',
+                'business_id' => $otherBusiness->id,
+                'title' => 'Other business delivery follow-up',
+                'summary' => 'This must not appear on Horns dashboard.',
+                'priority' => 'high',
+                'due_at' => today()->subDay(),
+                'assigned_user_id' => $sandhamali->id,
+                'status' => Mission::STATUS_OPEN,
+            ]);
+        }
+
+        $this->actingAs($manager);
+
+        $page = new TodaysWork;
+        $page->business = $horns;
+        $method = new \ReflectionMethod(TodaysWork::class, 'teamSummary');
+        $method->setAccessible(true);
+
+        $summary = $method->invoke($page);
+
+        $this->assertSame(1, $summary['open']);
+        $this->assertSame(1, $summary['overdue']);
+        $this->assertSame('Sandhamali', $summary['members'][0]['name']);
+        $this->assertSame(1, $summary['members'][0]['open']);
+        $this->assertSame(1, $summary['members'][0]['overdue']);
     }
 
     public function test_employee_work_queue_url_redirects_to_todays_work(): void
