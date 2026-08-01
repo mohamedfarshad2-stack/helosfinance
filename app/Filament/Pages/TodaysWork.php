@@ -704,7 +704,7 @@ class TodaysWork extends Page
         $latestEvents = $this->latestStockAppOrderEvents();
         $currentEventsByKey = $latestEvents->keyBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event));
         $latestEventsInPeriod = $latestEvents
-            ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
+            ->filter(fn (OperationalEvent $event): bool => $this->stockAppPipelineDate($event)?->betweenIncluded($start, $end) ?? false)
             ->values();
         $pendingConfirmation = $latestEventsInPeriod
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
@@ -780,10 +780,80 @@ class TodaysWork extends Page
                 'reference' => $this->stockAppOrderReference($event),
                 'status' => str_replace('_', ' ', $this->stockAppStatus($event)),
                 'value' => $this->stockAppOrderValue($event),
-                'date' => $event->occurred_at?->format('M j, H:i') ?? 'No date',
+                'date' => $this->stockAppPipelineDate($event)?->format('M j, H:i') ?? 'No date',
             ])
             ->values()
             ->all();
+    }
+
+    private function stockAppPipelineDate(OperationalEvent $event): ?Carbon
+    {
+        $lane = $this->parcelMovementLane($event);
+        $keys = match ($lane) {
+            'pending_confirmation' => [
+                'order_date',
+                'created_at',
+                'created_on',
+                'ordered_at',
+                'order_created_at',
+                'order.order_date',
+                'order.created_at',
+                'data.order_date',
+                'data.created_at',
+                'payload.order_date',
+                'payload.created_at',
+            ],
+            'confirmed_waiting_dispatch' => [
+                'confirmed_at',
+                'order_confirmed_at',
+                'client_confirmed_at',
+                'order.confirmed_at',
+                'data.confirmed_at',
+                'payload.confirmed_at',
+                'order_date',
+            ],
+            'delivered' => [
+                'delivered_at',
+                'delivery_done_at',
+                'completed_at',
+                'order.delivered_at',
+                'data.delivered_at',
+                'payload.delivered_at',
+            ],
+            default => [
+                'dispatched_at',
+                'tracking_added_at',
+                'tracking_number_added_at',
+                'courier_sent_at',
+                'shipped_at',
+                'order.dispatched_at',
+                'data.dispatched_at',
+                'payload.dispatched_at',
+            ],
+        };
+
+        foreach ($keys as $key) {
+            $date = $this->parseStockAppPayloadDate(data_get($event->payload, $key));
+
+            if ($date instanceof Carbon) {
+                return $date;
+            }
+        }
+
+        return $event->occurred_at;
+    }
+
+    private function parseStockAppPayloadDate(mixed $value): ?Carbon
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function latestStockAppOrderEvents(): Collection

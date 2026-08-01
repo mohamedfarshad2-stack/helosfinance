@@ -677,6 +677,15 @@ class WorkQueueIntelligenceTest extends TestCase
         ]);
         OperationalEvent::query()->create([
             'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_CREATED,
+            'external_id' => 'OLD-PENDING-SYNCED-TODAY',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'OLD-PENDING-SYNCED-TODAY', 'sale_amount' => 999, 'status' => 'Pending', 'order_date' => today()->subDays(10)->toDateString()],
+            'occurred_at' => now(),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
             'source' => 'stock_app',
             'event_type' => OperationalEvent::ORDER_CONFIRMED,
             'external_id' => 'ORDER-CONFIRMED',
