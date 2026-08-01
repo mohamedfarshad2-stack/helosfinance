@@ -263,7 +263,7 @@ class StockAppSyncController extends Controller
             'delivered', 'delivery_done' => OperationalEvent::ORDER_DELIVERED,
             'returned', 'return' => OperationalEvent::ORDER_RETURNED,
             'resent', 'resend' => OperationalEvent::ORDER_RESENT,
-            'created' => OperationalEvent::ORDER_CREATED,
+            'created', 'new', 'pending' => OperationalEvent::ORDER_CREATED,
             'confirmed' => OperationalEvent::ORDER_CONFIRMED,
             default => $eventType,
         };
