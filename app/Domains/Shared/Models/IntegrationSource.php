@@ -59,4 +59,17 @@ class IntegrationSource extends Model
             'allow_local_bypass' => $this->allow_local_bypass ?? ($settings['allow_local_bypass'] ?? null),
         ];
     }
+
+    public function stockAppPendingReadConfig(): array
+    {
+        $settings = is_array($this->settings ?? null) ? $this->settings : [];
+
+        return [
+            'email' => $settings['stock_app_admin_email'] ?? null,
+            'password' => $settings['stock_app_admin_password'] ?? null,
+            'client_id' => filled($settings['stock_app_client_id'] ?? null)
+                ? (int) $settings['stock_app_client_id']
+                : null,
+        ];
+    }
 }

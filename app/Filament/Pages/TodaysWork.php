@@ -11,6 +11,7 @@ use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\MissionGeneratorService;
 use App\Domains\Shared\Services\MissionSourceActionService;
+use App\Domains\Shared\Services\StockAppPendingParityService;
 use App\Filament\Resources\MissionResource;
 use App\Models\User;
 use Filament\Notifications\Notification;
@@ -738,6 +739,7 @@ class TodaysWork extends Page
         $deliveredSoFarValue = (float) $deliveredSoFar->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $pendingSyncCoverage = $this->pendingSyncCoverage($start);
+        $pendingParity = app(StockAppPendingParityService::class)->compare($this->business, $start, $end, $pendingConfirmation->count());
 
         return [
             'period_label' => $start->isSameDay($end)
@@ -749,6 +751,9 @@ class TodaysWork extends Page
             'pending_confirmation_label' => 'Selected date range',
             'pending_confirmation_sync_note' => $pendingSyncCoverage['note'],
             'pending_confirmation_sync_warning' => $pendingSyncCoverage['warning'],
+            'pending_confirmation_live_count' => $pendingParity['live_count'],
+            'pending_confirmation_live_note' => $pendingParity['note'],
+            'pending_confirmation_live_warning' => $pendingParity['warning'],
             'follow_up_label' => $followUpEnd->lt($start)
                 ? 'Before today'
                 : ($start->isSameDay($followUpEnd)

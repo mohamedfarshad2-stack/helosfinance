@@ -43,6 +43,10 @@ class IntegrationSourceResource extends Resource
                     TextInput::make('settings.stock_app_business_key')
                         ->label('Stock-app client code')
                         ->helperText('Use the Code from the Stock App client screen. Example: horns. HELOS uses this to match orders to this business.'),
+                    TextInput::make('settings.stock_app_client_id')
+                        ->label('Stock-app client ID')
+                        ->numeric()
+                        ->helperText('Use the numeric clientId from the Stock App orders URL. Example: 1 for Horns England.'),
                     Select::make('status')->options(['draft' => 'Draft', 'testing' => 'Testing', 'active' => 'Active', 'paused' => 'Paused'])->required(),
                 ])
                 ->columns(2),
@@ -66,6 +70,15 @@ class IntegrationSourceResource extends Resource
                         ->revealable()
                         ->dehydrated(fn ($state): bool => filled($state))
                         ->helperText('Leave blank to keep the existing secret.'),
+                    TextInput::make('settings.stock_app_admin_email')
+                        ->label('Stock-app read-only email')
+                        ->email()
+                        ->helperText('HELOS uses this only to compare live pending queue numbers against synced rows.'),
+                    TextInput::make('settings.stock_app_admin_password')
+                        ->label('Stock-app read-only password')
+                        ->password()
+                        ->revealable()
+                        ->helperText('Used only for live pending queue verification inside HELOS.'),
                 ])
                 ->columns(2),
         ]);
