@@ -692,13 +692,30 @@ class TodaysWork extends Page
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
         $latestEvents = $this->latestStockAppOrderEvents();
-        $pendingConfirmation = $latestEvents
+        $currentEventsByKey = $latestEvents->keyBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event));
+        $latestEventsInPeriod = $latestEvents
+            ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
+            ->values();
+        $pendingConfirmation = $latestEventsInPeriod
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
             ->values();
-        $dispatchedWaitingDelivery = $latestEvents
-            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'dispatched_waiting_delivery')
+        $dispatchedWaitingDelivery = $dispatchEvents
+            ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
+            ->map(fn (Collection $events): OperationalEvent => $events
+                ->sortBy(fn (OperationalEvent $event): string => sprintf(
+                    '%012d-%012d',
+                    $event->occurred_at?->timestamp ?? 0,
+                    $event->id,
+                ))
+                ->last())
+            ->filter(function (OperationalEvent $event) use ($currentEventsByKey): bool {
+                $current = $currentEventsByKey->get($this->stockAppOrderKey($event));
+
+                return $current instanceof OperationalEvent
+                    && $this->parcelMovementLane($current) === 'dispatched_waiting_delivery';
+            })
             ->values();
-        $deliveredSoFar = $latestEvents
+        $deliveredSoFar = $latestEventsInPeriod
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'delivered')
             ->values();
 
@@ -711,7 +728,6 @@ class TodaysWork extends Page
             'period_label' => $start->isSameDay($end)
                 ? $start->format('M j, Y')
                 : $start->format('M j').' - '.$end->format('M j, Y'),
-            'backlog_label' => 'Current open work',
             'business_name' => $this->business->name,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
