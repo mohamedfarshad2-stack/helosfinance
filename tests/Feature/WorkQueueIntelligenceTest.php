@@ -788,10 +788,11 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->assertSame(3, $movement['dispatched_count']);
         $this->assertSame(5400.0, $movement['dispatched_value']);
-        $this->assertSame(4, $movement['pending_confirmation_count']);
-        $this->assertSame(3599.0, $movement['pending_confirmation_value']);
-        $this->assertSame('OLD-PENDING-SYNCED-TODAY', $movement['pending_confirmation_items'][0]['reference']);
-        $this->assertSame(999.0, $movement['pending_confirmation_items'][0]['value']);
+        $this->assertSame(3, $movement['pending_confirmation_count']);
+        $this->assertSame(2600.0, $movement['pending_confirmation_value']);
+        $this->assertSame('HN-3699', $movement['pending_confirmation_items'][0]['reference']);
+        $this->assertSame(1200.0, $movement['pending_confirmation_items'][0]['value']);
+        $this->assertNotContains('OLD-PENDING-SYNCED-TODAY', array_column($movement['pending_confirmation_items'], 'reference'));
         $this->assertSame(1, $movement['confirmed_waiting_dispatch_count']);
         $this->assertSame(1000.0, $movement['confirmed_waiting_dispatch_value']);
         $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);
