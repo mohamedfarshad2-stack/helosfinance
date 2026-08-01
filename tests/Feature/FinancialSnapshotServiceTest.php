@@ -428,4 +428,44 @@ class FinancialSnapshotServiceTest extends TestCase
         $this->assertSame(['count' => 1, 'value' => 2000.0, 'courier_cost' => 0.0], $dispatchCohorts['dispatch_missing']);
         $this->assertSame(['count' => 0, 'value' => 0.0, 'courier_cost' => 0.0], $dispatchCohorts['invalid_dispatch_sequence']);
     }
+
+    public function test_owner_order_date_cohort_uses_latest_stock_app_status(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Current Stock Queue Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_CREATED,
+            'external_id' => 'pending-7001',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => ['order_id' => 7001, 'order_date' => now()->toDateString(), 'sale_amount' => 2850],
+            'occurred_at' => now()->subHour(),
+        ]);
+
+        $summary = app(BusinessHealthSnapshotService::class)->previewRange($business, now()->startOfDay(), now()->endOfDay());
+        $this->assertSame(['count' => 1, 'value' => 2850.0], $summary['metrics']['current_order_cohort']['pending_confirmation']);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'confirmed-7001',
+            'channel' => 'cod',
+            'quantity' => 1,
+            'payload' => ['order_id' => 7001, 'order_date' => now()->toDateString(), 'sale_amount' => 2850],
+            'occurred_at' => now(),
+        ]);
+
+        $updated = app(BusinessHealthSnapshotService::class)->previewRange($business, now()->startOfDay(), now()->endOfDay());
+        $this->assertSame(['count' => 0, 'value' => 0.0], $updated['metrics']['current_order_cohort']['pending_confirmation']);
+        $this->assertSame(['count' => 1, 'value' => 2850.0], $updated['metrics']['current_order_cohort']['confirmed_waiting_dispatch']);
+    }
 }

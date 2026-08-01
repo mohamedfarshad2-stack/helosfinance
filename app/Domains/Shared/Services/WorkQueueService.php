@@ -459,7 +459,27 @@ class WorkQueueService
             $latestDate = optional($latest->occurred_at)->toDateString() ?? now()->toDateString();
             $related = $this->relatedRecord('operational_event', $latest->id, $label, OperationalEventResource::getUrl('index'));
 
-            if (in_array($latest->event_type, [OperationalEvent::ORDER_CREATED, OperationalEvent::ORDER_CONFIRMED], true)) {
+            if ($latest->event_type === OperationalEvent::ORDER_CREATED) {
+                $tasks[] = $this->makeTask([
+                    'id' => 'order-confirm-'.$this->stableOrderKey($latest),
+                    'queue' => 'pending',
+                    'state' => 'open',
+                    'priority' => $this->datePriority($first->occurred_at),
+                    'title' => 'Pending order needs customer confirmation',
+                    'why_it_matters' => 'This order has not reached dispatch. Confirming genuine orders creates the next delivery opportunity.',
+                    'recommended_action' => 'Open the order in Stock App, call the customer, verify phone, address, product and value, then record the real confirmation result.',
+                    'related_record' => $related,
+                    'assigned_team' => 'CSR',
+                    'assigned_user' => $this->assignedUserLabel($business, ['csr', 'sales', 'operations', 'admin']),
+                    'created_at' => $createdAt,
+                    'due_on' => $createdAt,
+                    'status_label' => $this->statusLabel($createdAt),
+                    'work_type' => 'pending_confirmation',
+                    'amount' => $this->orderFinancialValue($latest),
+                ]);
+            }
+
+            if ($latest->event_type === OperationalEvent::ORDER_CONFIRMED) {
                 $tasks[] = $this->makeTask([
                     'id' => 'order-track-'.($latest->external_id ?: $latest->id),
                     'queue' => 'pending',
@@ -611,9 +631,40 @@ class WorkQueueService
         return $tasks;
     }
 
+    private function orderFinancialValue(OperationalEvent $event): ?float
+    {
+        $value = (float) (data_get($event->payload, 'sale_amount')
+            ?? data_get($event->payload, 'customer_total_amount')
+            ?? data_get($event->payload, 'amount')
+            ?? 0);
+
+        return $value > 0 ? $value : null;
+    }
+
     private function stableOrderKey(OperationalEvent $event): string
     {
-        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
+        foreach ([
+            'order_id',
+            'cod_order_id',
+            'order_number',
+            'reference',
+            'id',
+            'order.id',
+            'order.order_id',
+            'data.id',
+            'data.order_id',
+        ] as $key) {
+            $value = data_get($event->payload, $key);
+
+            if (filled($value)) {
+                return 'stock-order:'.trim((string) $value);
+            }
+        }
+
+        $externalId = trim((string) $event->external_id);
+        $normalized = preg_replace('/^(?:pending|created|confirmed|confirmation|dispatch|dispatched|tracking|delivery|delivered|return|returned|resend)[\-_:\/]+/i', '', $externalId);
+
+        return 'stock-order:'.($normalized !== '' ? $normalized : ($externalId !== '' ? $externalId : (string) $event->id));
     }
 
     private function inventoryTasks(Business $business): array
@@ -889,7 +940,7 @@ class WorkQueueService
             return '100%';
         }
 
-        return number_format(($completedToday / $total) * 100, 0).'%' ;
+        return number_format(($completedToday / $total) * 100, 0).'%';
     }
 
     private function orderLabel(OperationalEvent $event): string

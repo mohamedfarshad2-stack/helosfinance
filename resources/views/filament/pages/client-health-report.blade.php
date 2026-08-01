@@ -24,7 +24,10 @@
                 $end = \Illuminate\Support\Carbon::parse($snapshot->period_end)->format('M j, Y');
                 $dispatchedValue = (float) data_get($metrics, 'dispatched_parcel_value', 0);
                 $deliveredRevenue = (float) $snapshot->revenue_total;
-                $pendingValue = (float) data_get($metrics, 'pending_dispatch_value', 0);
+                $currentOrderCohort = (array) data_get($metrics, 'current_order_cohort', []);
+                $pendingConfirmationCount = (int) data_get($currentOrderCohort, 'pending_confirmation.count', 0);
+                $pendingConfirmationValue = (float) data_get($currentOrderCohort, 'pending_confirmation.value', 0);
+                $pendingValue = (float) data_get($currentOrderCohort, 'dispatched_waiting_delivery.value', data_get($metrics, 'pending_dispatch_value', 0));
                 $productCosts = (float) data_get($metrics, 'production_costs', data_get($metrics, 'product_costs', 0));
                 $productionPendingPay = (float) data_get($metrics, 'production_pending_pay', 0);
                 $missingEstimatedProductionCosts = (float) data_get($metrics, 'missing_estimated_production_costs', 0);
@@ -51,7 +54,7 @@
                 $toSettle = (float) data_get($metrics, 'to_settle', 0);
                 $companyCostsEntered = $manualOverheadCosts + $salaryPressure + $bankPaymentChargeBankRows;
                 $deliveredCount = (int) data_get($metrics, 'order_counts.delivered', 0);
-                $pendingCount = (int) data_get($metrics, 'pending_dispatch_count', 0);
+                $pendingCount = (int) data_get($currentOrderCohort, 'dispatched_waiting_delivery.count', data_get($metrics, 'pending_dispatch_count', 0));
                 $returnedCount = (int) data_get($metrics, 'order_counts.returned', 0);
                 $returnCourierCosts = (float) data_get($metrics, 'return_courier_costs', 0);
                 $averageReturnCourierCost = $returnedCount > 0 ? $returnCourierCosts / $returnedCount : 0;
@@ -183,6 +186,13 @@
                         : 'The selected period is negative after known HELOS costs. This can happen when delivered sales are lower than recorded courier, production, salary, overhead, expense, leakage, and estimated missing production costs.');
                 $heroStats = [
                     [
+                        'label' => 'Pending confirmation',
+                        'value' => $money($pendingConfirmationValue),
+                        'helper' => $number($pendingConfirmationCount).' order(s) need CSR action',
+                        'icon' => 'heroicon-o-phone',
+                        'style' => 'from-fuchsia-500 to-violet-500',
+                    ],
+                    [
                         'label' => 'Verified delivered sales',
                         'value' => $money($ownerDeliveredRevenue),
                         'helper' => 'Courier is deducted below',
@@ -190,7 +200,7 @@
                         'style' => 'from-emerald-500 to-teal-500',
                     ],
                     [
-                        'label' => 'Pending delivery',
+                        'label' => 'Dispatched awaiting delivery',
                         'value' => $money($pendingValue),
                         'helper' => $number($pendingCount).' parcel(s) not revenue yet',
                         'icon' => 'heroicon-o-clock',
@@ -216,8 +226,8 @@
                     [
                         'title' => 'Manager view',
                         'kicker' => 'Team focus',
-                        'value' => $number($pendingCount).' pending',
-                        'body' => 'Push pending parcels to delivered, reduce returns, and keep parcel statuses accurate every day.',
+                        'value' => $number($pendingConfirmationCount).' to confirm · '.$number($pendingCount).' with courier',
+                        'body' => 'Push CSR staff to confirm genuine pending orders, then follow dispatched parcels until delivery and reduce returns.',
                         'icon' => 'heroicon-o-user-group',
                         'style' => 'border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100',
                     ],
@@ -231,6 +241,14 @@
                     ],
                 ];
                 $cards = [
+                    [
+                        'label' => 'Pending confirmation',
+                        'count' => $number($pendingConfirmationCount).' orders',
+                        'value' => $money($pendingConfirmationValue),
+                        'hint' => 'Current Stock App pending orders for the selected order-date range. CSR must call and record the real result.',
+                        'icon' => 'heroicon-o-phone',
+                        'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100',
+                    ],
                     [
                         'label' => 'Dispatched this period',
                         'count' => $number($dispatchCount).' parcels',
@@ -348,7 +366,7 @@
                         'action_url' => \App\Filament\Resources\ExpenseResource::getUrl('index'),
                     ],
                     [
-                        'label' => 'Pending delivery',
+                        'label' => 'Dispatched awaiting delivery',
                         'count' => $number($pendingCount).' parcels',
                         'value' => $money($pendingValue),
                         'hint' => 'The team must push these parcels toward successful delivery.',
@@ -420,7 +438,8 @@
                         'open' => false,
                         'details' => array_values(array_filter([
                             $cardsByLabel->get('Dispatched this period'),
-                            $cardsByLabel->get('Pending delivery'),
+                            $cardsByLabel->get('Pending confirmation'),
+                            $cardsByLabel->get('Dispatched awaiting delivery'),
                             $cardsByLabel->get('Courier costs'),
                         ])),
                     ],
@@ -529,7 +548,8 @@
                             ['label' => 'Return courier', 'value' => $money($returnCourierCosts), 'helper' => $number($returnedCount).' returns x '.$money($averageReturnCourierCost), 'icon' => 'heroicon-o-arrow-uturn-left', 'style' => 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100'],
                             ['label' => 'Production', 'value' => $money($productionCostForOwner), 'helper' => $productionCostTrusted ? 'Recorded' : 'Estimate used', 'icon' => 'heroicon-o-cube', 'style' => $productionCostTrusted ? 'border-violet-200 bg-violet-50 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100' : 'border-rose-200 bg-rose-50 text-rose-950 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100'],
                             ['label' => 'Company costs', 'value' => $money($companyCostsEntered), 'helper' => 'Expenses + salary', 'icon' => 'heroicon-o-building-office-2', 'style' => 'border-slate-200 bg-slate-50 text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100'],
-                            ['label' => 'Pending delivery', 'value' => $money($pendingValue), 'helper' => $number($pendingCount).' parcels', 'icon' => 'heroicon-o-clock', 'style' => 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'],
+                            ['label' => 'Pending confirmation', 'value' => $money($pendingConfirmationValue), 'helper' => $number($pendingConfirmationCount).' orders', 'icon' => 'heroicon-o-phone', 'style' => 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-950 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-100'],
+                            ['label' => 'Awaiting delivery', 'value' => $money($pendingValue), 'helper' => $number($pendingCount).' dispatched parcels', 'icon' => 'heroicon-o-clock', 'style' => 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'],
                         ] as $tile)
                             <div class="rounded-xl border p-3 shadow-sm {{ $tile['style'] }}">
                                 <div class="flex items-start justify-between gap-2">

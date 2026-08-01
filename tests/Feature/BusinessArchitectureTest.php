@@ -5,15 +5,15 @@ namespace Tests\Feature;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Expense;
 use App\Filament\Pages\BankStatementImport;
-use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Pages\ClientHealthReport;
+use App\Filament\Pages\QuickExpenseEntry;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\ExpenseResource;
-use App\Filament\Resources\MaterialComponentResource;
 use App\Filament\Resources\IntegrationSourceResource;
+use App\Filament\Resources\MaterialComponentResource;
 use App\Filament\Resources\MaterialLedgerResource;
-use App\Filament\Resources\ProductionWorkStepResource;
 use App\Filament\Resources\ProductionEntryResource;
+use App\Filament\Resources\ProductionWorkStepResource;
 use App\Filament\Resources\ServiceBillingResource;
 use App\Filament\Resources\SkuRecipeResource;
 use App\Filament\Resources\SkuResource;
@@ -203,7 +203,8 @@ class BusinessArchitectureTest extends TestCase
             ->assertSee('Courier costs')
             ->assertSee('Open courier setup')
             ->assertSee('Costs still to settle')
-            ->assertSee('Pending delivery')
+            ->assertSee('Pending confirmation')
+            ->assertSee('Dispatched awaiting delivery')
             ->assertSee('Delivered sales')
             ->assertSee('This period dispatches delivered')
             ->assertSee('Earlier dispatches delivered')

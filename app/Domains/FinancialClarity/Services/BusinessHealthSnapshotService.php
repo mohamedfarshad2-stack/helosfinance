@@ -157,6 +157,7 @@ class BusinessHealthSnapshotService
             ->filter(fn (OperationalEvent $event): bool => (float) $event->direct_cost_amount <= 0)
             ->count();
         $deliveredCohorts = $this->deliveredCohorts($business, $latestDeliveredOrderEvents, $start, $end);
+        $currentOrderCohort = $this->currentStockAppOrderCohort($business, $start, $end);
         $deliveredDispatchCohorts = $this->deliveredDispatchCohorts($business, $latestDeliveredOrderEvents, $start, $end);
         $unrecognizedOrderRevenue = max((float) (clone $events)->sum('revenue_amount') - $recognizedOrderRevenue, 0.0);
         $revenue = $recognizedOrderRevenue + $serviceRevenue;
@@ -307,6 +308,7 @@ class BusinessHealthSnapshotService
                 'parcel_gross_profit' => $parcelGrossProfit,
                 'delivered_without_courier_cost_count' => $deliveredWithoutCourierCost,
                 'delivered_cohorts' => $deliveredCohorts,
+                'current_order_cohort' => $currentOrderCohort,
                 'delivered_dispatch_cohorts' => $deliveredDispatchCohorts,
                 'unrecognized_order_revenue' => $unrecognizedOrderRevenue,
                 'fixed_expenses' => $fixedExpenses,
@@ -531,6 +533,77 @@ class BusinessHealthSnapshotService
             ->all();
     }
 
+    private function currentStockAppOrderCohort(Business $business, Carbon $start, Carbon $end): array
+    {
+        $groups = OperationalEvent::query()
+            ->where('business_id', $business->id)
+            ->whereIn('source', ['stock_app', 'stock_app_sync'])
+            ->whereIn('event_type', $this->orderLifecycleEventTypes())
+            ->get()
+            ->groupBy(fn (OperationalEvent $event): string => $this->stableOrderKey($event));
+
+        $orders = $groups
+            ->map(function (Collection $events): ?array {
+                $ordered = $events->sortBy(fn (OperationalEvent $event): string => sprintf(
+                    '%012d-%012d',
+                    $event->occurred_at?->timestamp ?? 0,
+                    $event->id,
+                ));
+                $latest = $ordered->last();
+
+                if (! $latest instanceof OperationalEvent) {
+                    return null;
+                }
+
+                return [
+                    'event' => $latest,
+                    'order_date' => $this->stockAppOrderDate($ordered),
+                    'value' => $this->orderValue($latest),
+                ];
+            })
+            ->filter(fn (?array $order): bool => $order !== null
+                && $order['order_date'] instanceof Carbon
+                && $order['order_date']->betweenIncluded($start->copy()->startOfDay(), $end->copy()->endOfDay()))
+            ->values();
+
+        $summarize = fn (Collection $rows): array => [
+            'count' => $rows->count(),
+            'value' => round((float) $rows->sum('value'), 2),
+        ];
+
+        return [
+            'total' => $summarize($orders),
+            'pending_confirmation' => $summarize($orders->filter(fn (array $order): bool => $order['event']->event_type === OperationalEvent::ORDER_CREATED)),
+            'confirmed_waiting_dispatch' => $summarize($orders->filter(fn (array $order): bool => $order['event']->event_type === OperationalEvent::ORDER_CONFIRMED)),
+            'dispatched_waiting_delivery' => $summarize($orders->filter(fn (array $order): bool => in_array($order['event']->event_type, [
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_RESENT,
+            ], true))),
+            'delivered' => $summarize($orders->filter(fn (array $order): bool => $order['event']->event_type === OperationalEvent::ORDER_DELIVERED)),
+            'returned' => $summarize($orders->filter(fn (array $order): bool => $order['event']->event_type === OperationalEvent::ORDER_RETURNED)),
+        ];
+    }
+
+    private function stockAppOrderDate(Collection $events): ?Carbon
+    {
+        foreach ($events as $event) {
+            foreach (['order_date', 'ordered_at', 'order_created_at', 'order.order_date', 'data.order_date'] as $key) {
+                $value = data_get($event->payload, $key);
+
+                if (filled($value)) {
+                    try {
+                        return Carbon::parse($value);
+                    } catch (\Throwable) {
+                        // Continue to another order-date field.
+                    }
+                }
+            }
+        }
+
+        return $events->first()?->occurred_at;
+    }
+
     private function payloadConfirmationAt(OperationalEvent $event): ?Carbon
     {
         foreach (['confirmed_at', 'order_confirmed_at', 'client_confirmed_at'] as $key) {
@@ -567,7 +640,28 @@ class BusinessHealthSnapshotService
 
     private function stableOrderKey(OperationalEvent $event): string
     {
-        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
+        foreach ([
+            'order_id',
+            'cod_order_id',
+            'order_number',
+            'reference',
+            'id',
+            'order.id',
+            'order.order_id',
+            'data.id',
+            'data.order_id',
+        ] as $key) {
+            $value = data_get($event->payload, $key);
+
+            if (filled($value)) {
+                return 'stock-order:'.trim((string) $value);
+            }
+        }
+
+        $externalId = trim((string) $event->external_id);
+        $normalized = preg_replace('/^(?:pending|created|confirmed|confirmation|dispatch|dispatched|tracking|delivery|delivered|return|returned|resend)[\-_:\/]+/i', '', $externalId);
+
+        return 'stock-order:'.($normalized !== '' ? $normalized : ($externalId !== '' ? $externalId : (string) $event->id));
     }
 
     /**

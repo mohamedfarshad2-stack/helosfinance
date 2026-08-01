@@ -1344,6 +1344,7 @@ class TodaysWork extends Page
     private function taskResponsibility(array $task): ?string
     {
         return match ((string) ($task['work_type'] ?? 'general')) {
+            'pending_confirmation' => 'order_confirmation',
             'order_tracking', 'tracking_added' => 'dispatch',
             'delivery_follow_up', 'order_delivery' => 'delivery_follow_up',
             'return_action', 'resend_follow_up' => 'return_recovery',

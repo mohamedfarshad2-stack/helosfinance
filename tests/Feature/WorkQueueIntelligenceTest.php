@@ -300,7 +300,7 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertContains('Possible transfer needs confirmation', $titles);
         $this->assertContains('Supplier payment needs settlement', $titles);
         $this->assertContains('Production payout pending', $titles);
-        $this->assertContains('Order needs a tracking number', $titles);
+        $this->assertContains('Pending order needs customer confirmation', $titles);
         $this->assertContains('Dispatched parcel needs delivery follow-up', $titles);
         $this->assertContains('Return needs action', $titles);
         $this->assertContains('Resend is still open', $titles);
@@ -471,8 +471,8 @@ class WorkQueueIntelligenceTest extends TestCase
         OperationalEvent::query()->create([
             'business_id' => $business->id,
             'sku_id' => null,
-            'source' => 'manual',
-            'event_type' => OperationalEvent::ORDER_CREATED,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
             'external_id' => 'ORD-EMP-1',
             'channel' => 'cod',
             'department' => 'Sales',
@@ -1003,7 +1003,8 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertSee('Open production')
             ->assertSee('Estimated missing production')
             ->assertSee('Costs still to settle')
-            ->assertSee('Pending delivery')
+            ->assertSee('Pending confirmation')
+            ->assertSee('Dispatched awaiting delivery')
             ->assertSee('This period dispatches delivered')
             ->assertSee('Earlier dispatches delivered')
             ->assertSee('Estimated profit from known costs');
