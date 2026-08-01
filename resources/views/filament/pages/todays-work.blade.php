@@ -181,10 +181,10 @@
                     <div class="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-4 shadow-sm dark:border-sky-900 dark:from-sky-950/30 dark:via-gray-900 dark:to-emerald-950/20">
                         <div class="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
                             <div>
-                                <div class="text-xs font-black uppercase text-sky-700 dark:text-sky-300">Parcel movement</div>
+                                <div class="text-xs font-black uppercase text-sky-700 dark:text-sky-300">Parcel movement - {{ $parcelMovement['business_name'] }} only</div>
                                 <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Move confirmed to dispatched, then pending to delivered</h2>
                                 <p class="mt-1 max-w-3xl text-sm font-medium text-gray-600 dark:text-gray-300">
-                                    Confirmed is not dispatched yet. Dispatched is not revenue yet. Your job is to move each parcel to the next real status.
+                                    These numbers use the selected dates only. Confirmed is not dispatched yet. Dispatched is not revenue yet. Your job is to move each parcel to the next real status.
                                 </p>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
@@ -207,13 +207,13 @@
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">This is not revenue until delivered.</div>
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-amber-100 dark:bg-gray-950 dark:text-white dark:ring-amber-900">
-                                <div class="text-xs font-black uppercase text-amber-600">Confirmed waiting dispatch</div>
+                                <div class="text-xs font-black uppercase text-amber-600">Confirmed waiting dispatch - {{ $parcelMovement['period_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['confirmed_waiting_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['confirmed_waiting_count']) }} confirmed parcel(s)</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Add tracking and move these to dispatched.</div>
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-emerald-100 dark:bg-gray-950 dark:text-white dark:ring-emerald-900">
-                                <div class="text-xs font-black uppercase text-emerald-600">Pending delivery pressure</div>
+                                <div class="text-xs font-black uppercase text-emerald-600">Pending delivery pressure - {{ $parcelMovement['period_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['pending_delivery_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['pending_delivery_count']) }} dispatched/pending parcel(s)</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Push these to delivered or record the real return reason.</div>

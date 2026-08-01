@@ -694,9 +694,11 @@ class TodaysWork extends Page
         $latestEvents = $this->latestStockAppOrderEvents();
         $confirmedWaiting = $latestEvents
             ->where('event_type', OperationalEvent::ORDER_CONFIRMED)
+            ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
             ->values();
         $pendingDelivery = $latestEvents
             ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
+            ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
             ->values();
 
         $confirmedValue = (float) $confirmedWaiting->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
@@ -707,6 +709,7 @@ class TodaysWork extends Page
             'period_label' => $start->isSameDay($end)
                 ? $start->format('M j, Y')
                 : $start->format('M j').' - '.$end->format('M j, Y'),
+            'business_name' => $this->business->name,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
             'dispatched_count' => $dispatchEvents

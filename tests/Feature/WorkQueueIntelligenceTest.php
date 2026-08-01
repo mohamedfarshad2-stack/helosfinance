@@ -702,6 +702,15 @@ class WorkQueueIntelligenceTest extends TestCase
             'payload' => ['order_id' => 'OTHER-ORDER', 'sale_amount' => 9000],
             'occurred_at' => now(),
         ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'OLD-CONFIRMED',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'OLD-CONFIRMED', 'sale_amount' => 7000],
+            'occurred_at' => now()->subDays(10),
+        ]);
 
         $this->actingAs($arafath);
 
