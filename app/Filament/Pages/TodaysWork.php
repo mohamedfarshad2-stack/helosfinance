@@ -737,6 +737,7 @@ class TodaysWork extends Page
         $dispatchedWaitingDeliveryValue = (float) $dispatchedWaitingDelivery->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $deliveredSoFarValue = (float) $deliveredSoFar->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
+        $pendingSyncCoverage = $this->pendingSyncCoverage($start);
 
         return [
             'period_label' => $start->isSameDay($end)
@@ -746,6 +747,8 @@ class TodaysWork extends Page
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
             'pending_confirmation_label' => 'Selected date range',
+            'pending_confirmation_sync_note' => $pendingSyncCoverage['note'],
+            'pending_confirmation_sync_warning' => $pendingSyncCoverage['warning'],
             'follow_up_label' => $followUpEnd->lt($start)
                 ? 'Before today'
                 : ($start->isSameDay($followUpEnd)
@@ -770,6 +773,45 @@ class TodaysWork extends Page
             'can_dispatch' => in_array('dispatch', $responsibilities, true),
             'can_follow_delivery' => in_array('delivery_follow_up', $responsibilities, true),
         ];
+    }
+
+    private function pendingSyncCoverage(Carbon $start): array
+    {
+        if (! $this->business) {
+            return ['warning' => false, 'note' => null];
+        }
+
+        $integration = IntegrationSource::query()
+            ->where('business_id', $this->business->id)
+            ->where('type', 'stock_app')
+            ->orderByDesc('last_successful_sync_at')
+            ->orderByDesc('last_webhook_received_at')
+            ->first();
+
+        if (! $integration instanceof IntegrationSource) {
+            return ['warning' => true, 'note' => 'HELOAS has no active Stock App sync record for this business yet.'];
+        }
+
+        $coverageStart = collect([
+            $integration->last_successful_sync_at,
+            $integration->last_webhook_received_at,
+            $integration->created_at,
+        ])
+            ->filter(fn ($value) => $value instanceof Carbon)
+            ->min();
+
+        if (! $coverageStart instanceof Carbon) {
+            return ['warning' => true, 'note' => 'HELOAS cannot prove when Stock App pending-order coverage started.'];
+        }
+
+        if ($start->lt($coverageStart->copy()->startOfDay())) {
+            return [
+                'warning' => true,
+                'note' => 'Pending queue may be incomplete before '.$coverageStart->format('M j, Y g:i A').'. Older pending orders can stay in Stock App without existing in HELOAS until they are synced.',
+            ];
+        }
+
+        return ['warning' => false, 'note' => 'Pending queue is being read from HELOAS sync records for the selected date range.'];
     }
 
     private function parcelMovementItems(Collection $events): array
