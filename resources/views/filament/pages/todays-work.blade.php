@@ -176,6 +176,68 @@
                 </x-filament::section>
             @endif
 
+            @if (! empty($parcelMovement))
+                <x-filament::section>
+                    <div class="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-4 shadow-sm dark:border-sky-900 dark:from-sky-950/30 dark:via-gray-900 dark:to-emerald-950/20">
+                        <div class="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
+                            <div>
+                                <div class="text-xs font-black uppercase text-sky-700 dark:text-sky-300">Parcel movement</div>
+                                <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Move confirmed to dispatched, then pending to delivered</h2>
+                                <p class="mt-1 max-w-3xl text-sm font-medium text-gray-600 dark:text-gray-300">
+                                    Confirmed is not dispatched yet. Dispatched is not revenue yet. Your job is to move each parcel to the next real status.
+                                </p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="grid gap-1 text-xs font-bold text-gray-600 dark:text-gray-300">
+                                    From
+                                    <input type="date" wire:model.live="parcelStartDate" class="rounded-lg border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                                </label>
+                                <label class="grid gap-1 text-xs font-bold text-gray-600 dark:text-gray-300">
+                                    To
+                                    <input type="date" wire:model.live="parcelEndDate" class="rounded-lg border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid gap-3 lg:grid-cols-3">
+                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-sky-100 dark:bg-gray-950 dark:text-white dark:ring-sky-900">
+                                <div class="text-xs font-black uppercase text-sky-600">Dispatched value - {{ $parcelMovement['period_label'] }}</div>
+                                <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['dispatched_value'], 2) }}</div>
+                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['dispatched_count']) }} parcel(s) sent to courier</div>
+                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">This is not revenue until delivered.</div>
+                            </div>
+                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-amber-100 dark:bg-gray-950 dark:text-white dark:ring-amber-900">
+                                <div class="text-xs font-black uppercase text-amber-600">Confirmed waiting dispatch</div>
+                                <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['confirmed_waiting_value'], 2) }}</div>
+                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['confirmed_waiting_count']) }} confirmed parcel(s)</div>
+                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Add tracking and move these to dispatched.</div>
+                            </div>
+                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-emerald-100 dark:bg-gray-950 dark:text-white dark:ring-emerald-900">
+                                <div class="text-xs font-black uppercase text-emerald-600">Pending delivery pressure</div>
+                                <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['pending_delivery_value'], 2) }}</div>
+                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['pending_delivery_count']) }} dispatched/pending parcel(s)</div>
+                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Push these to delivered or record the real return reason.</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                            @if ($parcelMovement['can_dispatch'])
+                                <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                                    <div class="text-xs font-black uppercase opacity-70">Arafath dispatch lane</div>
+                                    <div class="mt-1 text-sm font-semibold">Start with confirmed waiting dispatch. Every confirmed parcel without tracking is stuck before courier.</div>
+                                </div>
+                            @endif
+                            @if ($parcelMovement['can_follow_delivery'])
+                                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
+                                    <div class="text-xs font-black uppercase opacity-70">Delivery conversion lane</div>
+                                    <div class="mt-1 text-sm font-semibold">Then push dispatched and courier-pending parcels to delivered. That is where owner revenue becomes real.</div>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </x-filament::section>
+            @endif
+
             @if (! $guide['is_supervisor'])
                 <x-filament::section>
                 <div class="grid gap-4 lg:grid-cols-2">

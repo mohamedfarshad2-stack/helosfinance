@@ -7,10 +7,11 @@ use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
 use App\Domains\Shared\Models\Mission;
-use App\Filament\Resources\MissionResource;
+use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Services\MissionGeneratorService;
 use App\Domains\Shared\Services\MissionSourceActionService;
+use App\Filament\Resources\MissionResource;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -41,6 +42,12 @@ class TodaysWork extends Page
 
     public array $employeeContribution = [];
 
+    public array $parcelMovement = [];
+
+    public ?string $parcelStartDate = null;
+
+    public ?string $parcelEndDate = null;
+
     public ?int $activeMissionId = null;
 
     public array $missionActionData = [];
@@ -53,9 +60,12 @@ class TodaysWork extends Page
     {
         $businessId = Auth::user()?->business_id;
         $this->business = $businessId ? Business::query()->find($businessId) : null;
+        $this->parcelStartDate = today()->toDateString();
+        $this->parcelEndDate = today()->toDateString();
         $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
         $this->managerProfit = $this->managerProfitGuide($snapshots);
         $this->employeeContribution = $this->employeeContributionGuide($snapshots);
+        $this->parcelMovement = $this->employeeParcelMovement();
     }
 
     protected function getViewData(): array
@@ -65,9 +75,20 @@ class TodaysWork extends Page
             'workQueue' => $this->workQueue,
             'managerProfit' => $this->managerProfit,
             'employeeContribution' => $this->employeeContribution,
+            'parcelMovement' => $this->parcelMovement,
             'activeMission' => $this->activeMission(),
             'actionOptions' => $this->actionOptions(),
         ];
+    }
+
+    public function updatedParcelStartDate(): void
+    {
+        $this->parcelMovement = $this->employeeParcelMovement();
+    }
+
+    public function updatedParcelEndDate(): void
+    {
+        $this->parcelMovement = $this->employeeParcelMovement();
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -641,6 +662,109 @@ class TodaysWork extends Page
             'goals' => $goals,
             'calculation_ready' => $contributionPerDelivery > 0,
         ];
+    }
+
+    private function employeeParcelMovement(): array
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User || ! $user->isStaff() || ! $this->business) {
+            return [];
+        }
+
+        $responsibilities = $user->staffResponsibilities($this->business->id);
+        $canMoveParcels = array_intersect($responsibilities, ['order_confirmation', 'dispatch', 'delivery_follow_up']) !== [];
+
+        if (! $canMoveParcels) {
+            return [];
+        }
+
+        $start = $this->safeDate($this->parcelStartDate, today())->startOfDay();
+        $end = $this->safeDate($this->parcelEndDate, today())->endOfDay();
+
+        if ($start->gt($end)) {
+            [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
+        }
+
+        $dispatchEvents = OperationalEvent::query()
+            ->where('business_id', $this->business->id)
+            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
+            ->whereBetween('occurred_at', [$start, $end])
+            ->get();
+        $latestEvents = $this->latestStockAppOrderEvents();
+        $confirmedWaiting = $latestEvents
+            ->where('event_type', OperationalEvent::ORDER_CONFIRMED)
+            ->values();
+        $pendingDelivery = $latestEvents
+            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
+            ->values();
+
+        $confirmedValue = (float) $confirmedWaiting->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
+        $pendingDeliveryValue = (float) $pendingDelivery->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
+        $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
+
+        return [
+            'period_label' => $start->isSameDay($end)
+                ? $start->format('M j, Y')
+                : $start->format('M j').' - '.$end->format('M j, Y'),
+            'start_date' => $start->toDateString(),
+            'end_date' => $end->toDateString(),
+            'dispatched_count' => $dispatchEvents
+                ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
+                ->count(),
+            'dispatched_value' => $dispatchedValue,
+            'confirmed_waiting_count' => $confirmedWaiting->count(),
+            'confirmed_waiting_value' => $confirmedValue,
+            'pending_delivery_count' => $pendingDelivery->count(),
+            'pending_delivery_value' => $pendingDeliveryValue,
+            'can_dispatch' => in_array('dispatch', $responsibilities, true),
+            'can_follow_delivery' => in_array('delivery_follow_up', $responsibilities, true),
+        ];
+    }
+
+    private function latestStockAppOrderEvents(): Collection
+    {
+        return OperationalEvent::query()
+            ->where('business_id', $this->business?->id)
+            ->whereIn('event_type', [
+                OperationalEvent::ORDER_CREATED,
+                OperationalEvent::ORDER_CONFIRMED,
+                OperationalEvent::TRACKING_NUMBER_ADDED,
+                OperationalEvent::WHOLESALE_PARCEL_SENT,
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::ORDER_RESENT,
+                OperationalEvent::FAKE_ORDER_DETECTED,
+            ])
+            ->get()
+            ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
+            ->map(fn (Collection $events): OperationalEvent => $events->sortBy('occurred_at')->last())
+            ->values();
+    }
+
+    private function stockAppOrderKey(OperationalEvent $event): string
+    {
+        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
+    }
+
+    private function stockAppOrderValue(OperationalEvent $event): float
+    {
+        return max((float) (
+            data_get($event->payload, 'sale_amount')
+            ?? data_get($event->payload, 'customer_total_amount')
+            ?? data_get($event->payload, 'total_amount')
+            ?? $event->revenue_amount
+            ?? 0
+        ), 0);
+    }
+
+    private function safeDate(?string $date, Carbon $fallback): Carbon
+    {
+        try {
+            return filled($date) ? Carbon::parse($date) : $fallback->copy();
+        } catch (\Throwable) {
+            return $fallback->copy();
+        }
     }
 
     private function teamSummary(): array

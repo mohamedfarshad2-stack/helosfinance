@@ -9,11 +9,26 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Services\WorkQueueService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class RevenuePipelineServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Carbon::setTestNow(Carbon::parse('2026-07-15 12:00:00'));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
 
     public function test_it_splits_cod_and_wholesale_revenue_pipeline(): void
     {

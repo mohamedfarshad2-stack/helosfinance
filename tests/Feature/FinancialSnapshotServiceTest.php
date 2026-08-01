@@ -10,11 +10,26 @@ use App\Domains\Shared\Models\FinancialSnapshot;
 use App\Domains\Shared\Models\OperationalEvent;
 use App\Domains\Shared\Models\Sku;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class FinancialSnapshotServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Carbon::setTestNow(Carbon::parse('2026-07-15 12:00:00'));
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
 
     public function test_current_month_snapshot_updates_the_same_row_instead_of_creating_duplicates(): void
     {

@@ -630,6 +630,100 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertSame(1, $summary['members'][0]['overdue']);
     }
 
+    public function test_dispatch_employee_sees_parcel_movement_for_current_business(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Horns England Pvt Ltd',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+        $otherBusiness = Business::query()->create([
+            'name' => 'Other Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+        $arafath = User::query()->create([
+            'name' => 'Arafath',
+            'email' => 'arafath-movement@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'employee_access_profile' => 'operations',
+            'staff_responsibilities' => ['dispatch', 'delivery_follow_up'],
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'ORDER-CONFIRMED',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'ORDER-CONFIRMED', 'sale_amount' => 1000],
+            'occurred_at' => now()->subHour(),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-PENDING',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'ORDER-PENDING', 'sale_amount' => 2000],
+            'occurred_at' => now()->subMinutes(30),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-DELIVERED',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'ORDER-DELIVERED', 'sale_amount' => 3000],
+            'occurred_at' => now()->subMinutes(20),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+            'external_id' => 'ORDER-DELIVERED',
+            'revenue_amount' => 3000,
+            'payload' => ['order_id' => 'ORDER-DELIVERED', 'sale_amount' => 3000],
+            'occurred_at' => now()->subMinutes(10),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $otherBusiness->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'OTHER-ORDER',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'OTHER-ORDER', 'sale_amount' => 9000],
+            'occurred_at' => now(),
+        ]);
+
+        $this->actingAs($arafath);
+
+        $page = new TodaysWork;
+        $page->business = $business;
+        $page->parcelStartDate = today()->toDateString();
+        $page->parcelEndDate = today()->toDateString();
+        $method = new \ReflectionMethod(TodaysWork::class, 'employeeParcelMovement');
+        $method->setAccessible(true);
+
+        $movement = $method->invoke($page);
+
+        $this->assertSame(2, $movement['dispatched_count']);
+        $this->assertSame(5000.0, $movement['dispatched_value']);
+        $this->assertSame(1, $movement['confirmed_waiting_count']);
+        $this->assertSame(1000.0, $movement['confirmed_waiting_value']);
+        $this->assertSame(1, $movement['pending_delivery_count']);
+        $this->assertSame(2000.0, $movement['pending_delivery_value']);
+        $this->assertTrue($movement['can_dispatch']);
+        $this->assertTrue($movement['can_follow_delivery']);
+    }
+
     public function test_employee_work_queue_url_redirects_to_todays_work(): void
     {
         $business = Business::query()->create([
