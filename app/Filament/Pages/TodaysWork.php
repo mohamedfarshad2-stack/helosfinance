@@ -691,9 +691,7 @@ class TodaysWork extends Page
             ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
-        $latestEvents = $this->latestStockAppOrderEvents()
-            ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
-            ->values();
+        $latestEvents = $this->latestStockAppOrderEvents();
         $pendingConfirmation = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
             ->values();
@@ -713,6 +711,7 @@ class TodaysWork extends Page
             'period_label' => $start->isSameDay($end)
                 ? $start->format('M j, Y')
                 : $start->format('M j').' - '.$end->format('M j, Y'),
+            'backlog_label' => 'Current open work',
             'business_name' => $this->business->name,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),

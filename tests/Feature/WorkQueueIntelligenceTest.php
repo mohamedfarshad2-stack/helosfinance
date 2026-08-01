@@ -745,8 +745,8 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertSame(5000.0, $movement['dispatched_value']);
         $this->assertSame(2, $movement['pending_confirmation_count']);
         $this->assertSame(1400.0, $movement['pending_confirmation_value']);
-        $this->assertSame(1, $movement['confirmed_waiting_count']);
-        $this->assertSame(1000.0, $movement['confirmed_waiting_value']);
+        $this->assertSame(2, $movement['confirmed_waiting_count']);
+        $this->assertSame(8000.0, $movement['confirmed_waiting_value']);
         $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);
         $this->assertSame(2000.0, $movement['dispatched_waiting_delivery_value']);
         $this->assertTrue($movement['can_dispatch']);
