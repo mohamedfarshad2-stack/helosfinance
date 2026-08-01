@@ -35,6 +35,11 @@ class StockAppSyncController extends Controller
             'orders.*.order_status' => ['nullable', 'string'],
             'orders.*.current_status' => ['nullable', 'string'],
             'orders.*.delivery_status' => ['nullable', 'string'],
+            'orders.*.confirmation_status' => ['nullable', 'string'],
+            'orders.*.confirm_status' => ['nullable', 'string'],
+            'orders.*.customer_confirmation_status' => ['nullable', 'string'],
+            'orders.*.customer_confirm_status' => ['nullable', 'string'],
+            'orders.*.call_status' => ['nullable', 'string'],
             'orders.*.status_name' => ['nullable', 'string'],
             'orders.*.status_label' => ['nullable', 'string'],
             'orders.*.order_state' => ['nullable', 'string'],
@@ -42,7 +47,10 @@ class StockAppSyncController extends Controller
             'orders.*.shipment_status' => ['nullable', 'string'],
             'orders.*.fulfillment_status' => ['nullable', 'string'],
             'orders.*.external_id' => ['nullable', 'string'],
-            'orders.*.order_id' => ['nullable', 'string'],
+            'orders.*.id' => ['nullable'],
+            'orders.*.cod_order_id' => ['nullable'],
+            'orders.*.order_id' => ['nullable'],
+            'orders.*.order_number' => ['nullable'],
             'orders.*.reference' => ['nullable', 'string'],
             'orders.*.sku_code' => ['nullable', 'string'],
             'orders.*.sku_name' => ['nullable', 'string'],
@@ -213,7 +221,7 @@ class StockAppSyncController extends Controller
         $parts = [
             $businessId,
             $order['event_type'] ?? 'unknown',
-            $order['order_id'] ?? $order['external_id'] ?? $order['reference'] ?? $order['sku_code'] ?? 'payload',
+            $order['cod_order_id'] ?? $order['order_id'] ?? $order['id'] ?? $order['order_number'] ?? $order['external_id'] ?? $order['reference'] ?? $order['sku_code'] ?? 'payload',
             $order['tracking_number'] ?? 'no-tracking',
             $order['occurred_at'] ?? 'now',
             $order['quantity'] ?? 1,
@@ -261,7 +269,26 @@ class StockAppSyncController extends Controller
     private function normalizeEventType(mixed $value): ?string
     {
         if (is_array($value)) {
-            foreach (['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state', 'parcel_status', 'shipment_status', 'fulfillment_status'] as $key) {
+            $confirmationKeys = ['confirmation_status', 'confirm_status', 'customer_confirmation_status', 'customer_confirm_status', 'call_status'];
+            $statusKeys = ['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state', 'parcel_status', 'shipment_status', 'fulfillment_status'];
+
+            foreach ($confirmationKeys as $key) {
+                $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
+
+                if ($normalized === OperationalEvent::ORDER_CREATED) {
+                    return $normalized;
+                }
+            }
+
+            foreach ($statusKeys as $key) {
+                $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
+
+                if ($normalized !== null) {
+                    return $normalized;
+                }
+            }
+
+            foreach ($confirmationKeys as $key) {
                 $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
 
                 if ($normalized !== null) {

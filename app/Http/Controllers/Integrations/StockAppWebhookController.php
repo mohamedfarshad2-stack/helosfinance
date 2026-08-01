@@ -32,6 +32,11 @@ class StockAppWebhookController extends Controller
             'order_status' => ['nullable', 'string'],
             'current_status' => ['nullable', 'string'],
             'delivery_status' => ['nullable', 'string'],
+            'confirmation_status' => ['nullable', 'string'],
+            'confirm_status' => ['nullable', 'string'],
+            'customer_confirmation_status' => ['nullable', 'string'],
+            'customer_confirm_status' => ['nullable', 'string'],
+            'call_status' => ['nullable', 'string'],
             'status_name' => ['nullable', 'string'],
             'status_label' => ['nullable', 'string'],
             'order_state' => ['nullable', 'string'],
@@ -68,7 +73,10 @@ class StockAppWebhookController extends Controller
             'return_reason' => ['nullable', 'string'],
             'preferred_delivery_at' => ['nullable', 'date'],
             'occurred_at' => ['nullable', 'date'],
-            'order_id' => ['nullable', 'string'],
+            'id' => ['nullable'],
+            'cod_order_id' => ['nullable'],
+            'order_id' => ['nullable'],
+            'order_number' => ['nullable'],
             'reference' => ['nullable', 'string'],
             'stage_occurred_at_source' => ['nullable', 'string'],
             'restockable' => ['nullable'],
@@ -175,7 +183,7 @@ class StockAppWebhookController extends Controller
         $parts = [
             $businessId,
             $payload['event_type'] ?? 'unknown',
-            $payload['order_id'] ?? $payload['external_id'] ?? $payload['reference'] ?? $payload['sku_code'] ?? 'payload',
+            $payload['cod_order_id'] ?? $payload['order_id'] ?? $payload['id'] ?? $payload['order_number'] ?? $payload['external_id'] ?? $payload['reference'] ?? $payload['sku_code'] ?? 'payload',
             $payload['tracking_number'] ?? 'no-tracking',
             $payload['occurred_at'] ?? 'now',
             $payload['quantity'] ?? 1,
@@ -223,7 +231,26 @@ class StockAppWebhookController extends Controller
     private function normalizeEventType(mixed $value): ?string
     {
         if (is_array($value)) {
-            foreach (['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state', 'parcel_status', 'shipment_status', 'fulfillment_status'] as $key) {
+            $confirmationKeys = ['confirmation_status', 'confirm_status', 'customer_confirmation_status', 'customer_confirm_status', 'call_status'];
+            $statusKeys = ['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state', 'parcel_status', 'shipment_status', 'fulfillment_status'];
+
+            foreach ($confirmationKeys as $key) {
+                $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
+
+                if ($normalized === OperationalEvent::ORDER_CREATED) {
+                    return $normalized;
+                }
+            }
+
+            foreach ($statusKeys as $key) {
+                $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
+
+                if ($normalized !== null) {
+                    return $normalized;
+                }
+            }
+
+            foreach ($confirmationKeys as $key) {
                 $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
 
                 if ($normalized !== null) {

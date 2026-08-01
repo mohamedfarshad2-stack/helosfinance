@@ -881,12 +881,17 @@ class TodaysWork extends Page
             'order_id',
             'order_number',
             'reference',
+            'id',
             'order.id',
+            'order.cod_order_id',
             'order.order_id',
             'order.order_number',
+            'data.cod_order_id',
             'data.id',
             'data.order_id',
             'data.order_number',
+            'payload.cod_order_id',
+            'payload.id',
             'payload.order_id',
             'payload.order_number',
         ] as $key) {
@@ -918,10 +923,17 @@ class TodaysWork extends Page
             'reference',
             'tracking_number',
             'cod_order_id',
+            'id',
+            'order.id',
+            'order.cod_order_id',
             'order.order_id',
             'order.order_number',
+            'data.id',
+            'data.cod_order_id',
             'data.order_id',
             'data.order_number',
+            'payload.id',
+            'payload.cod_order_id',
             'payload.order_id',
             'payload.order_number',
         ] as $key) {
@@ -1007,6 +1019,37 @@ class TodaysWork extends Page
 
     private function stockAppPayloadStatus(OperationalEvent $event): mixed
     {
+        $confirmationKeys = [
+            'confirmation_status',
+            'confirm_status',
+            'customer_confirmation_status',
+            'customer_confirm_status',
+            'call_status',
+            'order.confirmation_status',
+            'order.confirm_status',
+            'order.customer_confirmation_status',
+            'order.customer_confirm_status',
+            'order.call_status',
+            'data.confirmation_status',
+            'data.confirm_status',
+            'data.customer_confirmation_status',
+            'data.customer_confirm_status',
+            'data.call_status',
+            'payload.confirmation_status',
+            'payload.confirm_status',
+            'payload.customer_confirmation_status',
+            'payload.customer_confirm_status',
+            'payload.call_status',
+        ];
+
+        foreach ($confirmationKeys as $key) {
+            $value = data_get($event->payload, $key);
+
+            if (filled($value) && $this->isPendingConfirmationStatus(str_replace([' ', '-'], '_', strtolower(trim((string) $value))))) {
+                return $value;
+            }
+        }
+
         foreach ([
             'status',
             'order_status',
@@ -1031,6 +1074,14 @@ class TodaysWork extends Page
             'payload.current_status',
             'payload.delivery_status',
         ] as $key) {
+            $value = data_get($event->payload, $key);
+
+            if (filled($value)) {
+                return $value;
+            }
+        }
+
+        foreach ($confirmationKeys as $key) {
             $value = data_get($event->payload, $key);
 
             if (filled($value)) {

@@ -100,6 +100,60 @@ class StockAppSyncTest extends TestCase
         ]);
     }
 
+    public function test_sync_orders_keep_confirmation_status_and_identity_fields(): void
+    {
+        $business = Business::query()->create(['name' => 'Sync Business']);
+
+        $this->postJson('/api/v1/stock-app/sync/orders', [
+            'business_id' => $business->id,
+            'orders' => [
+                [
+                    'event_type' => OperationalEvent::ORDER_CONFIRMED,
+                    'confirm_status' => 'Pending Confirmation',
+                    'id' => 3699,
+                    'order_number' => 'HN-3699',
+                    'sale_amount' => 1935,
+                    'quantity' => 1,
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('created', 1);
+
+        $event = OperationalEvent::query()->where('business_id', $business->id)->first();
+
+        $this->assertNotNull($event);
+        $this->assertSame(OperationalEvent::ORDER_CREATED, $event->event_type);
+        $this->assertSame('Pending Confirmation', $event->payload['confirm_status']);
+        $this->assertSame(3699, $event->payload['id']);
+        $this->assertSame('HN-3699', $event->payload['order_number']);
+    }
+
+    public function test_delivery_status_wins_when_confirmation_status_is_already_confirmed(): void
+    {
+        $business = Business::query()->create(['name' => 'Sync Business']);
+
+        $this->postJson('/api/v1/stock-app/sync/orders', [
+            'business_id' => $business->id,
+            'orders' => [
+                [
+                    'delivery_status' => 'Delivered',
+                    'confirm_status' => 'Confirmed',
+                    'id' => 3700,
+                    'sale_amount' => 2500,
+                    'quantity' => 1,
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('created', 1);
+
+        $this->assertDatabaseHas('operational_events', [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::ORDER_DELIVERED,
+        ]);
+    }
+
     public function test_sync_orders_reject_missing_business_context(): void
     {
         $this->postJson('/api/v1/stock-app/sync/orders', [
