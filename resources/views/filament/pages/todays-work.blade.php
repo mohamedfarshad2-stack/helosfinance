@@ -208,13 +208,24 @@
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-orange-100 dark:bg-gray-950 dark:text-white dark:ring-orange-900">
                                 <div class="text-xs font-black uppercase text-orange-600">Pending confirmation - {{ $parcelMovement['pending_confirmation_label'] }}</div>
-                                <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}</div>
+                                @if (filled($parcelMovement['pending_confirmation_live_count'] ?? null))
+                                    <div class="mt-2 text-2xl font-black">{{ number_format((int) $parcelMovement['pending_confirmation_live_count']) }} parcel(s)</div>
+                                @else
+                                    <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}</div>
+                                @endif
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">
-                                    {{ number_format($parcelMovement['pending_confirmation_count']) }} synced pending parcel(s)
                                     @if (filled($parcelMovement['pending_confirmation_live_count'] ?? null))
-                                        / {{ number_format((int) $parcelMovement['pending_confirmation_live_count']) }} live in Stock App
+                                        Live Stock App pending queue
+                                        @if ((int) $parcelMovement['pending_confirmation_count'] !== (int) $parcelMovement['pending_confirmation_live_count'])
+                                            / {{ number_format((int) $parcelMovement['pending_confirmation_count']) }} synced in HELOAS
+                                        @endif
+                                    @else
+                                        {{ number_format($parcelMovement['pending_confirmation_count']) }} synced pending parcel(s)
                                     @endif
                                 </div>
+                                @if (filled($parcelMovement['pending_confirmation_live_count'] ?? null) && (int) $parcelMovement['pending_confirmation_count'] !== (int) $parcelMovement['pending_confirmation_live_count'])
+                                    <div class="mt-1 text-xs font-semibold text-orange-700 dark:text-orange-300">Synced HELOAS pending value: LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}</div>
+                                @endif
                                 <div class="mt-2 text-xs font-semibold {{ !empty($parcelMovement['pending_confirmation_live_warning']) || !empty($parcelMovement['pending_confirmation_sync_warning']) ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400' }}">{{ $parcelMovement['pending_confirmation_live_note'] ?? $parcelMovement['pending_confirmation_sync_note'] ?? 'Call and confirm these before dispatch.' }}</div>
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-violet-100 dark:bg-gray-950 dark:text-white dark:ring-violet-900">
