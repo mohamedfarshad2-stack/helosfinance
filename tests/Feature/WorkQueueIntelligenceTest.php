@@ -709,7 +709,7 @@ class WorkQueueIntelligenceTest extends TestCase
             'external_id' => 'ORDER-PENDING',
             'revenue_amount' => 0,
             'payload' => ['order_id' => 'ORDER-PENDING', 'sale_amount' => 2000],
-            'occurred_at' => now()->subMinutes(30),
+            'occurred_at' => now()->subDay()->addHour(),
         ]);
         OperationalEvent::query()->create([
             'business_id' => $business->id,
@@ -752,7 +752,7 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $page = new TodaysWork;
         $page->business = $business;
-        $page->parcelStartDate = today()->toDateString();
+        $page->parcelStartDate = today()->subDay()->toDateString();
         $page->parcelEndDate = today()->toDateString();
         $method = new \ReflectionMethod(TodaysWork::class, 'employeeParcelMovement');
         $method->setAccessible(true);
@@ -763,8 +763,8 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertSame(5400.0, $movement['dispatched_value']);
         $this->assertSame(2, $movement['pending_confirmation_count']);
         $this->assertSame(1400.0, $movement['pending_confirmation_value']);
-        $this->assertSame(2, $movement['dispatched_waiting_delivery_count']);
-        $this->assertSame(2400.0, $movement['dispatched_waiting_delivery_value']);
+        $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);
+        $this->assertSame(2000.0, $movement['dispatched_waiting_delivery_value']);
         $this->assertSame(1, $movement['delivered_so_far_count']);
         $this->assertSame(3000.0, $movement['delivered_so_far_value']);
         $this->assertTrue($movement['can_dispatch']);

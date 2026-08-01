@@ -184,7 +184,7 @@
                                 <div class="text-xs font-black uppercase text-sky-700 dark:text-sky-300">Parcel movement - {{ $parcelMovement['business_name'] }} only</div>
                                 <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Move pending to confirmed, dispatched parcels to delivered</h2>
                                 <p class="mt-1 max-w-3xl text-sm font-medium text-gray-600 dark:text-gray-300">
-                                    These numbers use the selected date range. Dispatched not delivered means parcels sent to courier in this period that have not become delivered or returned yet.
+                                    Dispatched value, pending, and delivered use the selected date range. Dispatched not delivered excludes today and shows older parcels that still need delivery follow-up.
                                 </p>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
@@ -213,10 +213,10 @@
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Call and confirm these before dispatch.</div>
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-amber-100 dark:bg-gray-950 dark:text-white dark:ring-amber-900">
-                                <div class="text-xs font-black uppercase text-amber-600">Dispatched not delivered - {{ $parcelMovement['period_label'] }}</div>
+                                <div class="text-xs font-black uppercase text-amber-600">Dispatched not delivered - {{ $parcelMovement['follow_up_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['dispatched_waiting_delivery_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['dispatched_waiting_delivery_count']) }} dispatched parcel(s)</div>
-                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Push these to delivered or record the real return reason.</div>
+                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Older dispatched parcels only. Push these to delivered or record the real return reason.</div>
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-emerald-100 dark:bg-gray-950 dark:text-white dark:ring-emerald-900">
                                 <div class="text-xs font-black uppercase text-emerald-600">Delivered so far - {{ $parcelMovement['period_label'] }}</div>

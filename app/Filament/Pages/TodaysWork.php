@@ -691,6 +691,16 @@ class TodaysWork extends Page
             ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
+        $followUpEnd = $end->lt(today()->startOfDay())
+            ? $end
+            : today()->startOfDay()->subSecond();
+        $followUpDispatchEvents = $followUpEnd->lt($start)
+            ? collect()
+            : OperationalEvent::query()
+                ->where('business_id', $this->business->id)
+                ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
+                ->whereBetween('occurred_at', [$start, $followUpEnd])
+                ->get();
         $latestEvents = $this->latestStockAppOrderEvents();
         $currentEventsByKey = $latestEvents->keyBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event));
         $latestEventsInPeriod = $latestEvents
@@ -699,7 +709,7 @@ class TodaysWork extends Page
         $pendingConfirmation = $latestEventsInPeriod
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
             ->values();
-        $dispatchedWaitingDelivery = $dispatchEvents
+        $dispatchedWaitingDelivery = $followUpDispatchEvents
             ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
             ->map(fn (Collection $events): OperationalEvent => $events
                 ->sortBy(fn (OperationalEvent $event): string => sprintf(
@@ -731,6 +741,11 @@ class TodaysWork extends Page
             'business_name' => $this->business->name,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
+            'follow_up_label' => $followUpEnd->lt($start)
+                ? 'Before today'
+                : ($start->isSameDay($followUpEnd)
+                    ? $start->format('M j, Y')
+                    : $start->format('M j').' - '.$followUpEnd->format('M j, Y')),
             'dispatched_count' => $dispatchEvents
                 ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
                 ->count(),
