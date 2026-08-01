@@ -704,6 +704,15 @@ class WorkQueueIntelligenceTest extends TestCase
         ]);
         OperationalEvent::query()->create([
             'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_RESENT,
+            'external_id' => 'ORDER-RETURN-FOLLOW-UP-resent',
+            'revenue_amount' => 0,
+            'payload' => ['sale_amount' => 999],
+            'occurred_at' => now()->subMinutes(35),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
             'source' => 'stock_app',
             'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
             'external_id' => 'ORDER-PENDING',
@@ -763,6 +772,8 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertSame(5400.0, $movement['dispatched_value']);
         $this->assertSame(2, $movement['pending_confirmation_count']);
         $this->assertSame(1400.0, $movement['pending_confirmation_value']);
+        $this->assertSame(1, $movement['confirmed_waiting_dispatch_count']);
+        $this->assertSame(1000.0, $movement['confirmed_waiting_dispatch_value']);
         $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);
         $this->assertSame(2000.0, $movement['dispatched_waiting_delivery_value']);
         $this->assertSame(1, $movement['delivered_so_far_count']);

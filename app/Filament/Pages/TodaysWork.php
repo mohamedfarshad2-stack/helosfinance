@@ -688,7 +688,7 @@ class TodaysWork extends Page
 
         $dispatchEvents = OperationalEvent::query()
             ->where('business_id', $this->business->id)
-            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
+            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT])
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
         $followUpEnd = $end->lt(today()->startOfDay())
@@ -698,7 +698,7 @@ class TodaysWork extends Page
             ? collect()
             : OperationalEvent::query()
                 ->where('business_id', $this->business->id)
-                ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
+                ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT])
                 ->whereBetween('occurred_at', [$start, $followUpEnd])
                 ->get();
         $latestEvents = $this->latestStockAppOrderEvents();
@@ -708,6 +708,9 @@ class TodaysWork extends Page
             ->values();
         $pendingConfirmation = $latestEventsInPeriod
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
+            ->values();
+        $confirmedWaitingDispatch = $latestEventsInPeriod
+            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'confirmed_waiting_dispatch')
             ->values();
         $dispatchedWaitingDelivery = $followUpDispatchEvents
             ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
@@ -730,6 +733,7 @@ class TodaysWork extends Page
             ->values();
 
         $pendingConfirmationValue = (float) $pendingConfirmation->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
+        $confirmedWaitingDispatchValue = (float) $confirmedWaitingDispatch->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedWaitingDeliveryValue = (float) $dispatchedWaitingDelivery->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $deliveredSoFarValue = (float) $deliveredSoFar->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
@@ -752,6 +756,8 @@ class TodaysWork extends Page
             'dispatched_value' => $dispatchedValue,
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
+            'confirmed_waiting_dispatch_count' => $confirmedWaitingDispatch->count(),
+            'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
             'delivered_so_far_count' => $deliveredSoFar->count(),
@@ -865,7 +871,6 @@ class TodaysWork extends Page
         if (in_array($event->event_type, [
             OperationalEvent::TRACKING_NUMBER_ADDED,
             OperationalEvent::WHOLESALE_PARCEL_SENT,
-            OperationalEvent::ORDER_RESENT,
         ], true)) {
             return 'dispatched_waiting_delivery';
         }
@@ -974,9 +979,6 @@ class TodaysWork extends Page
             'transport_sent',
             'parcel_sent',
             'sent_to_courier',
-            'resent',
-            'resend',
-            'order_resent',
         ], true);
     }
 

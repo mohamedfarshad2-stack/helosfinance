@@ -182,9 +182,9 @@
                         <div class="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
                             <div>
                                 <div class="text-xs font-black uppercase text-sky-700 dark:text-sky-300">Parcel movement - {{ $parcelMovement['business_name'] }} only</div>
-                                <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Move pending to confirmed, dispatched parcels to delivered</h2>
+                                <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Stock App parcel pipeline</h2>
                                 <p class="mt-1 max-w-3xl text-sm font-medium text-gray-600 dark:text-gray-300">
-                                    Dispatched value, pending, and delivered use the selected date range. Dispatched not delivered excludes today and shows older parcels that still need delivery follow-up.
+                                    These boxes follow Stock App signals only for Horns England: pending to confirmed, confirmed to dispatch, dispatched to delivered. Return follow-up/resend signals are excluded here to avoid counting the same order twice.
                                 </p>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
@@ -199,7 +199,7 @@
                             </div>
                         </div>
 
-                        <div class="mt-4 grid gap-3 xl:grid-cols-4">
+                        <div class="mt-4 grid gap-3 xl:grid-cols-5">
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-sky-100 dark:bg-gray-950 dark:text-white dark:ring-sky-900">
                                 <div class="text-xs font-black uppercase text-sky-600">Dispatched value - {{ $parcelMovement['period_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['dispatched_value'], 2) }}</div>
@@ -211,6 +211,12 @@
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['pending_confirmation_count']) }} pending parcel(s)</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Call and confirm these before dispatch.</div>
+                            </div>
+                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-violet-100 dark:bg-gray-950 dark:text-white dark:ring-violet-900">
+                                <div class="text-xs font-black uppercase text-violet-600">Confirmed waiting dispatch - {{ $parcelMovement['period_label'] }}</div>
+                                <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['confirmed_waiting_dispatch_value'], 2) }}</div>
+                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['confirmed_waiting_dispatch_count']) }} confirmed parcel(s)</div>
+                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Add tracking and send these to courier.</div>
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-amber-100 dark:bg-gray-950 dark:text-white dark:ring-amber-900">
                                 <div class="text-xs font-black uppercase text-amber-600">Dispatched not delivered - {{ $parcelMovement['follow_up_label'] }}</div>
@@ -230,7 +236,7 @@
                             @if ($parcelMovement['can_dispatch'])
                                 <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
                                     <div class="text-xs font-black uppercase opacity-70">Arafath dispatch lane</div>
-                                    <div class="mt-1 text-sm font-semibold">Start by clearing pending confirmation, then keep dispatched parcels moving until they become delivered.</div>
+                                    <div class="mt-1 text-sm font-semibold">First clear pending confirmations, then dispatch confirmed parcels with tracking.</div>
                                 </div>
                             @endif
                             @if ($parcelMovement['can_follow_delivery'])
