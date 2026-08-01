@@ -184,7 +184,7 @@
                                 <div class="text-xs font-black uppercase text-sky-700 dark:text-sky-300">Parcel movement - {{ $parcelMovement['business_name'] }} only</div>
                                 <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Stock App parcel pipeline</h2>
                                 <p class="mt-1 max-w-3xl text-sm font-medium text-gray-600 dark:text-gray-300">
-                                    These boxes follow Stock App signals only for Horns England: pending to confirmed, confirmed to dispatch, dispatched to delivered. Return follow-up/resend signals are excluded here to avoid counting the same order twice.
+                                    These boxes follow Stock App signals only for Horns England. Pending confirmation shows the current Stock App pending queue. The other movement boxes use the selected dates.
                                 </p>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
@@ -207,7 +207,7 @@
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">This is not revenue until delivered.</div>
                             </div>
                             <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-orange-100 dark:bg-gray-950 dark:text-white dark:ring-orange-900">
-                                <div class="text-xs font-black uppercase text-orange-600">Pending confirmation - {{ $parcelMovement['period_label'] }}</div>
+                                <div class="text-xs font-black uppercase text-orange-600">Pending confirmation - {{ $parcelMovement['pending_confirmation_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['pending_confirmation_count']) }} pending parcel(s)</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Call and confirm these before dispatch.</div>

@@ -706,7 +706,7 @@ class TodaysWork extends Page
         $latestEventsInPeriod = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->stockAppPipelineDate($event)?->betweenIncluded($start, $end) ?? false)
             ->values();
-        $pendingConfirmation = $latestEventsInPeriod
+        $pendingConfirmation = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
             ->values();
         $confirmedWaitingDispatch = $latestEventsInPeriod
@@ -745,6 +745,7 @@ class TodaysWork extends Page
             'business_name' => $this->business->name,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
+            'pending_confirmation_label' => 'Current Stock App queue',
             'follow_up_label' => $followUpEnd->lt($start)
                 ? 'Before today'
                 : ($start->isSameDay($followUpEnd)
