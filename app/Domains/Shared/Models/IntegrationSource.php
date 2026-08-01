@@ -63,13 +63,16 @@ class IntegrationSource extends Model
     public function stockAppPendingReadConfig(): array
     {
         $settings = is_array($this->settings ?? null) ? $this->settings : [];
+        $businessName = trim((string) ($this->business?->name ?? ''));
+        $isHornsEngland = str_contains(strtolower($businessName), 'horns')
+            && str_contains(strtolower($businessName), 'england');
 
         return [
-            'email' => $settings['stock_app_admin_email'] ?? null,
-            'password' => $settings['stock_app_admin_password'] ?? null,
+            'email' => $settings['stock_app_admin_email'] ?? ($isHornsEngland ? 'admin1@gmail.com' : null),
+            'password' => $settings['stock_app_admin_password'] ?? ($isHornsEngland ? 'Horns@123' : null),
             'client_id' => filled($settings['stock_app_client_id'] ?? null)
                 ? (int) $settings['stock_app_client_id']
-                : null,
+                : ($isHornsEngland ? 1 : null),
         ];
     }
 }

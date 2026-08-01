@@ -45,12 +45,12 @@ class StockAppPendingParityService
 
         try {
             $liveCount = $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end);
-        } catch (Throwable) {
+        } catch (Throwable $throwable) {
             return [
                 'available' => false,
                 'live_count' => null,
                 'warning' => true,
-                'note' => 'HELOAS could not read the live Stock App pending queue right now.',
+                'note' => 'HELOAS could not read the live Stock App pending queue right now: '.Str::limit($throwable->getMessage(), 140),
             ];
         }
 
