@@ -668,6 +668,15 @@ class WorkQueueIntelligenceTest extends TestCase
         ]);
         OperationalEvent::query()->create([
             'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'ORDER-CONFIRMATION-PENDING-NESTED',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'ORDER-CONFIRMATION-PENDING-NESTED', 'sale_amount' => 600, 'data' => ['status' => 'Confirmation Pending']],
+            'occurred_at' => now()->subMinutes(90),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
             'source' => 'stock_app',
             'event_type' => OperationalEvent::ORDER_CONFIRMED,
             'external_id' => 'ORDER-CONFIRMED',
@@ -734,8 +743,8 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->assertSame(2, $movement['dispatched_count']);
         $this->assertSame(5000.0, $movement['dispatched_value']);
-        $this->assertSame(1, $movement['pending_confirmation_count']);
-        $this->assertSame(800.0, $movement['pending_confirmation_value']);
+        $this->assertSame(2, $movement['pending_confirmation_count']);
+        $this->assertSame(1400.0, $movement['pending_confirmation_value']);
         $this->assertSame(1, $movement['confirmed_waiting_count']);
         $this->assertSame(1000.0, $movement['confirmed_waiting_value']);
         $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);

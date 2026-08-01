@@ -35,6 +35,9 @@ class StockAppWebhookController extends Controller
             'status_name' => ['nullable', 'string'],
             'status_label' => ['nullable', 'string'],
             'order_state' => ['nullable', 'string'],
+            'parcel_status' => ['nullable', 'string'],
+            'shipment_status' => ['nullable', 'string'],
+            'fulfillment_status' => ['nullable', 'string'],
             'external_id' => ['nullable', 'string'],
             'sku_code' => ['nullable', 'string'],
             'quantity' => ['nullable', 'integer', 'min:1'],
@@ -220,7 +223,7 @@ class StockAppWebhookController extends Controller
     private function normalizeEventType(mixed $value): ?string
     {
         if (is_array($value)) {
-            foreach (['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state'] as $key) {
+            foreach (['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state', 'parcel_status', 'shipment_status', 'fulfillment_status'] as $key) {
                 $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
 
                 if ($normalized !== null) {
@@ -261,12 +264,12 @@ class StockAppWebhookController extends Controller
         $normalized = str_replace([' ', '-'], '_', strtolower($eventType));
 
         return match ($normalized) {
-            'dispatched', 'dispatch', 'tracking_added', 'tracking', 'tracking_number', 'tracking_number_added' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'dispatched', 'dispatch', 'shipped', 'shipping', 'sent_to_courier', 'tracking_added', 'tracking', 'tracking_number', 'tracking_number_added' => OperationalEvent::TRACKING_NUMBER_ADDED,
             'wholesale_sent', 'wholesale_dispatched', 'transport_sent', 'parcel_sent', 'wholesale_parcel_sent' => OperationalEvent::WHOLESALE_PARCEL_SENT,
             'delivered', 'delivery_done' => OperationalEvent::ORDER_DELIVERED,
             'returned', 'return' => OperationalEvent::ORDER_RETURNED,
             'resent', 'resend' => OperationalEvent::ORDER_RESENT,
-            'created', 'new', 'pending', 'order_pending', 'pending_confirmation' => OperationalEvent::ORDER_CREATED,
+            'created', 'new', 'pending', 'order_pending', 'pending_confirmation', 'confirmation_pending', 'pending_confirm', 'pending_call', 'call_pending', 'to_confirm', 'not_confirmed', 'unconfirmed', 'no_answer' => OperationalEvent::ORDER_CREATED,
             'confirmed', 'confirm' => OperationalEvent::ORDER_CONFIRMED,
             'fake', 'fake_order', 'fake_order_detected' => OperationalEvent::FAKE_ORDER_DETECTED,
             OperationalEvent::ORDER_CREATED,

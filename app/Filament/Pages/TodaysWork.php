@@ -771,43 +771,15 @@ class TodaysWork extends Page
         $status = $this->stockAppStatus($event);
         $eventType = strtolower((string) $event->event_type);
 
-        if (in_array($status, [
-            'pending',
-            'new',
-            'created',
-            'order_pending',
-            'pending_confirmation',
-        ], true)) {
+        if ($this->isPendingConfirmationStatus($status)) {
             return 'pending_confirmation';
         }
 
-        if (in_array($status, [
-            'confirmed',
-            'confirm',
-            'order_confirmed',
-        ], true)) {
+        if ($this->isConfirmedStatus($status)) {
             return 'confirmed_waiting_dispatch';
         }
 
-        if (in_array($status, [
-            'dispatched',
-            'dispatch',
-            'tracking',
-            'tracking_added',
-            'tracking_number',
-            'tracking_number_added',
-            'courier_pending',
-            'delivery_pending',
-            'out_for_delivery',
-            'wholesale_sent',
-            'wholesale_dispatched',
-            'wholesale_parcel_sent',
-            'transport_sent',
-            'parcel_sent',
-            'resent',
-            'resend',
-            'order_resent',
-        ], true)) {
+        if ($this->isDispatchedStatus($status)) {
             return 'dispatched_waiting_delivery';
         }
 
@@ -832,13 +804,105 @@ class TodaysWork extends Page
 
     private function stockAppStatus(OperationalEvent $event): string
     {
-        $status = data_get($event->payload, 'status')
-            ?? data_get($event->payload, 'order_status')
-            ?? data_get($event->payload, 'current_status')
-            ?? data_get($event->payload, 'delivery_status')
+        $status = $this->stockAppPayloadStatus($event)
             ?? $event->event_type;
 
         return str_replace([' ', '-'], '_', strtolower(trim((string) $status)));
+    }
+
+    private function stockAppPayloadStatus(OperationalEvent $event): mixed
+    {
+        foreach ([
+            'status',
+            'order_status',
+            'current_status',
+            'delivery_status',
+            'status_name',
+            'status_label',
+            'order_state',
+            'parcel_status',
+            'shipment_status',
+            'fulfillment_status',
+            'order.status',
+            'order.order_status',
+            'order.current_status',
+            'order.delivery_status',
+            'data.status',
+            'data.order_status',
+            'data.current_status',
+            'data.delivery_status',
+            'payload.status',
+            'payload.order_status',
+            'payload.current_status',
+            'payload.delivery_status',
+        ] as $key) {
+            $value = data_get($event->payload, $key);
+
+            if (filled($value)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function isPendingConfirmationStatus(string $status): bool
+    {
+        return in_array($status, [
+            'pending',
+            'new',
+            'created',
+            'order_pending',
+            'pending_confirmation',
+            'confirmation_pending',
+            'pending_confirm',
+            'pending_call',
+            'call_pending',
+            'to_confirm',
+            'not_confirmed',
+            'unconfirmed',
+            'no_answer',
+        ], true)
+            || str_contains($status, 'pending')
+            || str_contains($status, 'to_confirm')
+            || str_contains($status, 'not_confirm')
+            || str_contains($status, 'unconfirmed')
+            || str_contains($status, 'no_answer');
+    }
+
+    private function isConfirmedStatus(string $status): bool
+    {
+        return in_array($status, [
+            'confirmed',
+            'confirm',
+            'order_confirmed',
+        ], true);
+    }
+
+    private function isDispatchedStatus(string $status): bool
+    {
+        return in_array($status, [
+            'dispatched',
+            'dispatch',
+            'shipped',
+            'shipping',
+            'tracking',
+            'tracking_added',
+            'tracking_number',
+            'tracking_number_added',
+            'courier_pending',
+            'delivery_pending',
+            'out_for_delivery',
+            'wholesale_sent',
+            'wholesale_dispatched',
+            'wholesale_parcel_sent',
+            'transport_sent',
+            'parcel_sent',
+            'sent_to_courier',
+            'resent',
+            'resend',
+            'order_resent',
+        ], true);
     }
 
     private function stockAppOrderValue(OperationalEvent $event): float
