@@ -691,19 +691,17 @@ class TodaysWork extends Page
             ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
-        $latestEvents = $this->latestStockAppOrderEvents();
-        $pendingConfirmationTypes = $this->pendingConfirmationEventTypes();
-        $pendingConfirmation = $latestEvents
-            ->filter(fn (OperationalEvent $event): bool => in_array(strtolower((string) $event->event_type), $pendingConfirmationTypes, true))
+        $latestEvents = $this->latestStockAppOrderEvents()
             ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
+            ->values();
+        $pendingConfirmation = $latestEvents
+            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
             ->values();
         $confirmedWaiting = $latestEvents
-            ->where('event_type', OperationalEvent::ORDER_CONFIRMED)
-            ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
+            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'confirmed_waiting_dispatch')
             ->values();
         $dispatchedWaitingDelivery = $latestEvents
-            ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT, OperationalEvent::ORDER_RESENT])
-            ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
+            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'dispatched_waiting_delivery')
             ->values();
 
         $pendingConfirmationValue = (float) $pendingConfirmation->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
@@ -774,6 +772,81 @@ class TodaysWork extends Page
             'pending_confirmation',
             'Pending Confirmation',
         ];
+    }
+
+    private function parcelMovementLane(OperationalEvent $event): string
+    {
+        $status = $this->stockAppStatus($event);
+        $eventType = strtolower((string) $event->event_type);
+
+        if (in_array($status, [
+            'pending',
+            'new',
+            'created',
+            'order_pending',
+            'pending_confirmation',
+        ], true)) {
+            return 'pending_confirmation';
+        }
+
+        if (in_array($status, [
+            'confirmed',
+            'confirm',
+            'order_confirmed',
+        ], true)) {
+            return 'confirmed_waiting_dispatch';
+        }
+
+        if (in_array($status, [
+            'dispatched',
+            'dispatch',
+            'tracking',
+            'tracking_added',
+            'tracking_number',
+            'tracking_number_added',
+            'courier_pending',
+            'delivery_pending',
+            'out_for_delivery',
+            'wholesale_sent',
+            'wholesale_dispatched',
+            'wholesale_parcel_sent',
+            'transport_sent',
+            'parcel_sent',
+            'resent',
+            'resend',
+            'order_resent',
+        ], true)) {
+            return 'dispatched_waiting_delivery';
+        }
+
+        if ($event->event_type === OperationalEvent::ORDER_CONFIRMED) {
+            return 'confirmed_waiting_dispatch';
+        }
+
+        if (in_array($event->event_type, [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_RESENT,
+        ], true)) {
+            return 'dispatched_waiting_delivery';
+        }
+
+        if (in_array($eventType, array_map('strtolower', $this->pendingConfirmationEventTypes()), true)) {
+            return 'pending_confirmation';
+        }
+
+        return 'closed_or_other';
+    }
+
+    private function stockAppStatus(OperationalEvent $event): string
+    {
+        $status = data_get($event->payload, 'status')
+            ?? data_get($event->payload, 'order_status')
+            ?? data_get($event->payload, 'current_status')
+            ?? data_get($event->payload, 'delivery_status')
+            ?? $event->event_type;
+
+        return str_replace([' ', '-'], '_', strtolower(trim((string) $status)));
     }
 
     private function stockAppOrderValue(OperationalEvent $event): float
