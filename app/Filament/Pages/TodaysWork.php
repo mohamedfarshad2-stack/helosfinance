@@ -756,15 +756,34 @@ class TodaysWork extends Page
             'dispatched_value' => $dispatchedValue,
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
+            'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation),
             'confirmed_waiting_dispatch_count' => $confirmedWaitingDispatch->count(),
             'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
+            'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch),
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
+            'dispatched_waiting_delivery_items' => $this->parcelMovementItems($dispatchedWaitingDelivery),
             'delivered_so_far_count' => $deliveredSoFar->count(),
             'delivered_so_far_value' => $deliveredSoFarValue,
+            'delivered_so_far_items' => $this->parcelMovementItems($deliveredSoFar),
             'can_dispatch' => in_array('dispatch', $responsibilities, true),
             'can_follow_delivery' => in_array('delivery_follow_up', $responsibilities, true),
         ];
+    }
+
+    private function parcelMovementItems(Collection $events): array
+    {
+        return $events
+            ->sortByDesc(fn (OperationalEvent $event): int => $event->occurred_at?->timestamp ?? 0)
+            ->take(8)
+            ->map(fn (OperationalEvent $event): array => [
+                'reference' => $this->stockAppOrderReference($event),
+                'status' => str_replace('_', ' ', $this->stockAppStatus($event)),
+                'value' => $this->stockAppOrderValue($event),
+                'date' => $event->occurred_at?->format('M j, H:i') ?? 'No date',
+            ])
+            ->values()
+            ->all();
     }
 
     private function latestStockAppOrderEvents(): Collection
@@ -818,6 +837,31 @@ class TodaysWork extends Page
         }
 
         return 'event:'.$event->id;
+    }
+
+    private function stockAppOrderReference(OperationalEvent $event): string
+    {
+        foreach ([
+            'order_id',
+            'order_number',
+            'reference',
+            'tracking_number',
+            'cod_order_id',
+            'order.order_id',
+            'order.order_number',
+            'data.order_id',
+            'data.order_number',
+            'payload.order_id',
+            'payload.order_number',
+        ] as $key) {
+            $value = trim((string) data_get($event->payload, $key));
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return trim((string) $event->external_id) ?: 'Event '.$event->id;
     }
 
     /**

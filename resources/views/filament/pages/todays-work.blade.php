@@ -246,6 +246,43 @@
                                 </div>
                             @endif
                         </div>
+
+                        @php
+                            $parcelDetailGroups = [
+                                ['label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'tone' => 'orange'],
+                                ['label' => 'Confirmed to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'tone' => 'violet'],
+                                ['label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'tone' => 'amber'],
+                                ['label' => 'Delivered', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'tone' => 'emerald'],
+                            ];
+                        @endphp
+                        <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                            @foreach ($parcelDetailGroups as $group)
+                                @php
+                                    $detailTone = match ($group['tone']) {
+                                        'orange' => 'text-orange-600',
+                                        'violet' => 'text-violet-600',
+                                        'amber' => 'text-amber-600',
+                                        default => 'text-emerald-600',
+                                    };
+                                @endphp
+                                <div class="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+                                    <div class="text-xs font-black uppercase {{ $detailTone }}">{{ $group['label'] }}</div>
+                                    <div class="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
+                                        @forelse ($group['items'] as $item)
+                                            <div class="grid grid-cols-[1fr_auto] gap-3 py-2 text-sm">
+                                                <div>
+                                                    <div class="font-black text-gray-950 dark:text-white">{{ $item['reference'] }}</div>
+                                                    <div class="text-xs font-semibold capitalize text-gray-500">{{ $item['status'] }} | {{ $item['date'] }}</div>
+                                                </div>
+                                                <div class="text-right font-black text-gray-950 dark:text-white">LKR {{ number_format((float) $item['value'], 2) }}</div>
+                                            </div>
+                                        @empty
+                                            <div class="py-2 text-sm font-semibold text-gray-500">No parcels in this lane.</div>
+                                        @endforelse
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 </x-filament::section>
             @endif
