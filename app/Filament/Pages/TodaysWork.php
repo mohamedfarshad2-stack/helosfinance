@@ -692,8 +692,9 @@ class TodaysWork extends Page
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
         $latestEvents = $this->latestStockAppOrderEvents();
+        $pendingConfirmationTypes = $this->pendingConfirmationEventTypes();
         $pendingConfirmation = $latestEvents
-            ->whereIn('event_type', [OperationalEvent::ORDER_CREATED, 'pending'])
+            ->filter(fn (OperationalEvent $event): bool => in_array(strtolower((string) $event->event_type), $pendingConfirmationTypes, true))
             ->filter(fn (OperationalEvent $event): bool => $event->occurred_at?->betweenIncluded($start, $end) ?? false)
             ->values();
         $confirmedWaiting = $latestEvents
@@ -736,9 +737,7 @@ class TodaysWork extends Page
     {
         return OperationalEvent::query()
             ->where('business_id', $this->business?->id)
-            ->whereIn('event_type', [
-                OperationalEvent::ORDER_CREATED,
-                'pending',
+            ->whereIn('event_type', array_merge([
                 OperationalEvent::ORDER_CONFIRMED,
                 OperationalEvent::TRACKING_NUMBER_ADDED,
                 OperationalEvent::WHOLESALE_PARCEL_SENT,
@@ -746,7 +745,7 @@ class TodaysWork extends Page
                 OperationalEvent::ORDER_RETURNED,
                 OperationalEvent::ORDER_RESENT,
                 OperationalEvent::FAKE_ORDER_DETECTED,
-            ])
+            ], $this->pendingConfirmationEventTypes()))
             ->get()
             ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
             ->map(fn (Collection $events): OperationalEvent => $events->sortBy('occurred_at')->last())
@@ -756,6 +755,25 @@ class TodaysWork extends Page
     private function stockAppOrderKey(OperationalEvent $event): string
     {
         return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function pendingConfirmationEventTypes(): array
+    {
+        return [
+            OperationalEvent::ORDER_CREATED,
+            'pending',
+            'Pending',
+            'new',
+            'New',
+            'order_pending',
+            'Order Pending',
+            'order pending',
+            'pending_confirmation',
+            'Pending Confirmation',
+        ];
     }
 
     private function stockAppOrderValue(OperationalEvent $event): float

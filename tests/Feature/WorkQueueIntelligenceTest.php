@@ -660,7 +660,7 @@ class WorkQueueIntelligenceTest extends TestCase
         OperationalEvent::query()->create([
             'business_id' => $business->id,
             'source' => 'stock_app',
-            'event_type' => OperationalEvent::ORDER_CREATED,
+            'event_type' => 'Pending',
             'external_id' => 'ORDER-PENDING-CONFIRMATION',
             'revenue_amount' => 0,
             'payload' => ['order_id' => 'ORDER-PENDING-CONFIRMATION', 'sale_amount' => 800],

@@ -75,6 +75,30 @@ class StockAppSyncTest extends TestCase
         $this->assertNotNull(IntegrationSource::query()->where('business_id', $business->id)->first()?->last_synced_at);
     }
 
+    public function test_sync_orders_normalize_pending_status_to_order_created(): void
+    {
+        $business = Business::query()->create(['name' => 'Sync Business']);
+
+        $this->postJson('/api/v1/stock-app/sync/orders', [
+            'business_id' => $business->id,
+            'orders' => [
+                [
+                    'status' => 'Pending',
+                    'external_id' => 'SYNC-PENDING-1',
+                    'quantity' => 1,
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('created', 1);
+
+        $this->assertDatabaseHas('operational_events', [
+            'business_id' => $business->id,
+            'event_type' => OperationalEvent::ORDER_CREATED,
+            'external_id' => 'SYNC-PENDING-1',
+        ]);
+    }
+
     public function test_sync_orders_reject_missing_business_context(): void
     {
         $this->postJson('/api/v1/stock-app/sync/orders', [

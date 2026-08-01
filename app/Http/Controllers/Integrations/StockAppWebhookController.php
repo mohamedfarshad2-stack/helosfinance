@@ -219,14 +219,16 @@ class StockAppWebhookController extends Controller
             return null;
         }
 
-        return match ($eventType) {
+        $normalized = str_replace([' ', '-'], '_', strtolower($eventType));
+
+        return match ($normalized) {
             'dispatched', 'dispatch', 'tracking_added', 'tracking', 'tracking_number', 'tracking_number_added' => OperationalEvent::TRACKING_NUMBER_ADDED,
             'wholesale_sent', 'wholesale_dispatched', 'transport_sent', 'parcel_sent', 'wholesale_parcel_sent' => OperationalEvent::WHOLESALE_PARCEL_SENT,
             'delivered', 'delivery_done' => OperationalEvent::ORDER_DELIVERED,
             'returned', 'return' => OperationalEvent::ORDER_RETURNED,
             'resent', 'resend' => OperationalEvent::ORDER_RESENT,
-            'created', 'new', 'pending' => OperationalEvent::ORDER_CREATED,
-            'confirmed' => OperationalEvent::ORDER_CONFIRMED,
+            'created', 'new', 'pending', 'order_pending', 'pending_confirmation' => OperationalEvent::ORDER_CREATED,
+            'confirmed', 'confirm' => OperationalEvent::ORDER_CONFIRMED,
             default => $eventType,
         };
     }
