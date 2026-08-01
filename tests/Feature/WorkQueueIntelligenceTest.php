@@ -686,6 +686,24 @@ class WorkQueueIntelligenceTest extends TestCase
         ]);
         OperationalEvent::query()->create([
             'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'ORDER-SUFFIX-confirmed',
+            'revenue_amount' => 0,
+            'payload' => ['sale_amount' => 400],
+            'occurred_at' => now()->subMinutes(50),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app_sync',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-SUFFIX-tracking_number_added',
+            'revenue_amount' => 0,
+            'payload' => ['sale_amount' => 400],
+            'occurred_at' => now()->subMinutes(40),
+        ]);
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
             'source' => 'stock_app',
             'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
             'external_id' => 'ORDER-PENDING',
@@ -741,14 +759,14 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $movement = $method->invoke($page);
 
-        $this->assertSame(2, $movement['dispatched_count']);
-        $this->assertSame(5000.0, $movement['dispatched_value']);
+        $this->assertSame(3, $movement['dispatched_count']);
+        $this->assertSame(5400.0, $movement['dispatched_value']);
         $this->assertSame(2, $movement['pending_confirmation_count']);
         $this->assertSame(1400.0, $movement['pending_confirmation_value']);
-        $this->assertSame(2, $movement['confirmed_waiting_count']);
-        $this->assertSame(8000.0, $movement['confirmed_waiting_value']);
-        $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);
-        $this->assertSame(2000.0, $movement['dispatched_waiting_delivery_value']);
+        $this->assertSame(2, $movement['dispatched_waiting_delivery_count']);
+        $this->assertSame(2400.0, $movement['dispatched_waiting_delivery_value']);
+        $this->assertSame(1, $movement['delivered_so_far_count']);
+        $this->assertSame(3000.0, $movement['delivered_so_far_value']);
         $this->assertTrue($movement['can_dispatch']);
         $this->assertTrue($movement['can_follow_delivery']);
     }

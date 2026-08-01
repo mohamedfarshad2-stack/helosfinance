@@ -695,16 +695,16 @@ class TodaysWork extends Page
         $pendingConfirmation = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
             ->values();
-        $confirmedWaiting = $latestEvents
-            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'confirmed_waiting_dispatch')
-            ->values();
         $dispatchedWaitingDelivery = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'dispatched_waiting_delivery')
             ->values();
+        $deliveredSoFar = $latestEvents
+            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'delivered')
+            ->values();
 
         $pendingConfirmationValue = (float) $pendingConfirmation->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
-        $confirmedValue = (float) $confirmedWaiting->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedWaitingDeliveryValue = (float) $dispatchedWaitingDelivery->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
+        $deliveredSoFarValue = (float) $deliveredSoFar->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
 
         return [
@@ -721,10 +721,10 @@ class TodaysWork extends Page
             'dispatched_value' => $dispatchedValue,
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
-            'confirmed_waiting_count' => $confirmedWaiting->count(),
-            'confirmed_waiting_value' => $confirmedValue,
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
+            'delivered_so_far_count' => $deliveredSoFar->count(),
+            'delivered_so_far_value' => $deliveredSoFarValue,
             'can_dispatch' => in_array('dispatch', $responsibilities, true),
             'can_follow_delivery' => in_array('delivery_follow_up', $responsibilities, true),
         ];
@@ -737,13 +737,50 @@ class TodaysWork extends Page
             ->whereIn('source', ['stock_app', 'stock_app_sync'])
             ->get()
             ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
-            ->map(fn (Collection $events): OperationalEvent => $events->sortBy('occurred_at')->last())
+            ->map(fn (Collection $events): OperationalEvent => $events
+                ->sortBy(fn (OperationalEvent $event): string => sprintf(
+                    '%012d-%012d',
+                    $event->occurred_at?->timestamp ?? 0,
+                    $event->id,
+                ))
+                ->last())
             ->values();
     }
 
     private function stockAppOrderKey(OperationalEvent $event): string
     {
-        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
+        foreach ([
+            'cod_order_id',
+            'order_id',
+            'order_number',
+            'reference',
+            'order.id',
+            'order.order_id',
+            'order.order_number',
+            'data.id',
+            'data.order_id',
+            'data.order_number',
+            'payload.order_id',
+            'payload.order_number',
+        ] as $key) {
+            $value = trim((string) data_get($event->payload, $key));
+
+            if ($value !== '') {
+                return $key.':'.$value;
+            }
+        }
+
+        $externalId = trim((string) ($event->external_id ?? ''));
+
+        if ($externalId !== '') {
+            if (preg_match('/^(.*?)-(?:created|new|pending|confirmed|delivered|returned|resent|tracking_number_added|tracking_added|tracking|dispatch|dispatched|shipped|shipping|sent_to_courier)(?:-|$)/i', $externalId, $matches) === 1) {
+                return 'external:'.$matches[1];
+            }
+
+            return 'external:'.$externalId;
+        }
+
+        return 'event:'.$event->id;
     }
 
     /**
@@ -782,8 +819,16 @@ class TodaysWork extends Page
             return 'dispatched_waiting_delivery';
         }
 
+        if ($this->isDeliveredStatus($status)) {
+            return 'delivered';
+        }
+
         if ($event->event_type === OperationalEvent::ORDER_CONFIRMED) {
             return 'confirmed_waiting_dispatch';
+        }
+
+        if ($event->event_type === OperationalEvent::ORDER_DELIVERED) {
+            return 'delivered';
         }
 
         if (in_array($event->event_type, [
@@ -904,12 +949,24 @@ class TodaysWork extends Page
         ], true);
     }
 
+    private function isDeliveredStatus(string $status): bool
+    {
+        return in_array($status, [
+            'delivered',
+            'delivery_done',
+            'completed',
+            'complete',
+        ], true);
+    }
+
     private function stockAppOrderValue(OperationalEvent $event): float
     {
         return max((float) (
             data_get($event->payload, 'sale_amount')
             ?? data_get($event->payload, 'customer_total_amount')
+            ?? data_get($event->payload, 'total_customer_amount')
             ?? data_get($event->payload, 'total_amount')
+            ?? data_get($event->payload, 'amount')
             ?? $event->revenue_amount
             ?? 0
         ), 0);
