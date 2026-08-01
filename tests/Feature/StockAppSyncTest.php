@@ -83,6 +83,7 @@ class StockAppSyncTest extends TestCase
             'business_id' => $business->id,
             'orders' => [
                 [
+                    'event_type' => 'order_updated',
                     'status' => 'Pending',
                     'external_id' => 'SYNC-PENDING-1',
                     'quantity' => 1,

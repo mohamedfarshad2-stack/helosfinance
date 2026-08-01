@@ -735,15 +735,7 @@ class TodaysWork extends Page
     {
         return OperationalEvent::query()
             ->where('business_id', $this->business?->id)
-            ->whereIn('event_type', array_merge([
-                OperationalEvent::ORDER_CONFIRMED,
-                OperationalEvent::TRACKING_NUMBER_ADDED,
-                OperationalEvent::WHOLESALE_PARCEL_SENT,
-                OperationalEvent::ORDER_DELIVERED,
-                OperationalEvent::ORDER_RETURNED,
-                OperationalEvent::ORDER_RESENT,
-                OperationalEvent::FAKE_ORDER_DETECTED,
-            ], $this->pendingConfirmationEventTypes()))
+            ->whereIn('source', ['stock_app', 'stock_app_sync'])
             ->get()
             ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
             ->map(fn (Collection $events): OperationalEvent => $events->sortBy('occurred_at')->last())

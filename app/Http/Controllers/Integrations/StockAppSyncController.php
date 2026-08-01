@@ -32,6 +32,12 @@ class StockAppSyncController extends Controller
             'orders' => ['required', 'array'],
             'orders.*.event_type' => ['nullable', 'string'],
             'orders.*.status' => ['nullable', 'string'],
+            'orders.*.order_status' => ['nullable', 'string'],
+            'orders.*.current_status' => ['nullable', 'string'],
+            'orders.*.delivery_status' => ['nullable', 'string'],
+            'orders.*.status_name' => ['nullable', 'string'],
+            'orders.*.status_label' => ['nullable', 'string'],
+            'orders.*.order_state' => ['nullable', 'string'],
             'orders.*.external_id' => ['nullable', 'string'],
             'orders.*.order_id' => ['nullable', 'string'],
             'orders.*.reference' => ['nullable', 'string'],
@@ -99,7 +105,7 @@ class StockAppSyncController extends Controller
 
         try {
             foreach ($data['orders'] as $order) {
-                $eventType = $this->normalizeEventType($order['event_type'] ?? $order['status'] ?? null);
+                $eventType = $this->normalizeEventType($order);
 
                 if ($eventType === null) {
                     $security->recordRejected($integrationSource, 'An order row was missing an event type.');
@@ -251,6 +257,39 @@ class StockAppSyncController extends Controller
 
     private function normalizeEventType(mixed $value): ?string
     {
+        if (is_array($value)) {
+            foreach (['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state'] as $key) {
+                $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
+
+                if ($normalized !== null) {
+                    return $normalized;
+                }
+            }
+
+            return $this->normalizeSingleEventType($value['event_type'] ?? null, true);
+        }
+
+        return $this->normalizeSingleEventType($value, true);
+    }
+
+    private function normalizeKnownEventType(mixed $value): ?string
+    {
+        $normalized = $this->normalizeSingleEventType($value);
+
+        return in_array($normalized, [
+            OperationalEvent::ORDER_CREATED,
+            OperationalEvent::ORDER_CONFIRMED,
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+            OperationalEvent::ORDER_RESENT,
+            OperationalEvent::FAKE_ORDER_DETECTED,
+        ], true) ? $normalized : null;
+    }
+
+    private function normalizeSingleEventType(mixed $value, bool $preserveUnknown = false): ?string
+    {
         $eventType = trim((string) $value);
 
         if ($eventType === '') {
@@ -267,7 +306,16 @@ class StockAppSyncController extends Controller
             'resent', 'resend' => OperationalEvent::ORDER_RESENT,
             'created', 'new', 'pending', 'order_pending', 'pending_confirmation' => OperationalEvent::ORDER_CREATED,
             'confirmed', 'confirm' => OperationalEvent::ORDER_CONFIRMED,
-            default => $eventType,
+            'fake', 'fake_order', 'fake_order_detected' => OperationalEvent::FAKE_ORDER_DETECTED,
+            OperationalEvent::ORDER_CREATED,
+            OperationalEvent::ORDER_CONFIRMED,
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+            OperationalEvent::ORDER_RESENT,
+            OperationalEvent::FAKE_ORDER_DETECTED => $normalized,
+            default => $preserveUnknown ? $eventType : null,
         };
     }
 

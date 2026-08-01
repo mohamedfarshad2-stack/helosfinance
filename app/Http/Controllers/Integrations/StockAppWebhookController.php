@@ -29,6 +29,12 @@ class StockAppWebhookController extends Controller
             'business_key' => ['nullable', 'string'],
             'event_type' => ['nullable', 'string'],
             'status' => ['nullable', 'string'],
+            'order_status' => ['nullable', 'string'],
+            'current_status' => ['nullable', 'string'],
+            'delivery_status' => ['nullable', 'string'],
+            'status_name' => ['nullable', 'string'],
+            'status_label' => ['nullable', 'string'],
+            'order_state' => ['nullable', 'string'],
             'external_id' => ['nullable', 'string'],
             'sku_code' => ['nullable', 'string'],
             'quantity' => ['nullable', 'integer', 'min:1'],
@@ -73,7 +79,7 @@ class StockAppWebhookController extends Controller
         ]);
 
         [$business, $integrationSource] = $this->resolveBusinessContext($data);
-        $eventType = $this->normalizeEventType($data['event_type'] ?? $data['status'] ?? null);
+        $eventType = $this->normalizeEventType($data);
 
         if (! $business instanceof Business) {
             return response()->json([
@@ -213,6 +219,39 @@ class StockAppWebhookController extends Controller
 
     private function normalizeEventType(mixed $value): ?string
     {
+        if (is_array($value)) {
+            foreach (['status', 'order_status', 'current_status', 'delivery_status', 'status_name', 'status_label', 'order_state'] as $key) {
+                $normalized = $this->normalizeKnownEventType($value[$key] ?? null);
+
+                if ($normalized !== null) {
+                    return $normalized;
+                }
+            }
+
+            return $this->normalizeSingleEventType($value['event_type'] ?? null, true);
+        }
+
+        return $this->normalizeSingleEventType($value, true);
+    }
+
+    private function normalizeKnownEventType(mixed $value): ?string
+    {
+        $normalized = $this->normalizeSingleEventType($value);
+
+        return in_array($normalized, [
+            OperationalEvent::ORDER_CREATED,
+            OperationalEvent::ORDER_CONFIRMED,
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+            OperationalEvent::ORDER_RESENT,
+            OperationalEvent::FAKE_ORDER_DETECTED,
+        ], true) ? $normalized : null;
+    }
+
+    private function normalizeSingleEventType(mixed $value, bool $preserveUnknown = false): ?string
+    {
         $eventType = trim((string) $value);
 
         if ($eventType === '') {
@@ -229,7 +268,16 @@ class StockAppWebhookController extends Controller
             'resent', 'resend' => OperationalEvent::ORDER_RESENT,
             'created', 'new', 'pending', 'order_pending', 'pending_confirmation' => OperationalEvent::ORDER_CREATED,
             'confirmed', 'confirm' => OperationalEvent::ORDER_CONFIRMED,
-            default => $eventType,
+            'fake', 'fake_order', 'fake_order_detected' => OperationalEvent::FAKE_ORDER_DETECTED,
+            OperationalEvent::ORDER_CREATED,
+            OperationalEvent::ORDER_CONFIRMED,
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_DELIVERED,
+            OperationalEvent::ORDER_RETURNED,
+            OperationalEvent::ORDER_RESENT,
+            OperationalEvent::FAKE_ORDER_DETECTED => $normalized,
+            default => $preserveUnknown ? $eventType : null,
         };
     }
 
