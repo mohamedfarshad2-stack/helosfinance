@@ -65,13 +65,12 @@ class StockAppPendingParityService
         }
 
         try {
-            $liveCount = $allowFetch
-                ? Cache::remember(
-                    $cacheKey,
-                    now()->addMinutes(30),
-                    fn (): int => $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end),
-                )
-                : (int) Cache::get($cacheKey);
+            if ($allowFetch) {
+                $liveCount = $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end);
+                Cache::put($cacheKey, $liveCount, now()->addMinutes(30));
+            } else {
+                $liveCount = (int) Cache::get($cacheKey);
+            }
         } catch (Throwable $throwable) {
             return [
                 'available' => false,

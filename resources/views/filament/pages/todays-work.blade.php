@@ -214,7 +214,7 @@
                                 @if (filled($parcelMovement['pending_confirmation_live_count'] ?? null))
                                     <div class="mt-2 text-2xl font-black">{{ number_format((int) $parcelMovement['pending_confirmation_live_count']) }} parcel(s)</div>
                                 @else
-                                    <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}</div>
+                                    <div class="mt-2 text-2xl font-black">Live count not refreshed</div>
                                 @endif
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">
                                     @if (filled($parcelMovement['pending_confirmation_live_count'] ?? null))
@@ -223,7 +223,7 @@
                                             / {{ number_format((int) $parcelMovement['pending_confirmation_count']) }} synced in HELOAS
                                         @endif
                                     @else
-                                        {{ number_format($parcelMovement['pending_confirmation_count']) }} synced pending parcel(s)
+                                        HELOAS synced: {{ number_format($parcelMovement['pending_confirmation_count']) }} parcel(s) / LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}
                                     @endif
                                 </div>
                                 @if (filled($parcelMovement['pending_confirmation_live_count'] ?? null) && (int) $parcelMovement['pending_confirmation_count'] !== (int) $parcelMovement['pending_confirmation_live_count'])
@@ -255,12 +255,28 @@
                             </button>
                         </div>
 
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-100 bg-orange-50/70 p-3 text-sm dark:border-orange-900 dark:bg-orange-950/20">
+                            <div class="font-semibold text-orange-900 dark:text-orange-100">
+                                Pending confirmation details below are HELOAS synced rows. Refresh the live Stock App count if Stock App looks higher.
+                            </div>
+                            <button
+                                type="button"
+                                wire:click="refreshLivePending"
+                                wire:loading.attr="disabled"
+                                wire:target="refreshLivePending"
+                                class="rounded-lg bg-orange-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-wait disabled:opacity-60"
+                            >
+                                <span wire:loading.remove wire:target="refreshLivePending">Refresh live pending</span>
+                                <span wire:loading wire:target="refreshLivePending">Checking Stock App...</span>
+                            </button>
+                        </div>
+
                         @php
                             $parcelDetailGroups = [
-                                ['key' => 'pending', 'label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'tone' => 'orange', 'instruction' => 'Call the customer and confirm the order before dispatch.'],
-                                ['key' => 'confirmed', 'label' => 'Confirmed to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'tone' => 'violet', 'instruction' => 'Add tracking and move confirmed parcels to dispatched.'],
-                                ['key' => 'dispatched', 'label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'tone' => 'amber', 'instruction' => 'Follow up with courier/customer until these become delivered or a true return.'],
-                                ['key' => 'delivered', 'label' => 'Delivered', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'tone' => 'emerald', 'instruction' => 'These are already converted to delivered sales.'],
+                                ['key' => 'pending', 'label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'total' => $parcelMovement['pending_confirmation_count'] ?? 0, 'tone' => 'orange', 'instruction' => 'Call the customer and confirm the order before dispatch.'],
+                                ['key' => 'confirmed', 'label' => 'Confirmed to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'total' => $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0, 'tone' => 'violet', 'instruction' => 'Add tracking and move confirmed parcels to dispatched.'],
+                                ['key' => 'dispatched', 'label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'total' => $parcelMovement['dispatched_waiting_delivery_count'] ?? 0, 'tone' => 'amber', 'instruction' => 'Follow up with courier/customer until these become delivered or a true return.'],
+                                ['key' => 'delivered', 'label' => 'Delivered', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'total' => $parcelMovement['delivered_so_far_count'] ?? 0, 'tone' => 'emerald', 'instruction' => 'These are already converted to delivered sales.'],
                             ];
                         @endphp
                         <div class="mt-4">
@@ -278,6 +294,9 @@
                                         <div>
                                             <div class="text-xs font-black uppercase {{ $detailTone }}">{{ $group['label'] }}</div>
                                             <div class="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300">{{ $group['instruction'] }}</div>
+                                            <div class="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
+                                                Showing {{ number_format(count($group['items'])) }} of {{ number_format((int) $group['total']) }} parcel(s)
+                                            </div>
                                         </div>
                                         <button type="button" x-on:click="activeLane = null" class="rounded-lg px-3 py-1 text-xs font-black text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-800 dark:hover:bg-gray-900">Close</button>
                                     </div>

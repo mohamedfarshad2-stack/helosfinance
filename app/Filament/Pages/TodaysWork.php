@@ -92,6 +92,29 @@ class TodaysWork extends Page
         $this->parcelMovement = $this->employeeParcelMovement();
     }
 
+    public function refreshLivePending(): void
+    {
+        if (! $this->business) {
+            return;
+        }
+
+        app(StockAppPendingParityService::class)->compare(
+            $this->business,
+            $this->stockAppQueueStart(),
+            today()->endOfDay(),
+            0,
+            true,
+        );
+
+        $this->parcelMovement = $this->employeeParcelMovement();
+
+        Notification::make()
+            ->title('Live Stock App pending count refreshed')
+            ->body('HELOAS refreshed the live pending count without changing Stock App.')
+            ->success()
+            ->send();
+    }
+
     public static function shouldRegisterNavigation(): bool
     {
         return Auth::user()?->isStaff() ?? false;
@@ -734,13 +757,13 @@ class TodaysWork extends Page
             'dispatched_value' => $dispatchedValue,
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
-            'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation),
+            'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 1000),
             'confirmed_waiting_dispatch_count' => $confirmedWaitingDispatch->count(),
             'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
-            'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch),
+            'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 1000),
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
-            'dispatched_waiting_delivery_items' => $this->parcelMovementItems($dispatchedWaitingDelivery),
+            'dispatched_waiting_delivery_items' => $this->parcelMovementItems($dispatchedWaitingDelivery, 1000),
             'delivered_so_far_count' => $deliveredSoFar['count'],
             'delivered_so_far_value' => $deliveredSoFar['value'],
             'delivered_so_far_items' => $deliveredSoFar['items'],
@@ -788,11 +811,11 @@ class TodaysWork extends Page
         return ['warning' => false, 'note' => 'Pending queue is being read from HELOAS sync records for the current Stock App queue.'];
     }
 
-    private function parcelMovementItems(Collection $events): array
+    private function parcelMovementItems(Collection $events, int $limit = 8): array
     {
         return $events
             ->sortByDesc(fn (OperationalEvent $event): int => $event->occurred_at?->timestamp ?? 0)
-            ->take(8)
+            ->take($limit)
             ->map(fn (OperationalEvent $event): array => [
                 'reference' => $this->stockAppOrderReference($event),
                 'status' => str_replace('_', ' ', $this->stockAppStatus($event)),
