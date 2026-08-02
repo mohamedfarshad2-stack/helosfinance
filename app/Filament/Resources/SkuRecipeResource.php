@@ -31,6 +31,11 @@ class SkuRecipeResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?int $navigationSort = 4;
 
+    protected static function businessScopeResponsibilities(): array
+    {
+        return ['product_repair', 'dispatch'];
+    }
+
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -169,8 +174,12 @@ class SkuRecipeResource extends Resource
 
     public static function canAccess(): bool
     {
+        $user = Auth::user();
+
         return Auth::check()
-            && ((Auth::user()?->isOwner() ?? false) || (Auth::user()?->isInternalAdmin() ?? false))
+            && (($user?->isOwner() ?? false)
+                || ($user?->isInternalAdmin() ?? false)
+                || ($user?->hasStaffResponsibility(['product_repair', 'dispatch']) ?? false))
             && static::currentBusinessSupportsManufacturingSetup();
     }
 

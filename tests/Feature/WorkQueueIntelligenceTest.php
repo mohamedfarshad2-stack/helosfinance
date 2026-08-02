@@ -788,15 +788,15 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->assertSame(3, $movement['dispatched_count']);
         $this->assertSame(5400.0, $movement['dispatched_value']);
-        $this->assertSame(3, $movement['pending_confirmation_count']);
-        $this->assertSame(2600.0, $movement['pending_confirmation_value']);
-        $this->assertSame('HN-3699', $movement['pending_confirmation_items'][0]['reference']);
-        $this->assertSame(1200.0, $movement['pending_confirmation_items'][0]['value']);
-        $this->assertNotContains('OLD-PENDING-SYNCED-TODAY', array_column($movement['pending_confirmation_items'], 'reference'));
-        $this->assertSame(1, $movement['confirmed_waiting_dispatch_count']);
-        $this->assertSame(1000.0, $movement['confirmed_waiting_dispatch_value']);
-        $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);
-        $this->assertSame(2000.0, $movement['dispatched_waiting_delivery_value']);
+        $this->assertSame(4, $movement['pending_confirmation_count']);
+        $this->assertSame(3599.0, $movement['pending_confirmation_value']);
+        $pendingValues = collect($movement['pending_confirmation_items'])->pluck('value', 'reference')->all();
+        $this->assertSame(1200.0, $pendingValues['HN-3699']);
+        $this->assertContains('OLD-PENDING-SYNCED-TODAY', array_column($movement['pending_confirmation_items'], 'reference'));
+        $this->assertSame(2, $movement['confirmed_waiting_dispatch_count']);
+        $this->assertSame(8000.0, $movement['confirmed_waiting_dispatch_value']);
+        $this->assertSame(2, $movement['dispatched_waiting_delivery_count']);
+        $this->assertSame(2400.0, $movement['dispatched_waiting_delivery_value']);
         $this->assertSame(1, $movement['delivered_so_far_count']);
         $this->assertSame(3000.0, $movement['delivered_so_far_value']);
         $this->assertTrue($movement['can_dispatch']);
@@ -896,6 +896,40 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->actingAs($employee)
             ->get(SkuRecipeResource::getUrl('index'))
             ->assertForbidden();
+    }
+
+    public function test_dispatch_product_repair_employee_only_sees_sku_cost_work_in_products_menu(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Arafath Products Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $employee = User::query()->create([
+            'name' => 'Arafath',
+            'email' => 'arafath-products@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'employee_access_profile' => 'operations',
+            'staff_responsibilities' => ['dispatch', 'product_repair'],
+        ]);
+
+        $this->actingAs($employee);
+
+        $this->assertTrue(SkuRecipeResource::shouldRegisterNavigation());
+        $this->assertFalse(SkuResource::shouldRegisterNavigation());
+        $this->assertFalse(ProductionEntryResource::shouldRegisterNavigation());
+        $this->assertFalse(MaterialLedgerResource::shouldRegisterNavigation());
+
+        $this->get(SkuRecipeResource::getUrl('index'))->assertOk();
+        $this->get(SkuResource::getUrl('index'))->assertForbidden();
+        $this->get(ProductionEntryResource::getUrl('index'))->assertForbidden();
+        $this->get(MaterialLedgerResource::getUrl('index'))->assertForbidden();
     }
 
     public function test_work_queue_screen_renders_for_client_owners(): void

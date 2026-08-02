@@ -178,13 +178,16 @@
 
             @if (! empty($parcelMovement))
                 <x-filament::section>
-                    <div class="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-4 shadow-sm dark:border-sky-900 dark:from-sky-950/30 dark:via-gray-900 dark:to-emerald-950/20">
+                    <div
+                        x-data="{ activeLane: null }"
+                        class="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-4 shadow-sm dark:border-sky-900 dark:from-sky-950/30 dark:via-gray-900 dark:to-emerald-950/20"
+                    >
                         <div class="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-start">
                             <div>
                                 <div class="text-xs font-black uppercase text-sky-700 dark:text-sky-300">Parcel movement - {{ $parcelMovement['business_name'] }} only</div>
-                                <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Stock App parcel pipeline</h2>
+                                <h2 class="mt-1 text-xl font-black text-gray-950 dark:text-white">Arafath parcel command board</h2>
                                 <p class="mt-1 max-w-3xl text-sm font-medium text-gray-600 dark:text-gray-300">
-                                    These boxes follow Stock App signals only for Horns England. Pending confirmation shows the current Stock App pending queue. The other movement boxes use the selected dates.
+                                    Open queues stay current so no parcel is missed. The date range only changes dispatched value.
                                 </p>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
@@ -200,13 +203,13 @@
                         </div>
 
                         <div class="mt-4 grid gap-3 xl:grid-cols-5">
-                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-sky-100 dark:bg-gray-950 dark:text-white dark:ring-sky-900">
+                            <button type="button" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-sky-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-400 dark:bg-gray-950 dark:text-white dark:ring-sky-900">
                                 <div class="text-xs font-black uppercase text-sky-600">Dispatched value - {{ $parcelMovement['period_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['dispatched_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['dispatched_count']) }} parcel(s) sent to courier</div>
-                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">This is not revenue until delivered.</div>
-                            </div>
-                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-orange-100 dark:bg-gray-950 dark:text-white dark:ring-orange-900">
+                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Today's/selected-period dispatch pressure. Not revenue until delivered.</div>
+                            </button>
+                            <button type="button" x-on:click="activeLane = activeLane === 'pending' ? null : 'pending'" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-orange-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400 dark:bg-gray-950 dark:text-white dark:ring-orange-900">
                                 <div class="text-xs font-black uppercase text-orange-600">Pending confirmation - {{ $parcelMovement['pending_confirmation_label'] }}</div>
                                 @if (filled($parcelMovement['pending_confirmation_live_count'] ?? null))
                                     <div class="mt-2 text-2xl font-black">{{ number_format((int) $parcelMovement['pending_confirmation_live_count']) }} parcel(s)</div>
@@ -227,51 +230,40 @@
                                     <div class="mt-1 text-xs font-semibold text-orange-700 dark:text-orange-300">Synced HELOAS pending value: LKR {{ number_format((float) $parcelMovement['pending_confirmation_value'], 2) }}</div>
                                 @endif
                                 <div class="mt-2 text-xs font-semibold {{ !empty($parcelMovement['pending_confirmation_live_warning']) || !empty($parcelMovement['pending_confirmation_sync_warning']) ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-gray-400' }}">{{ $parcelMovement['pending_confirmation_live_note'] ?? $parcelMovement['pending_confirmation_sync_note'] ?? 'Call and confirm these before dispatch.' }}</div>
-                            </div>
-                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-violet-100 dark:bg-gray-950 dark:text-white dark:ring-violet-900">
-                                <div class="text-xs font-black uppercase text-violet-600">Confirmed waiting dispatch - {{ $parcelMovement['period_label'] }}</div>
+                                <div class="mt-2 text-xs font-black text-orange-700 dark:text-orange-300">Click to see parcels</div>
+                            </button>
+                            <button type="button" x-on:click="activeLane = activeLane === 'confirmed' ? null : 'confirmed'" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-violet-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-violet-400 dark:bg-gray-950 dark:text-white dark:ring-violet-900">
+                                <div class="text-xs font-black uppercase text-violet-600">Confirmed waiting dispatch - {{ $parcelMovement['current_queue_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['confirmed_waiting_dispatch_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['confirmed_waiting_dispatch_count']) }} confirmed parcel(s)</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Add tracking and send these to courier.</div>
-                            </div>
-                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-amber-100 dark:bg-gray-950 dark:text-white dark:ring-amber-900">
-                                <div class="text-xs font-black uppercase text-amber-600">Dispatched not delivered - {{ $parcelMovement['follow_up_label'] }}</div>
+                                <div class="mt-2 text-xs font-black text-violet-700 dark:text-violet-300">Click to see parcels</div>
+                            </button>
+                            <button type="button" x-on:click="activeLane = activeLane === 'dispatched' ? null : 'dispatched'" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-amber-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400 dark:bg-gray-950 dark:text-white dark:ring-amber-900">
+                                <div class="text-xs font-black uppercase text-amber-600">Dispatched not delivered - {{ $parcelMovement['current_queue_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['dispatched_waiting_delivery_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['dispatched_waiting_delivery_count']) }} dispatched parcel(s)</div>
-                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Older dispatched parcels only. Push these to delivered or record the real return reason.</div>
-                            </div>
-                            <div class="rounded-xl bg-white p-4 text-gray-950 shadow-sm ring-1 ring-emerald-100 dark:bg-gray-950 dark:text-white dark:ring-emerald-900">
-                                <div class="text-xs font-black uppercase text-emerald-600">Delivered so far - {{ $parcelMovement['period_label'] }}</div>
+                                <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Push these to delivered or record the real return reason.</div>
+                                <div class="mt-2 text-xs font-black text-amber-700 dark:text-amber-300">Click to see parcels</div>
+                            </button>
+                            <button type="button" x-on:click="activeLane = activeLane === 'delivered' ? null : 'delivered'" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-emerald-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:bg-gray-950 dark:text-white dark:ring-emerald-900">
+                                <div class="text-xs font-black uppercase text-emerald-600">Delivered so far - {{ $parcelMovement['delivered_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['delivered_so_far_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['delivered_so_far_count']) }} delivered parcel(s)</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">These parcels are already converted to delivered sales.</div>
-                            </div>
-                        </div>
-
-                        <div class="mt-4 grid gap-3 lg:grid-cols-2">
-                            @if ($parcelMovement['can_dispatch'])
-                                <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                                    <div class="text-xs font-black uppercase opacity-70">Arafath dispatch lane</div>
-                                    <div class="mt-1 text-sm font-semibold">First clear pending confirmations, then dispatch confirmed parcels with tracking.</div>
-                                </div>
-                            @endif
-                            @if ($parcelMovement['can_follow_delivery'])
-                                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
-                                    <div class="text-xs font-black uppercase opacity-70">Delivery conversion lane</div>
-                                    <div class="mt-1 text-sm font-semibold">Then push dispatched parcels to delivered. That is where owner revenue becomes real.</div>
-                                </div>
-                            @endif
+                                <div class="mt-2 text-xs font-black text-emerald-700 dark:text-emerald-300">Click to see parcels</div>
+                            </button>
                         </div>
 
                         @php
                             $parcelDetailGroups = [
-                                ['label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'tone' => 'orange'],
-                                ['label' => 'Confirmed to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'tone' => 'violet'],
-                                ['label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'tone' => 'amber'],
-                                ['label' => 'Delivered', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'tone' => 'emerald'],
+                                ['key' => 'pending', 'label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'tone' => 'orange', 'instruction' => 'Call the customer and confirm the order before dispatch.'],
+                                ['key' => 'confirmed', 'label' => 'Confirmed to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'tone' => 'violet', 'instruction' => 'Add tracking and move confirmed parcels to dispatched.'],
+                                ['key' => 'dispatched', 'label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'tone' => 'amber', 'instruction' => 'Follow up with courier/customer until these become delivered or a true return.'],
+                                ['key' => 'delivered', 'label' => 'Delivered', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'tone' => 'emerald', 'instruction' => 'These are already converted to delivered sales.'],
                             ];
                         @endphp
-                        <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                        <div class="mt-4">
                             @foreach ($parcelDetailGroups as $group)
                                 @php
                                     $detailTone = match ($group['tone']) {
@@ -281,9 +273,15 @@
                                         default => 'text-emerald-600',
                                     };
                                 @endphp
-                                <div class="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950">
-                                    <div class="text-xs font-black uppercase {{ $detailTone }}">{{ $group['label'] }}</div>
-                                    <div class="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
+                                <div x-cloak x-show="activeLane === '{{ $group['key'] }}'" class="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-950">
+                                    <div class="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <div class="text-xs font-black uppercase {{ $detailTone }}">{{ $group['label'] }}</div>
+                                            <div class="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300">{{ $group['instruction'] }}</div>
+                                        </div>
+                                        <button type="button" x-on:click="activeLane = null" class="rounded-lg px-3 py-1 text-xs font-black text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-800 dark:hover:bg-gray-900">Close</button>
+                                    </div>
+                                    <div class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
                                         @forelse ($group['items'] as $item)
                                             <div class="grid grid-cols-[1fr_auto] gap-3 py-2 text-sm">
                                                 <div>
@@ -303,7 +301,7 @@
                 </x-filament::section>
             @endif
 
-            @if (! $guide['is_supervisor'])
+            @if (! $guide['is_supervisor'] && empty($parcelMovement))
                 <x-filament::section>
                 <div class="grid gap-4 lg:grid-cols-2">
                     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">

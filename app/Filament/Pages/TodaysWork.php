@@ -692,44 +692,17 @@ class TodaysWork extends Page
             ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT])
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
-        $followUpEnd = $end->lt(today()->startOfDay())
-            ? $end
-            : today()->startOfDay()->subSecond();
-        $followUpDispatchEvents = $followUpEnd->lt($start)
-            ? collect()
-            : OperationalEvent::query()
-                ->where('business_id', $this->business->id)
-                ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT])
-                ->whereBetween('occurred_at', [$start, $followUpEnd])
-                ->get();
         $latestEvents = $this->latestStockAppOrderEvents();
-        $currentEventsByKey = $latestEvents->keyBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event));
-        $latestEventsInPeriod = $latestEvents
-            ->filter(fn (OperationalEvent $event): bool => $this->stockAppPipelineDate($event)?->betweenIncluded($start, $end) ?? false)
-            ->values();
-        $pendingConfirmation = $latestEventsInPeriod
+        $pendingConfirmation = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'pending_confirmation')
             ->values();
-        $confirmedWaitingDispatch = $latestEventsInPeriod
+        $confirmedWaitingDispatch = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'confirmed_waiting_dispatch')
             ->values();
-        $dispatchedWaitingDelivery = $followUpDispatchEvents
-            ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
-            ->map(fn (Collection $events): OperationalEvent => $events
-                ->sortBy(fn (OperationalEvent $event): string => sprintf(
-                    '%012d-%012d',
-                    $event->occurred_at?->timestamp ?? 0,
-                    $event->id,
-                ))
-                ->last())
-            ->filter(function (OperationalEvent $event) use ($currentEventsByKey): bool {
-                $current = $currentEventsByKey->get($this->stockAppOrderKey($event));
-
-                return $current instanceof OperationalEvent
-                    && $this->parcelMovementLane($current) === 'dispatched_waiting_delivery';
-            })
+        $dispatchedWaitingDelivery = $latestEvents
+            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'dispatched_waiting_delivery')
             ->values();
-        $deliveredSoFar = $latestEventsInPeriod
+        $deliveredSoFar = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'delivered')
             ->values();
 
@@ -738,8 +711,12 @@ class TodaysWork extends Page
         $dispatchedWaitingDeliveryValue = (float) $dispatchedWaitingDelivery->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $deliveredSoFarValue = (float) $deliveredSoFar->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
-        $pendingSyncCoverage = $this->pendingSyncCoverage($start);
-        $pendingParity = app(StockAppPendingParityService::class)->compare($this->business, $start, $end, $pendingConfirmation->count());
+        $liveQueueStart = $this->business->created_at instanceof Carbon
+            ? $this->business->created_at->copy()->startOfDay()
+            : today()->subMonths(3)->startOfDay();
+        $liveQueueStart = $liveQueueStart->max(today()->subMonths(3)->startOfDay());
+        $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
+        $pendingParity = app(StockAppPendingParityService::class)->compare($this->business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count());
 
         return [
             'period_label' => $start->isSameDay($end)
@@ -748,17 +725,14 @@ class TodaysWork extends Page
             'business_name' => $this->business->name,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
-            'pending_confirmation_label' => 'Selected date range',
+            'pending_confirmation_label' => 'Current Stock App queue',
             'pending_confirmation_sync_note' => $pendingSyncCoverage['note'],
             'pending_confirmation_sync_warning' => $pendingSyncCoverage['warning'],
             'pending_confirmation_live_count' => $pendingParity['live_count'],
             'pending_confirmation_live_note' => $pendingParity['note'],
             'pending_confirmation_live_warning' => $pendingParity['warning'],
-            'follow_up_label' => $followUpEnd->lt($start)
-                ? 'Before today'
-                : ($start->isSameDay($followUpEnd)
-                    ? $start->format('M j, Y')
-                    : $start->format('M j').' - '.$followUpEnd->format('M j, Y')),
+            'current_queue_label' => 'Current open work',
+            'delivered_label' => 'So far',
             'dispatched_count' => $dispatchEvents
                 ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
                 ->count(),
@@ -816,7 +790,7 @@ class TodaysWork extends Page
             ];
         }
 
-        return ['warning' => false, 'note' => 'Pending queue is being read from HELOAS sync records for the selected date range.'];
+        return ['warning' => false, 'note' => 'Pending queue is being read from HELOAS sync records for the current Stock App queue.'];
     }
 
     private function parcelMovementItems(Collection $events): array
