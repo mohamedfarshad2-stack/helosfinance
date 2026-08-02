@@ -5,6 +5,7 @@ namespace App\Domains\Shared\Services;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\IntegrationSource;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Throwable;
@@ -53,7 +54,19 @@ class StockAppPendingParityService
         }
 
         try {
-            $liveCount = $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end);
+            $cacheKey = implode(':', [
+                'stock-app-pending-count',
+                $integration->id,
+                $clientId,
+                $start->toDateString(),
+                $end->toDateString(),
+                optional($integration->updated_at)->timestamp ?? 0,
+            ]);
+            $liveCount = Cache::remember(
+                $cacheKey,
+                now()->addMinutes(10),
+                fn (): int => $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end),
+            );
         } catch (Throwable $throwable) {
             return [
                 'available' => false,
