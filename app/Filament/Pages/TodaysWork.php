@@ -732,6 +732,7 @@ class TodaysWork extends Page
             'pending_confirmation_live_note' => $pendingParity['note'],
             'pending_confirmation_live_warning' => $pendingParity['warning'],
             'current_queue_label' => 'Current open work',
+            'follow_up_label' => 'Current open work',
             'delivered_label' => 'So far',
             'dispatched_count' => $dispatchEvents
                 ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
