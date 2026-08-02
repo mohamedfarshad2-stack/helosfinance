@@ -713,7 +713,7 @@ class TodaysWork extends Page
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $liveQueueStart = $this->stockAppQueueStart();
         $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
-        $pendingParity = app(StockAppPendingParityService::class)->compare($this->business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count());
+        $pendingParity = app(StockAppPendingParityService::class)->compare($this->business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count(), false);
 
         return [
             'period_label' => $start->isSameDay($end)

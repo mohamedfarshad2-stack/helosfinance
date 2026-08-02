@@ -12,7 +12,7 @@ use Throwable;
 
 class StockAppPendingParityService
 {
-    public function compare(Business $business, Carbon $start, Carbon $end, int $syncedCount): array
+    public function compare(Business $business, Carbon $start, Carbon $end, int $syncedCount, bool $allowFetch = true): array
     {
         if (app()->environment('testing')) {
             return [
@@ -53,20 +53,25 @@ class StockAppPendingParityService
             ];
         }
 
+        $cacheKey = $this->cacheKey($integration, $clientId, $start, $end);
+
+        if (! $allowFetch && ! Cache::has($cacheKey)) {
+            return [
+                'available' => false,
+                'live_count' => null,
+                'warning' => false,
+                'note' => 'Live Stock App pending count is warming. HELOAS is showing synced pending rows now.',
+            ];
+        }
+
         try {
-            $cacheKey = implode(':', [
-                'stock-app-pending-count',
-                $integration->id,
-                $clientId,
-                $start->toDateString(),
-                $end->toDateString(),
-                optional($integration->updated_at)->timestamp ?? 0,
-            ]);
-            $liveCount = Cache::remember(
-                $cacheKey,
-                now()->addMinutes(10),
-                fn (): int => $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end),
-            );
+            $liveCount = $allowFetch
+                ? Cache::remember(
+                    $cacheKey,
+                    now()->addMinutes(30),
+                    fn (): int => $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end),
+                )
+                : (int) Cache::get($cacheKey);
         } catch (Throwable $throwable) {
             return [
                 'available' => false,
@@ -86,6 +91,18 @@ class StockAppPendingParityService
                 ? 'Live Stock App pending count is '.number_format($liveCount).', but HELOAS currently has '.number_format($syncedCount).' synced pending row(s) for this range.'
                 : 'HELOAS synced pending rows match the live Stock App pending count for this range.',
         ];
+    }
+
+    private function cacheKey(IntegrationSource $integration, int $clientId, Carbon $start, Carbon $end): string
+    {
+        return implode(':', [
+            'stock-app-pending-count',
+            $integration->id,
+            $clientId,
+            $start->toDateString(),
+            $end->toDateString(),
+            optional($integration->updated_at)->timestamp ?? 0,
+        ]);
     }
 
     private function fetchLivePendingCount(
