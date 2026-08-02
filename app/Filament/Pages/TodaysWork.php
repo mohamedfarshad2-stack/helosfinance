@@ -702,14 +702,11 @@ class TodaysWork extends Page
         $dispatchedWaitingDelivery = $latestEvents
             ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'dispatched_waiting_delivery')
             ->values();
-        $deliveredSoFar = $latestEvents
-            ->filter(fn (OperationalEvent $event): bool => $this->parcelMovementLane($event) === 'delivered')
-            ->values();
+        $deliveredSoFar = $this->deliveredStockAppSummary();
 
         $pendingConfirmationValue = (float) $pendingConfirmation->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $confirmedWaitingDispatchValue = (float) $confirmedWaitingDispatch->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedWaitingDeliveryValue = (float) $dispatchedWaitingDelivery->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
-        $deliveredSoFarValue = (float) $deliveredSoFar->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $liveQueueStart = $this->stockAppQueueStart();
         $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
@@ -744,9 +741,9 @@ class TodaysWork extends Page
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
             'dispatched_waiting_delivery_items' => $this->parcelMovementItems($dispatchedWaitingDelivery),
-            'delivered_so_far_count' => $deliveredSoFar->count(),
-            'delivered_so_far_value' => $deliveredSoFarValue,
-            'delivered_so_far_items' => $this->parcelMovementItems($deliveredSoFar),
+            'delivered_so_far_count' => $deliveredSoFar['count'],
+            'delivered_so_far_value' => $deliveredSoFar['value'],
+            'delivered_so_far_items' => $deliveredSoFar['items'],
             'can_dispatch' => in_array('dispatch', $responsibilities, true),
             'can_follow_delivery' => in_array('delivery_follow_up', $responsibilities, true),
         ];
@@ -878,10 +875,34 @@ class TodaysWork extends Page
 
     private function latestStockAppOrderEvents(): Collection
     {
+        $queueStart = $this->stockAppQueueStart();
+        $closedKeys = OperationalEvent::query()
+            ->where('business_id', $this->business?->id)
+            ->whereIn('source', ['stock_app', 'stock_app_sync'])
+            ->whereIn('event_type', [
+                OperationalEvent::ORDER_DELIVERED,
+                OperationalEvent::ORDER_RETURNED,
+                OperationalEvent::FAKE_ORDER_DETECTED,
+            ])
+            ->where('occurred_at', '>=', $queueStart)
+            ->get(['id', 'business_id', 'source', 'event_type', 'external_id', 'payload', 'occurred_at'])
+            ->map(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
+            ->filter()
+            ->unique()
+            ->flip();
+
         return OperationalEvent::query()
             ->where('business_id', $this->business?->id)
             ->whereIn('source', ['stock_app', 'stock_app_sync'])
-            ->where('occurred_at', '>=', $this->stockAppQueueStart())
+            ->where('occurred_at', '>=', $queueStart)
+            ->whereIn('event_type', array_values(array_unique(array_merge(
+                $this->pendingConfirmationEventTypes(),
+                [
+                    OperationalEvent::ORDER_CONFIRMED,
+                    OperationalEvent::TRACKING_NUMBER_ADDED,
+                    OperationalEvent::WHOLESALE_PARCEL_SENT,
+                ],
+            ))))
             ->get(['id', 'business_id', 'source', 'event_type', 'external_id', 'revenue_amount', 'payload', 'occurred_at'])
             ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
             ->map(fn (Collection $events): OperationalEvent => $events
@@ -891,7 +912,28 @@ class TodaysWork extends Page
                     $event->id,
                 ))
                 ->last())
+            ->reject(fn (OperationalEvent $event): bool => $closedKeys->has($this->stockAppOrderKey($event)))
             ->values();
+    }
+
+    private function deliveredStockAppSummary(): array
+    {
+        $query = OperationalEvent::query()
+            ->where('business_id', $this->business?->id)
+            ->whereIn('source', ['stock_app', 'stock_app_sync'])
+            ->where('event_type', OperationalEvent::ORDER_DELIVERED)
+            ->where('occurred_at', '>=', $this->stockAppQueueStart());
+
+        $recentItems = (clone $query)
+            ->latest('occurred_at')
+            ->limit(8)
+            ->get(['id', 'business_id', 'source', 'event_type', 'external_id', 'revenue_amount', 'payload', 'occurred_at']);
+
+        return [
+            'count' => (clone $query)->count(),
+            'value' => (float) (clone $query)->sum('revenue_amount'),
+            'items' => $this->parcelMovementItems($recentItems),
+        ];
     }
 
     private function stockAppQueueStart(): Carbon
