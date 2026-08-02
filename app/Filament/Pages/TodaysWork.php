@@ -711,10 +711,7 @@ class TodaysWork extends Page
         $dispatchedWaitingDeliveryValue = (float) $dispatchedWaitingDelivery->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $deliveredSoFarValue = (float) $deliveredSoFar->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
-        $liveQueueStart = $this->business->created_at instanceof Carbon
-            ? $this->business->created_at->copy()->startOfDay()
-            : today()->subMonths(3)->startOfDay();
-        $liveQueueStart = $liveQueueStart->max(today()->subMonths(3)->startOfDay());
+        $liveQueueStart = $this->stockAppQueueStart();
         $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
         $pendingParity = app(StockAppPendingParityService::class)->compare($this->business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count());
 
@@ -884,7 +881,8 @@ class TodaysWork extends Page
         return OperationalEvent::query()
             ->where('business_id', $this->business?->id)
             ->whereIn('source', ['stock_app', 'stock_app_sync'])
-            ->get()
+            ->where('occurred_at', '>=', $this->stockAppQueueStart())
+            ->get(['id', 'business_id', 'source', 'event_type', 'external_id', 'revenue_amount', 'payload', 'occurred_at'])
             ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
             ->map(fn (Collection $events): OperationalEvent => $events
                 ->sortBy(fn (OperationalEvent $event): string => sprintf(
@@ -894,6 +892,11 @@ class TodaysWork extends Page
                 ))
                 ->last())
             ->values();
+    }
+
+    private function stockAppQueueStart(): Carbon
+    {
+        return today()->subMonths(3)->startOfDay();
     }
 
     private function stockAppOrderKey(OperationalEvent $event): string
