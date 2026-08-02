@@ -274,7 +274,7 @@
                         @php
                             $parcelDetailGroups = [
                                 ['key' => 'pending', 'label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'total' => $parcelMovement['pending_confirmation_count'] ?? 0, 'tone' => 'orange', 'instruction' => 'Call the customer and confirm the order before dispatch.'],
-                                ['key' => 'confirmed', 'label' => 'Confirmed to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'total' => $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0, 'tone' => 'violet', 'instruction' => 'Add tracking and move confirmed parcels to dispatched.'],
+                                ['key' => 'confirmed', 'label' => 'Confirmed to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'total' => $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0, 'tone' => 'violet', 'instruction' => 'Add tracking and move confirmed parcels to dispatched.', 'breakdown' => $parcelMovement['confirmed_waiting_dispatch_breakdown'] ?? []],
                                 ['key' => 'dispatched', 'label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'total' => $parcelMovement['dispatched_waiting_delivery_count'] ?? 0, 'tone' => 'amber', 'instruction' => 'Follow up with courier/customer until these become delivered or a true return.'],
                                 ['key' => 'delivered', 'label' => 'Delivered', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'total' => $parcelMovement['delivered_so_far_count'] ?? 0, 'tone' => 'emerald', 'instruction' => 'These are already converted to delivered sales.'],
                             ];
@@ -300,6 +300,33 @@
                                         </div>
                                         <button type="button" x-on:click="activeLane = null" class="rounded-lg px-3 py-1 text-xs font-black text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-800 dark:hover:bg-gray-900">Close</button>
                                     </div>
+                                    @if (! empty($group['breakdown'] ?? []))
+                                        <div class="mt-3 grid gap-2 lg:grid-cols-4">
+                                            @foreach ([
+                                                'ages' => 'How old',
+                                                'event_types' => 'Latest event',
+                                                'statuses' => 'Status text',
+                                                'sources' => 'Source',
+                                            ] as $breakdownKey => $breakdownLabel)
+                                                <div class="rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900">
+                                                    <div class="text-xs font-black uppercase text-gray-500">{{ $breakdownLabel }}</div>
+                                                    <div class="mt-2 grid gap-1">
+                                                        @forelse (($group['breakdown'][$breakdownKey] ?? []) as $row)
+                                                            <div class="flex items-start justify-between gap-2 text-xs">
+                                                                <span class="font-semibold capitalize text-gray-600 dark:text-gray-300">{{ $row['label'] }}</span>
+                                                                <span class="text-right font-black text-gray-950 dark:text-white">
+                                                                    {{ number_format((int) $row['count']) }}
+                                                                    <span class="block font-semibold text-gray-500">LKR {{ number_format((float) $row['value'], 2) }}</span>
+                                                                </span>
+                                                            </div>
+                                                        @empty
+                                                            <div class="text-xs font-semibold text-gray-500">No breakdown.</div>
+                                                        @endforelse
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                     <div class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
                                         @forelse ($group['items'] as $item)
                                             <div class="grid grid-cols-[1fr_auto] gap-3 py-2 text-sm">

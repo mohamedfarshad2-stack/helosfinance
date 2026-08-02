@@ -761,6 +761,7 @@ class TodaysWork extends Page
             'confirmed_waiting_dispatch_count' => $confirmedWaitingDispatch->count(),
             'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
             'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 1000),
+            'confirmed_waiting_dispatch_breakdown' => $this->parcelMovementBreakdown($confirmedWaitingDispatch),
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
             'dispatched_waiting_delivery_items' => $this->parcelMovementItems($dispatchedWaitingDelivery, 1000),
@@ -824,6 +825,81 @@ class TodaysWork extends Page
             ])
             ->values()
             ->all();
+    }
+
+    private function parcelMovementBreakdown(Collection $events): array
+    {
+        $now = now();
+
+        $sourceRows = $events
+            ->groupBy(fn (OperationalEvent $event): string => (string) $event->source)
+            ->map(fn (Collection $group, string $source): array => [
+                'label' => str_replace('_', ' ', $source ?: 'unknown source'),
+                'count' => $group->count(),
+                'value' => (float) $group->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event)),
+            ])
+            ->sortByDesc('count')
+            ->values()
+            ->all();
+
+        $eventTypeRows = $events
+            ->groupBy(fn (OperationalEvent $event): string => (string) $event->event_type)
+            ->map(fn (Collection $group, string $eventType): array => [
+                'label' => str_replace('_', ' ', $eventType ?: 'unknown event'),
+                'count' => $group->count(),
+                'value' => (float) $group->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event)),
+            ])
+            ->sortByDesc('count')
+            ->values()
+            ->all();
+
+        $statusRows = $events
+            ->groupBy(fn (OperationalEvent $event): string => $this->stockAppStatus($event))
+            ->map(fn (Collection $group, string $status): array => [
+                'label' => str_replace('_', ' ', $status ?: 'unknown status'),
+                'count' => $group->count(),
+                'value' => (float) $group->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event)),
+            ])
+            ->sortByDesc('count')
+            ->take(8)
+            ->values()
+            ->all();
+
+        $ageRows = collect([
+            'today' => ['label' => 'Today', 'count' => 0, 'value' => 0.0],
+            '1_2_days' => ['label' => '1-2 days old', 'count' => 0, 'value' => 0.0],
+            '3_7_days' => ['label' => '3-7 days old', 'count' => 0, 'value' => 0.0],
+            '8_plus_days' => ['label' => '8+ days old', 'count' => 0, 'value' => 0.0],
+            'no_date' => ['label' => 'No usable date', 'count' => 0, 'value' => 0.0],
+        ]);
+
+        foreach ($events as $event) {
+            $date = $this->stockAppPipelineDate($event);
+            $value = $this->stockAppOrderValue($event);
+
+            $bucket = match (true) {
+                ! $date instanceof Carbon => 'no_date',
+                $date->isToday() => 'today',
+                $date->diffInDays($now) <= 2 => '1_2_days',
+                $date->diffInDays($now) <= 7 => '3_7_days',
+                default => '8_plus_days',
+            };
+
+            $row = $ageRows->get($bucket);
+            $row['count']++;
+            $row['value'] += $value;
+            $ageRows->put($bucket, $row);
+        }
+
+        return [
+            'sources' => $sourceRows,
+            'event_types' => $eventTypeRows,
+            'statuses' => $statusRows,
+            'ages' => $ageRows
+                ->filter(fn (array $row): bool => (int) $row['count'] > 0)
+                ->values()
+                ->all(),
+        ];
     }
 
     private function stockAppPipelineDate(OperationalEvent $event): ?Carbon
