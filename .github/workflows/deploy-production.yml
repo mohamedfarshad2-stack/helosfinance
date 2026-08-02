@@ -139,3 +139,18 @@ jobs:
               done
             '
           "
+
+      - name: Publish post-deploy HELOS health
+        run: |
+          ssh -i ~/.ssh/helios_lightsail ubuntu@65.1.151.96 'sudo bash -s' <<'REMOTE'
+          cd /var/www/helosfinance
+          mkdir -p public/diagnostics
+          {
+            echo "generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "commit=$(git rev-parse HEAD 2>/dev/null || true)"
+            echo "today_work_route=$(php artisan route:list --path=admin/todays-work --compact 2>/dev/null | tr '\n' ' ')"
+            echo "arafath_dashboard_probe_start"
+            timeout 25 php artisan tinker --execute='$user = App\Models\User::query()->whereRaw("LOWER(email) = ?", ["arafath@helos.com"])->first(); $business = $user?->business ?: App\Domains\Shared\Models\Business::query()->where("name", "like", "%Horns England%")->orderByDesc("id")->first(); Illuminate\Support\Facades\Auth::login($user); $page = new App\Filament\Pages\TodaysWork; $page->business = $business; $page->parcelStartDate = now()->startOfMonth()->toDateString(); $page->parcelEndDate = now()->toDateString(); $method = new ReflectionMethod(App\Filament\Pages\TodaysWork::class, "employeeParcelMovement"); $method->setAccessible(true); $start = microtime(true); $movement = $method->invoke($page); echo json_encode(["ok" => true, "seconds" => round(microtime(true) - $start, 3), "business" => $business?->name, "boxes" => ["dispatched_count" => $movement["dispatched_count"] ?? null, "pending_confirmation_count" => $movement["pending_confirmation_count"] ?? null, "confirmed_waiting_dispatch_count" => $movement["confirmed_waiting_dispatch_count"] ?? null, "dispatched_waiting_delivery_count" => $movement["dispatched_waiting_delivery_count"] ?? null, "delivered_so_far_count" => $movement["delivered_so_far_count"] ?? null]]).PHP_EOL;' || echo "arafath_dashboard_probe_failed=$?"
+            echo "arafath_dashboard_probe_end"
+          } > public/diagnostics/deploy-health.txt
+          REMOTE
