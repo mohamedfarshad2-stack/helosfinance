@@ -46,6 +46,7 @@ use Filament\Support\Enums\MaxWidth;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Collection;
+use Throwable;
 
 class ClientHealthReport extends Page implements HasForms
 {
@@ -115,7 +116,35 @@ class ClientHealthReport extends Page implements HasForms
             'goal_amount' => null,
         ]);
 
-        $this->loadReport($snapshots, $advisor, $cashIntelligence, $capitalIntelligence, $inventoryIntelligence, $revenuePipeline, $breakEvenIntelligence, $goalIntelligence, $trustValidation, $workQueue, false);
+        try {
+            $this->loadReport($snapshots, $advisor, $cashIntelligence, $capitalIntelligence, $inventoryIntelligence, $revenuePipeline, $breakEvenIntelligence, $goalIntelligence, $trustValidation, $workQueue, false);
+        } catch (Throwable $e) {
+            report($e);
+
+            $this->business = null;
+            $this->snapshot = null;
+            $this->advisor = [];
+            $this->briefing = [];
+            $this->cashIntelligence = [];
+            $this->capitalIntelligence = [];
+            $this->inventoryIntelligence = [];
+            $this->revenuePipeline = [];
+            $this->breakEvenStory = [];
+            $this->goalStory = [];
+            $this->healthStory = [];
+            $this->bucketStory = [];
+            $this->lifecycleStory = [];
+            $this->operationalSummary = [];
+            $this->treasuryStory = [];
+            $this->trustStatus = [];
+            $this->ownerBusinessMap = [];
+            $this->ownerSetupGuide = [];
+            $this->ownerCoach = [];
+            $this->trend = collect();
+            $this->topExpenses = collect();
+            $this->impact = [];
+            $this->serviceClientNames = [];
+        }
     }
 
     public function form(Form $form): Form
@@ -148,7 +177,11 @@ class ClientHealthReport extends Page implements HasForms
 
     public function refreshReport(BusinessHealthSnapshotService $snapshots, BusinessAdvisorService $advisor, CashIntelligenceService $cashIntelligence, CapitalIntelligenceService $capitalIntelligence, InventoryIntelligenceService $inventoryIntelligence, RevenuePipelineService $revenuePipeline, BreakEvenIntelligenceService $breakEvenIntelligence, GoalIntelligenceService $goalIntelligence, TrustValidationService $trustValidation, WorkQueueService $workQueue): void
     {
-        $this->loadReport($snapshots, $advisor, $cashIntelligence, $capitalIntelligence, $inventoryIntelligence, $revenuePipeline, $breakEvenIntelligence, $goalIntelligence, $trustValidation, $workQueue, true);
+        try {
+            $this->loadReport($snapshots, $advisor, $cashIntelligence, $capitalIntelligence, $inventoryIntelligence, $revenuePipeline, $breakEvenIntelligence, $goalIntelligence, $trustValidation, $workQueue, true);
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     private function loadReport(BusinessHealthSnapshotService $snapshots, BusinessAdvisorService $advisor, CashIntelligenceService $cashIntelligence, CapitalIntelligenceService $capitalIntelligence, InventoryIntelligenceService $inventoryIntelligence, RevenuePipelineService $revenuePipeline, BreakEvenIntelligenceService $breakEvenIntelligence, GoalIntelligenceService $goalIntelligence, TrustValidationService $trustValidation, WorkQueueService $workQueue, bool $refreshSnapshot): void

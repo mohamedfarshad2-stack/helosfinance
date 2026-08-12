@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class TodaysWork extends Page
 {
@@ -59,27 +60,49 @@ class TodaysWork extends Page
 
     public function mount(MissionGeneratorService $missions, BusinessHealthSnapshotService $snapshots): void
     {
-        $businessId = Auth::user()?->business_id;
-        $this->business = $businessId ? Business::query()->find($businessId) : null;
-        $this->parcelStartDate = today()->toDateString();
-        $this->parcelEndDate = today()->toDateString();
-        $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
-        $this->managerProfit = $this->managerProfitGuide($snapshots);
-        $this->employeeContribution = $this->employeeContributionGuide($snapshots);
-        $this->parcelMovement = $this->employeeParcelMovement();
+        try {
+            $businessId = Auth::user()?->business_id;
+            $this->business = $businessId ? Business::query()->find($businessId) : null;
+            $this->parcelStartDate = today()->toDateString();
+            $this->parcelEndDate = today()->toDateString();
+            $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
+            $this->managerProfit = $this->managerProfitGuide($snapshots);
+            $this->employeeContribution = $this->employeeContributionGuide($snapshots);
+            $this->parcelMovement = $this->employeeParcelMovement();
+        } catch (Throwable $e) {
+            report($e);
+            $this->workQueue = [];
+            $this->managerProfit = [];
+            $this->employeeContribution = [];
+            $this->parcelMovement = [];
+        }
     }
 
     protected function getViewData(): array
     {
-        return [
-            'business' => $this->business,
-            'workQueue' => $this->workQueue,
-            'managerProfit' => $this->managerProfit,
-            'employeeContribution' => $this->employeeContribution,
-            'parcelMovement' => $this->parcelMovement,
-            'activeMission' => $this->activeMission(),
-            'actionOptions' => $this->actionOptions(),
-        ];
+        try {
+            return [
+                'business' => $this->business,
+                'workQueue' => $this->workQueue,
+                'managerProfit' => $this->managerProfit,
+                'employeeContribution' => $this->employeeContribution,
+                'parcelMovement' => $this->parcelMovement,
+                'activeMission' => $this->activeMission(),
+                'actionOptions' => $this->actionOptions(),
+            ];
+        } catch (Throwable $e) {
+            report($e);
+
+            return [
+                'business' => $this->business,
+                'workQueue' => [],
+                'managerProfit' => [],
+                'employeeContribution' => [],
+                'parcelMovement' => [],
+                'activeMission' => null,
+                'actionOptions' => [],
+            ];
+        }
     }
 
     public function updatedParcelStartDate(): void
