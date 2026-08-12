@@ -60,16 +60,11 @@ class TodaysWork extends Page
 
     public function mount(MissionGeneratorService $missions, BusinessHealthSnapshotService $snapshots): void
     {
-        try {
-            $businessId = Auth::user()?->business_id;
-            $this->business = $businessId ? Business::query()->find($businessId) : null;
-            $this->parcelStartDate = today()->toDateString();
-            $this->parcelEndDate = today()->toDateString();
-            $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
-        } catch (Throwable $e) {
-            report($e);
-            $this->workQueue = $this->fallbackWorkQueue();
-        }
+        $businessId = Auth::user()?->business_id;
+        $this->business = $businessId ? Business::query()->find($businessId) : null;
+        $this->parcelStartDate = today()->toDateString();
+        $this->parcelEndDate = today()->toDateString();
+        $this->workQueue = $this->fallbackWorkQueue();
 
         $this->managerProfit = [];
         $this->employeeContribution = [];
@@ -78,29 +73,15 @@ class TodaysWork extends Page
 
     protected function getViewData(): array
     {
-        try {
-            return [
-                'business' => $this->business,
-                'workQueue' => $this->workQueue ?: $this->fallbackWorkQueue(),
-                'managerProfit' => $this->managerProfit,
-                'employeeContribution' => $this->employeeContribution,
-                'parcelMovement' => $this->parcelMovement,
-                'activeMission' => $this->activeMission(),
-                'actionOptions' => $this->actionOptions(),
-            ];
-        } catch (Throwable $e) {
-            report($e);
-
-            return [
-                'business' => $this->business,
-                'workQueue' => $this->fallbackWorkQueue(),
-                'managerProfit' => [],
-                'employeeContribution' => [],
-                'parcelMovement' => [],
-                'activeMission' => null,
-                'actionOptions' => [],
-            ];
-        }
+        return [
+            'business' => $this->business,
+            'workQueue' => $this->workQueue ?: $this->fallbackWorkQueue(),
+            'managerProfit' => $this->managerProfit,
+            'employeeContribution' => $this->employeeContribution,
+            'parcelMovement' => $this->parcelMovement,
+            'activeMission' => null,
+            'actionOptions' => [],
+        ];
     }
 
     public function updatedParcelStartDate(): void
