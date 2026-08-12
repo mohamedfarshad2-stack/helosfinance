@@ -76,7 +76,7 @@ return new class extends Migration
                 'name' => 'Arafath',
                 'password_hash' => '$2y$10$vbUdpAljqExMTDTahbgizudSGos2M/hNhZBGGE.aHNX.RQqwntbSO',
                 'profile' => 'operations',
-                'responsibilities' => ['dispatch', 'product_repair', 'material_stock'],
+                'responsibilities' => ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'],
                 'supervisor_email' => 'nifras@helos.com',
             ],
             'sandhamali@helos.com' => [
