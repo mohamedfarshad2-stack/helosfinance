@@ -345,7 +345,7 @@ class UserResource extends Resource
             ],
             'wholesale_management' => [
                 'employee_access_profile' => 'full_staff',
-                'staff_responsibilities' => ['collections', 'supervisor_review'],
+                'staff_responsibilities' => ['collections', 'supervisor_review', 'order_confirmation', 'dispatch', 'delivery_follow_up'],
                 'is_staff_supervisor' => true,
             ],
             'dispatch_only' => [

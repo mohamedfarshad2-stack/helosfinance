@@ -60,7 +60,8 @@ class TodaysWork extends Page
 
     public function mount(MissionGeneratorService $missions, BusinessHealthSnapshotService $snapshots): void
     {
-        $businessId = Auth::user()?->business_id;
+        $businessId = $this->resolvedBusinessId();
+
         $this->business = $businessId ? Business::query()->find($businessId) : null;
         $this->parcelStartDate = today()->toDateString();
         $this->parcelEndDate = today()->toDateString();
@@ -388,12 +389,13 @@ class TodaysWork extends Page
     private function employeeGuide(): array
     {
         $user = Auth::user();
+        $businessId = $this->resolvedBusinessId();
 
         if (! $user instanceof User) {
             return [];
         }
 
-        $responsibilities = collect($user->staffResponsibilities($user->business_id))
+        $responsibilities = collect($user->staffResponsibilities($businessId))
             ->map(fn (string $code): array => [
                 'label' => $this->responsibilityLabel($code),
                 'direction' => $this->responsibilityDirection($code),
@@ -609,15 +611,22 @@ class TodaysWork extends Page
     private function employeeContributionGuide(BusinessHealthSnapshotService $snapshots): array
     {
         $user = Auth::user();
+        $businessId = $this->resolvedBusinessId();
 
-        if (! $user instanceof User || ! $user->isStaff() || $user->is_staff_supervisor || ! $this->business) {
+        if (! $user instanceof User || ! $user->isStaff() || $user->is_staff_supervisor || ! $businessId) {
             return [];
         }
 
-        $snapshot = $snapshots->readCurrentMonth($this->business);
+        $business = $this->business ?: Business::query()->find($businessId);
+
+        if (! $business instanceof Business) {
+            return [];
+        }
+
+        $snapshot = $snapshots->readCurrentMonth($business);
 
         if (! $snapshot || ! $snapshot->period_end?->isToday()) {
-            $snapshot = $snapshots->currentMonth($this->business);
+            $snapshot = $snapshots->currentMonth($business);
         }
 
         $metrics = is_array($snapshot?->metrics) ? $snapshot->metrics : [];
@@ -635,14 +644,14 @@ class TodaysWork extends Page
             ? (int) ceil(ceil($recoveryGap / $contributionPerDelivery) / $daysRemaining)
             : null;
 
-        $responsibilities = $user->staffResponsibilities($this->business->id);
+        $responsibilities = $user->staffResponsibilities($business->id);
         $deliveryRoles = ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'];
         $supportsDeliveries = array_intersect($responsibilities, $deliveryRoles) !== [];
         $deliveryStaffCount = User::query()
-            ->where('business_id', $this->business->id)
+            ->where('business_id', $business->id)
             ->where('is_employee', true)
             ->get()
-            ->filter(fn (User $employee): bool => array_intersect($employee->staffResponsibilities($this->business?->id), $deliveryRoles) !== [])
+            ->filter(fn (User $employee): bool => array_intersect($employee->staffResponsibilities($business->id), $deliveryRoles) !== [])
             ->count();
         $personalDeliveryTarget = $supportsDeliveries && $companyDailyDeliveries !== null
             ? (int) ceil($companyDailyDeliveries / max($deliveryStaffCount, 1))
@@ -736,12 +745,19 @@ class TodaysWork extends Page
     private function employeeParcelMovement(): array
     {
         $user = Auth::user();
+        $businessId = $this->resolvedBusinessId();
 
-        if (! $user instanceof User || ! $user->isStaff() || ! $this->business) {
+        if (! $user instanceof User || ! $user->isStaff() || ! $businessId) {
             return [];
         }
 
-        $responsibilities = $user->staffResponsibilities($this->business->id);
+        $business = $this->business ?: Business::query()->find($businessId);
+
+        if (! $business instanceof Business) {
+            return [];
+        }
+
+        $responsibilities = $user->staffResponsibilities($business->id);
         $canMoveParcels = array_intersect($responsibilities, ['order_confirmation', 'dispatch', 'delivery_follow_up']) !== [];
 
         if (! $canMoveParcels) {
@@ -756,7 +772,7 @@ class TodaysWork extends Page
         }
 
         $dispatchEvents = OperationalEvent::query()
-            ->where('business_id', $this->business->id)
+            ->where('business_id', $business->id)
             ->whereIn('event_type', [OperationalEvent::TRACKING_NUMBER_ADDED, OperationalEvent::WHOLESALE_PARCEL_SENT])
             ->whereBetween('occurred_at', [$start, $end])
             ->get();
@@ -778,13 +794,13 @@ class TodaysWork extends Page
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $liveQueueStart = $this->stockAppQueueStart();
         $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
-        $pendingParity = app(StockAppPendingParityService::class)->compare($this->business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count(), false);
+        $pendingParity = app(StockAppPendingParityService::class)->compare($business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count(), false);
 
         return [
             'period_label' => $start->isSameDay($end)
                 ? $start->format('M j, Y')
                 : $start->format('M j').' - '.$end->format('M j, Y'),
-            'business_name' => $this->business->name,
+            'business_name' => $business->name,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
             'pending_confirmation_label' => 'Current Stock App queue',
@@ -1550,6 +1566,19 @@ class TodaysWork extends Page
             ->value('base_url');
 
         return $this->stockAppUrlCache = rtrim((string) ($baseUrl ?: 'https://codreturnslanka.lk'), '/').'/admin';
+    }
+
+    private function resolvedBusinessId(): ?int
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        return $user->business_id
+            ?: $user->defaultBusinessId()
+            ?: ($user->accessibleBusinessIds()[0] ?? null);
     }
 
     private function taskResponsibility(array $task): ?string
