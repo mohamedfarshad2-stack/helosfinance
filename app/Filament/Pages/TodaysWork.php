@@ -66,16 +66,14 @@ class TodaysWork extends Page
             $this->parcelStartDate = today()->toDateString();
             $this->parcelEndDate = today()->toDateString();
             $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
-            $this->managerProfit = $this->managerProfitGuide($snapshots);
-            $this->employeeContribution = $this->employeeContributionGuide($snapshots);
-            $this->parcelMovement = $this->employeeParcelMovement();
         } catch (Throwable $e) {
             report($e);
             $this->workQueue = $this->fallbackWorkQueue();
-            $this->managerProfit = [];
-            $this->employeeContribution = [];
-            $this->parcelMovement = [];
         }
+
+        $this->managerProfit = [];
+        $this->employeeContribution = [];
+        $this->parcelMovement = [];
     }
 
     protected function getViewData(): array
