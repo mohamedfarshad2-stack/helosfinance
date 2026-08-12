@@ -65,8 +65,21 @@ class TodaysWork extends Page
         $this->business = $businessId ? Business::query()->find($businessId) : null;
         $this->parcelStartDate = today()->toDateString();
         $this->parcelEndDate = today()->toDateString();
-        $this->workQueue = $this->fallbackWorkQueue();
 
+        $user = Auth::user();
+
+        if ($user instanceof User && $user->isStaff()) {
+            $visibleMissions = $missions->visibleForUser($user);
+
+            $this->workQueue = $this->employeeWorkQueue($visibleMissions);
+            $this->managerProfit = $this->managerProfitGuide($snapshots);
+            $this->employeeContribution = $this->employeeContributionGuide($snapshots);
+            $this->parcelMovement = $this->employeeParcelMovement();
+
+            return;
+        }
+
+        $this->workQueue = $this->fallbackWorkQueue();
         $this->managerProfit = [];
         $this->employeeContribution = [];
         $this->parcelMovement = [];
@@ -80,8 +93,8 @@ class TodaysWork extends Page
             'managerProfit' => $this->managerProfit,
             'employeeContribution' => $this->employeeContribution,
             'parcelMovement' => $this->parcelMovement,
-            'activeMission' => null,
-            'actionOptions' => [],
+            'activeMission' => $this->activeMission(),
+            'actionOptions' => $this->actionOptions(),
         ];
     }
 
