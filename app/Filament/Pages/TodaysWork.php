@@ -71,7 +71,7 @@ class TodaysWork extends Page
             $this->parcelMovement = $this->employeeParcelMovement();
         } catch (Throwable $e) {
             report($e);
-            $this->workQueue = [];
+            $this->workQueue = $this->fallbackWorkQueue();
             $this->managerProfit = [];
             $this->employeeContribution = [];
             $this->parcelMovement = [];
@@ -83,7 +83,7 @@ class TodaysWork extends Page
         try {
             return [
                 'business' => $this->business,
-                'workQueue' => $this->workQueue,
+                'workQueue' => $this->workQueue ?: $this->fallbackWorkQueue(),
                 'managerProfit' => $this->managerProfit,
                 'employeeContribution' => $this->employeeContribution,
                 'parcelMovement' => $this->parcelMovement,
@@ -95,7 +95,7 @@ class TodaysWork extends Page
 
             return [
                 'business' => $this->business,
-                'workQueue' => [],
+                'workQueue' => $this->fallbackWorkQueue(),
                 'managerProfit' => [],
                 'employeeContribution' => [],
                 'parcelMovement' => [],
@@ -360,6 +360,49 @@ class TodaysWork extends Page
             'completed_today_count' => $completedToday->count(),
             'employee_guide' => $this->employeeGuide(),
             'team_summary' => $this->teamSummary(),
+        ];
+    }
+
+    private function fallbackWorkQueue(): array
+    {
+        $user = Auth::user();
+        $name = $user instanceof User ? $user->name : 'Team member';
+        $isSupervisor = $user instanceof User ? (bool) $user->is_staff_supervisor : false;
+
+        return [
+            'headline' => 'Today\'s work is ready.',
+            'summary' => [],
+            'sections' => [
+                'due_today' => [],
+                'high_priority' => [],
+                'waiting_review' => [],
+                'completed_today' => [],
+                'problems' => [],
+                'missing_information' => [],
+            ],
+            'todays_priority' => null,
+            'ranked_missions' => [],
+            'tasks' => [],
+            'team_workload' => [],
+            'responsibility_groups' => [],
+            'my_responsibilities' => [],
+            'open_count' => 0,
+            'blocked_count' => 0,
+            'completed_today_count' => 0,
+            'employee_guide' => [
+                'name' => $name,
+                'reports_to' => 'Business owner',
+                'is_supervisor' => $isSupervisor,
+                'direct_reports' => [],
+                'responsibilities' => [],
+                'daily_routine' => [
+                    'Open the highest-priority mission and start it before taking lower-impact work.',
+                    'Update the real order, product, stock, production, expense, or collection record—not only the mission status.',
+                    'Mark blockers immediately and escalate them to the business owner instead of leaving work silent.',
+                    'Finish by checking overdue work and submitted items waiting for review.',
+                ],
+            ],
+            'team_summary' => [],
         ];
     }
 
