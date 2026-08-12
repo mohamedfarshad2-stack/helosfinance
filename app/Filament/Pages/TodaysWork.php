@@ -658,13 +658,13 @@ class TodaysWork extends Page
             : null;
 
         $completedToday = Mission::query()
-            ->where('business_id', $this->business->id)
+            ->where('business_id', $business->id)
             ->where('assigned_user_id', $user->id)
             ->where('status', Mission::STATUS_COMPLETED)
             ->whereDate('completed_at', today())
             ->count();
         $openToday = Mission::query()
-            ->where('business_id', $this->business->id)
+            ->where('business_id', $business->id)
             ->where('assigned_user_id', $user->id)
             ->active()
             ->where(fn ($query) => $query->whereNull('due_at')->orWhereDate('due_at', '<=', today()))
@@ -1641,12 +1641,13 @@ class TodaysWork extends Page
     private function myResponsibilityLabels(): array
     {
         $user = Auth::user();
+        $businessId = $this->resolvedBusinessId();
 
         if (! $user?->isStaff()) {
             return [];
         }
 
-        return collect($user->staffResponsibilities($user->business_id))
+        return collect($user->staffResponsibilities($businessId))
             ->map(fn (string $responsibility): string => $this->responsibilityLabel($responsibility))
             ->values()
             ->all();
