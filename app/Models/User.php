@@ -255,7 +255,7 @@ class User extends Authenticatable implements FilamentUser
             'production' => 'Production and piece pay',
             'material_stock' => 'Material stock',
             'expense_recording' => 'Expenses and supplier dues',
-            'collections' => 'Collections and service income',
+            'collections' => 'Collections and wholesale/service money',
             'bank_exceptions' => 'Bank exceptions',
             'product_repair' => 'Product/SKU repair',
             'supervisor_review' => 'Supervisor review',

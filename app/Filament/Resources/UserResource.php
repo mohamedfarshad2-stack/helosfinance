@@ -214,6 +214,8 @@ class UserResource extends Resource
     {
         return [
             'daily_operations' => 'Daily operations - orders, dispatch, returns',
+            'order_control' => 'Arafath - confirm, dispatch, and delivery follow-up',
+            'wholesale_management' => 'Nifras - wholesale sales, collections, and team follow-up',
             'dispatch_only' => 'Dispatch - confirmed to courier',
             'delivery_follow_up' => 'Delivery follow-up - not delivered',
             'production_store' => 'Production and stock',
@@ -336,6 +338,16 @@ class UserResource extends Resource
     private static function staffRolePresetConfig(string $preset): array
     {
         return match ($preset) {
+            'order_control' => [
+                'employee_access_profile' => 'operations',
+                'staff_responsibilities' => ['order_confirmation', 'dispatch', 'delivery_follow_up', 'return_recovery'],
+                'is_staff_supervisor' => false,
+            ],
+            'wholesale_management' => [
+                'employee_access_profile' => 'full_staff',
+                'staff_responsibilities' => ['collections', 'supervisor_review'],
+                'is_staff_supervisor' => true,
+            ],
             'dispatch_only' => [
                 'employee_access_profile' => 'operations',
                 'staff_responsibilities' => ['dispatch'],
