@@ -65,25 +65,10 @@ class TodaysWork extends Page
             $this->business = $businessId ? Business::query()->find($businessId) : null;
             $this->parcelStartDate = today()->toDateString();
             $this->parcelEndDate = today()->toDateString();
-            $this->workQueue = [
-                'headline' => 'HELOAS is loading your work safely.',
-                'summary' => [],
-                'sections' => [],
-                'todays_priority' => null,
-                'ranked_missions' => [],
-                'tasks' => [],
-                'team_workload' => [],
-                'responsibility_groups' => [],
-                'my_responsibilities' => [],
-                'open_count' => 0,
-                'blocked_count' => 0,
-                'completed_today_count' => 0,
-                'employee_guide' => [],
-                'team_summary' => [],
-            ];
-            $this->managerProfit = [];
-            $this->employeeContribution = [];
-            $this->parcelMovement = [];
+            $this->workQueue = $this->employeeWorkQueue($missions->visibleForUser(Auth::user()));
+            $this->managerProfit = $this->managerProfitGuide($snapshots);
+            $this->employeeContribution = $this->employeeContributionGuide($snapshots);
+            $this->parcelMovement = $this->employeeParcelMovement();
         } catch (Throwable $e) {
             report($e);
             $this->workQueue = [];
@@ -102,8 +87,8 @@ class TodaysWork extends Page
                 'managerProfit' => $this->managerProfit,
                 'employeeContribution' => $this->employeeContribution,
                 'parcelMovement' => $this->parcelMovement,
-                'activeMission' => null,
-                'actionOptions' => [],
+                'activeMission' => $this->activeMission(),
+                'actionOptions' => $this->actionOptions(),
             ];
         } catch (Throwable $e) {
             report($e);
