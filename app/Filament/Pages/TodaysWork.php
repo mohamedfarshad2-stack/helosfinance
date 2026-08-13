@@ -69,12 +69,34 @@ class TodaysWork extends Page
         $user = Auth::user();
 
         if ($user instanceof User && $user->isStaff()) {
-            $visibleMissions = $missions->visibleForUser($user);
+            try {
+                $visibleMissions = $missions->visibleForUser($user);
+                $this->workQueue = $this->employeeWorkQueue($visibleMissions);
+            } catch (Throwable $e) {
+                report($e);
+                $this->workQueue = $this->fallbackWorkQueue();
+            }
 
-            $this->workQueue = $this->employeeWorkQueue($visibleMissions);
-            $this->managerProfit = $this->managerProfitGuide($snapshots);
-            $this->employeeContribution = $this->employeeContributionGuide($snapshots);
-            $this->parcelMovement = $this->employeeParcelMovement();
+            try {
+                $this->managerProfit = $this->managerProfitGuide($snapshots);
+            } catch (Throwable $e) {
+                report($e);
+                $this->managerProfit = [];
+            }
+
+            try {
+                $this->employeeContribution = $this->employeeContributionGuide($snapshots);
+            } catch (Throwable $e) {
+                report($e);
+                $this->employeeContribution = [];
+            }
+
+            try {
+                $this->parcelMovement = $this->employeeParcelMovement();
+            } catch (Throwable $e) {
+                report($e);
+                $this->parcelMovement = [];
+            }
 
             return;
         }
@@ -114,13 +136,17 @@ class TodaysWork extends Page
             return;
         }
 
-        app(StockAppPendingParityService::class)->compare(
-            $this->business,
-            $this->stockAppQueueStart(),
-            today()->endOfDay(),
-            0,
-            true,
-        );
+        try {
+            app(StockAppPendingParityService::class)->compare(
+                $this->business,
+                $this->stockAppQueueStart(),
+                today()->endOfDay(),
+                0,
+                true,
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         $this->parcelMovement = $this->employeeParcelMovement();
 
@@ -831,14 +857,14 @@ class TodaysWork extends Page
             'dispatched_value' => $dispatchedValue,
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
-            'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 1000),
+            'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 40),
             'confirmed_waiting_dispatch_count' => $confirmedWaitingDispatch->count(),
             'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
-            'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 1000),
+            'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 40),
             'confirmed_waiting_dispatch_breakdown' => $this->parcelMovementBreakdown($confirmedWaitingDispatch),
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
-            'dispatched_waiting_delivery_items' => $this->parcelMovementItems($dispatchedWaitingDelivery, 1000),
+            'dispatched_waiting_delivery_items' => $this->parcelMovementItems($dispatchedWaitingDelivery, 40),
             'delivered_so_far_count' => $deliveredSoFar['count'],
             'delivered_so_far_value' => $deliveredSoFar['value'],
             'delivered_so_far_items' => $deliveredSoFar['items'],
