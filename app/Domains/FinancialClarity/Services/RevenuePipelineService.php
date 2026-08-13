@@ -66,8 +66,12 @@ class RevenuePipelineService
         $codOrders = $orders->filter(fn (array $order): bool => $this->isCodChannel($order['channel']));
         $wholesaleOrders = $orders->filter(fn (array $order): bool => $this->isWholesaleChannel($order['channel']));
 
-        $codPending = $codOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('expected_amount');
-        $codCollected = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount');
+        $codPending = $events
+            ->filter(fn (OperationalEvent $event): bool => $this->isCodChannel(strtolower((string) $event->channel)) && $this->isPendingEvent($event))
+            ->sum(fn (OperationalEvent $event): float => $this->pipelineExpectedAmount($event));
+        $codCollected = $events
+            ->filter(fn (OperationalEvent $event): bool => $this->isCodChannel(strtolower((string) $event->channel)) && $event->event_type === OperationalEvent::ORDER_DELIVERED)
+            ->sum(fn (OperationalEvent $event): float => $this->recognizedOrderAmount($event));
         $codReturnedOrders = $codOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED);
         $codReturned = $codReturnedOrders->sum('expected_amount');
         $codReturnLoss = $codReturnedOrders->sum('leakage_amount');
@@ -76,8 +80,12 @@ class RevenuePipelineService
         $codCashReceived = (float) ($codSettlement['cash_received'] ?? 0);
         $codSettlementGap = round($codCollected - $codCashReceived, 2);
 
-        $wholesalePending = $wholesaleOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('remaining_amount');
-        $wholesaleDelivered = $wholesaleOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_DELIVERED)->sum('recognized_amount')
+        $wholesalePending = $events
+            ->filter(fn (OperationalEvent $event): bool => $this->isWholesaleChannel(strtolower((string) $event->channel)) && $this->isPendingEvent($event))
+            ->sum(fn (OperationalEvent $event): float => $this->pipelineExpectedAmount($event) - max((float) data_get($event->payload ?? [], 'customer_paid_amount', data_get($event->payload ?? [], 'paid_amount', 0)), 0.0));
+        $wholesaleDelivered = $events
+            ->filter(fn (OperationalEvent $event): bool => $this->isWholesaleChannel(strtolower((string) $event->channel)) && $event->event_type === OperationalEvent::ORDER_DELIVERED)
+            ->sum(fn (OperationalEvent $event): float => $this->recognizedOrderAmount($event))
             + $wholesaleOrders->filter(fn (array $order): bool => $this->isPendingStatus($order['status']))->sum('paid_amount');
         $wholesaleReturned = $wholesaleOrders->filter(fn (array $order): bool => $order['status'] === OperationalEvent::ORDER_RETURNED)->sum('reversed_amount');
 
@@ -316,9 +324,9 @@ class RevenuePipelineService
         $sku = $latest->sku ?? ($first?->sku ?? null);
 
         $expectedAmount = $this->expectedAmount($sku, $payload);
-        $recognizedAmount = max((float) ($latest->revenue_amount ?? 0), 0.0);
+        $recognizedAmount = $this->recognizedOrderAmount($latest);
         $paidAmount = max((float) ($payload['customer_paid_amount'] ?? $payload['paid_amount'] ?? 0), 0.0);
-        $reversedAmount = abs((float) ($latest->revenue_amount ?? 0));
+        $reversedAmount = abs($this->recognizedOrderAmount($latest));
 
         return [
             'external_id' => $latest->external_id ?? $first->external_id ?? null,
@@ -381,6 +389,34 @@ class RevenuePipelineService
         }
 
         return 0.0;
+    }
+
+    private function pipelineExpectedAmount(OperationalEvent $event): float
+    {
+        $payload = is_array($event->payload ?? null) ? $event->payload : [];
+
+        return $this->expectedAmount($event->sku, $payload);
+    }
+
+    private function isPendingEvent(OperationalEvent $event): bool
+    {
+        return in_array($event->event_type, [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+            OperationalEvent::ORDER_RESENT,
+        ], true);
+    }
+
+    private function recognizedOrderAmount(OperationalEvent $event): float
+    {
+        $payload = is_array($event->payload ?? null) ? $event->payload : [];
+
+        return max((float) (
+            $event->revenue_amount
+            ?? data_get($payload, 'sale_amount')
+            ?? data_get($payload, 'revenue_amount')
+            ?? 0
+        ), 0.0);
     }
 
     private function isPendingStatus(string $status): bool
