@@ -896,8 +896,8 @@ class TodaysWork extends Page
             'pending_confirmation_live_count' => $pendingParity['live_count'],
             'pending_confirmation_live_note' => $pendingParity['note'],
             'pending_confirmation_live_warning' => $pendingParity['warning'],
-            'current_queue_label' => 'Current open work',
-            'follow_up_label' => 'Current open work',
+            'current_queue_label' => 'This month',
+            'follow_up_label' => 'This month',
             'delivered_label' => 'This month',
             'dispatched_count' => $dispatchEvents
                 ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
@@ -1200,7 +1200,7 @@ class TodaysWork extends Page
 
     private function stockAppQueueStart(): Carbon
     {
-        return today()->subMonths(3)->startOfDay();
+        return today()->startOfMonth()->startOfDay();
     }
 
     private function stockAppOrderKey(OperationalEvent $event): string
