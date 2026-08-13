@@ -62,19 +62,78 @@ return new class extends Migration
         $ids = [];
 
         foreach ($accounts as $name => $account) {
+            $primaryEmail = mb_strtolower($account['emails'][0]);
+
             $user = DB::table('users')
-                ->where(function ($query) use ($account): void {
-                    foreach ($account['emails'] as $email) {
-                        $query->orWhereRaw('LOWER(email) = ?', [mb_strtolower($email)]);
-                    }
-                })
+                ->whereRaw('LOWER(email) = ?', [$primaryEmail])
                 ->first(['id']);
+
+            if (! $user) {
+                $user = DB::table('users')
+                    ->where(function ($query) use ($account): void {
+                        foreach ($account['emails'] as $email) {
+                            $query->orWhereRaw('LOWER(email) = ?', [mb_strtolower($email)]);
+                        }
+                    })
+                    ->orderByRaw(
+                        "CASE WHEN LOWER(email) = ? THEN 0 ELSE 1 END",
+                        [$primaryEmail]
+                    )
+                    ->first(['id']);
+            }
 
             if (! $user) {
                 continue;
             }
 
             $ids[$name] = $user->id;
+
+            foreach ($account['emails'] as $email) {
+                $matchingUsers = DB::table('users')
+                    ->whereRaw('LOWER(email) = ?', [mb_strtolower($email)])
+                    ->pluck('id')
+                    ->all();
+
+                foreach ($matchingUsers as $matchingUserId) {
+                    if ((int) $matchingUserId === (int) $user->id) {
+                        continue;
+                    }
+
+                    $archivedEmail = sprintf(
+                        'archived+%d+%s@helos.invalid',
+                        $matchingUserId,
+                        preg_replace('/[^a-z0-9]+/i', '.', $primaryEmail)
+                    );
+
+                    DB::table('missions')->where('assigned_user_id', $matchingUserId)->update([
+                        'assigned_user_id' => $user->id,
+                        'updated_at' => now(),
+                    ]);
+                    DB::table('missions')->where('escalated_to_user_id', $matchingUserId)->update([
+                        'escalated_to_user_id' => $user->id,
+                        'updated_at' => now(),
+                    ]);
+                    DB::table('users')->where('supervisor_user_id', $matchingUserId)->update([
+                        'supervisor_user_id' => $user->id,
+                        'updated_at' => now(),
+                    ]);
+                    DB::table('staff_responsibility_assignments')->where('user_id', $matchingUserId)->update([
+                        'is_active' => false,
+                        'updated_at' => now(),
+                    ]);
+                    DB::table('users')->where('id', $matchingUserId)->update([
+                        'name' => 'Archived duplicate - '.DB::table('users')->where('id', $matchingUserId)->value('name'),
+                        'email' => $archivedEmail,
+                        'business_id' => null,
+                        'client_group_id' => null,
+                        'supervisor_user_id' => null,
+                        'staff_responsibilities' => json_encode([]),
+                        'responsibilities_configured' => true,
+                        'is_staff_supervisor' => false,
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
 
             DB::table('users')->where('id', $user->id)->update([
                 'name' => $name,
