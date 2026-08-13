@@ -771,7 +771,7 @@ class TodaysWork extends Page
         }
 
         $responsibilities = $user->staffResponsibilities($business->id);
-        $canMoveParcels = array_intersect($responsibilities, ['order_confirmation', 'dispatch', 'delivery_follow_up']) !== [];
+        $canMoveParcels = $this->canSeeOrderMovement($user, $business->id);
 
         if (! $canMoveParcels) {
             return [];
@@ -845,6 +845,19 @@ class TodaysWork extends Page
             'can_dispatch' => in_array('dispatch', $responsibilities, true),
             'can_follow_delivery' => in_array('delivery_follow_up', $responsibilities, true),
         ];
+    }
+
+    private function canSeeOrderMovement(User $user, int $businessId): bool
+    {
+        if (! $user->isStaff()) {
+            return false;
+        }
+
+        if ($user->canAccessOrderWork($businessId)) {
+            return true;
+        }
+
+        return in_array($user->employeeAccessProfileValue(), ['work_only', 'operations', 'full_staff'], true);
     }
 
     private function pendingSyncCoverage(Carbon $start): array

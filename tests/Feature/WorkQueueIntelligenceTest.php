@@ -801,6 +801,53 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertTrue($movement['can_follow_delivery']);
     }
 
+    public function test_employee_parcel_movement_stays_visible_for_operations_profile_without_loaded_assignments(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Horns England',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-DISPATCH-1',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'ORDER-DISPATCH-1', 'sale_amount' => 2500],
+            'occurred_at' => now(),
+        ]);
+
+        $employee = User::query()->create([
+            'name' => 'Arafath',
+            'email' => 'arafath.visibility@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'employee_access_profile' => 'operations',
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => [],
+        ]);
+
+        $this->actingAs($employee);
+
+        $page = new TodaysWork;
+        $page->business = $business;
+        $page->parcelStartDate = today()->toDateString();
+        $page->parcelEndDate = today()->toDateString();
+        $method = new \ReflectionMethod(TodaysWork::class, 'employeeParcelMovement');
+        $method->setAccessible(true);
+
+        $movement = $method->invoke($page);
+
+        $this->assertSame(1, $movement['dispatched_count']);
+        $this->assertSame(2500.0, $movement['dispatched_value']);
+    }
+
     public function test_employee_work_queue_url_redirects_to_todays_work(): void
     {
         $business = Business::query()->create([
