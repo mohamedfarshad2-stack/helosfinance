@@ -660,7 +660,7 @@ class UserResourceTest extends TestCase
         ]);
 
         $this->assertSame('full_staff', $wholesaleManagement['employee_access_profile']);
-        $this->assertSame(['collections', 'supervisor_review'], $wholesaleManagement['staff_responsibilities']);
+        $this->assertSame(['collections', 'supervisor_review', 'order_confirmation', 'dispatch', 'delivery_follow_up'], $wholesaleManagement['staff_responsibilities']);
         $this->assertTrue($wholesaleManagement['is_staff_supervisor']);
     }
 
