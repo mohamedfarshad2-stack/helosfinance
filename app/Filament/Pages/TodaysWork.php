@@ -468,16 +468,37 @@ class TodaysWork extends Page
 
         $savedSnapshot = $snapshots->readCurrentMonth($this->business);
 
-        if (! $savedSnapshot || ! $savedSnapshot->period_end?->isToday()) {
-            $savedSnapshot = $snapshots->currentMonth($this->business);
+        if (! $savedSnapshot) {
+            return [
+                'period' => now()->format('F Y'),
+                'as_of' => now()->format('M j, Y'),
+                'configured' => false,
+                'is_recommended' => true,
+                'operating_loss' => 0,
+                'recovery_pressure' => 0,
+                'recovery_status' => 'Loading',
+                'goal_label' => 'Monthly company target gap',
+                'gap' => null,
+                'gap_is_count' => false,
+                'required_deliveries' => null,
+                'daily_deliveries' => null,
+                'days_remaining' => max((int) now()->startOfDay()->diffInDays(now()->endOfMonth()->startOfDay()) + 1, 1),
+                'leakage' => 0,
+                'team_overdue' => 0,
+                'headline' => 'Finance snapshot is still loading. HELOS will show the company summary again once the saved month-end data is available.',
+                'employees' => [],
+                'cfo_actions' => [],
+                'warning' => 'Finance summary is using a lightweight fallback so the work screen stays open even when the saved snapshot is missing.',
+            ];
         }
-        $summary = $savedSnapshot ? [
+
+        $summary = [
             'revenue_total' => (float) $savedSnapshot->revenue_total,
             'cost_total' => (float) $savedSnapshot->cost_total,
             'leakage_total' => (float) $savedSnapshot->leakage_total,
             'estimated_profit' => (float) $savedSnapshot->estimated_profit,
             'metrics' => $savedSnapshot->metrics ?? [],
-        ] : $snapshots->currentMonthSummary($this->business);
+        ];
         $metrics = is_array($summary['metrics'] ?? null) ? $summary['metrics'] : [];
         $revenue = (float) ($summary['revenue_total'] ?? 0);
         $profit = (float) ($summary['estimated_profit'] ?? 0);
@@ -664,8 +685,35 @@ class TodaysWork extends Page
 
         $snapshot = $snapshots->readCurrentMonth($business);
 
-        if (! $snapshot || ! $snapshot->period_end?->isToday()) {
-            $snapshot = $snapshots->currentMonth($business);
+        if (! $snapshot) {
+            return [
+                'status' => 'Waiting for current month snapshot',
+                'target' => 0,
+                'completed' => 0,
+                'remaining' => 0,
+                'progress' => 0,
+                'goals' => [
+                    [
+                        'label' => 'Open missions',
+                        'target' => '0',
+                        'action' => 'HELOAS will list them once the current snapshot is ready.',
+                        'tone' => 'blue',
+                    ],
+                    [
+                        'label' => 'Completed today',
+                        'target' => '0',
+                        'action' => 'Finish the current highest-priority mission first.',
+                        'tone' => 'emerald',
+                    ],
+                    [
+                        'label' => 'Remaining',
+                        'target' => '0',
+                        'action' => 'Clear the remaining open work for the day.',
+                        'tone' => 'amber',
+                    ],
+                ],
+                'calculation_ready' => false,
+            ];
         }
 
         $metrics = is_array($snapshot?->metrics) ? $snapshot->metrics : [];
