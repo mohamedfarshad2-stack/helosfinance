@@ -898,7 +898,7 @@ class TodaysWork extends Page
             'pending_confirmation_live_warning' => $pendingParity['warning'],
             'current_queue_label' => 'Current open work',
             'follow_up_label' => 'Current open work',
-            'delivered_label' => 'So far',
+            'delivered_label' => 'This month',
             'dispatched_count' => $dispatchEvents
                 ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
                 ->count(),
@@ -1178,11 +1178,13 @@ class TodaysWork extends Page
 
     private function deliveredStockAppSummary(): array
     {
+        $monthStart = today()->startOfMonth();
+
         $query = OperationalEvent::query()
             ->where('business_id', $this->business?->id)
             ->whereIn('source', ['stock_app', 'stock_app_sync'])
             ->where('event_type', OperationalEvent::ORDER_DELIVERED)
-            ->where('occurred_at', '>=', $this->stockAppQueueStart());
+            ->where('occurred_at', '>=', $monthStart);
 
         $recentItems = (clone $query)
             ->latest('occurred_at')
@@ -1302,19 +1304,15 @@ class TodaysWork extends Page
             return 'pending_confirmation';
         }
 
-        if ($this->isConfirmedStatus($status)) {
-            return 'confirmed_waiting_dispatch';
-        }
-
-        if ($this->isDispatchedStatus($status)) {
-            return 'dispatched_waiting_delivery';
-        }
-
         if ($this->isDeliveredStatus($status)) {
             return 'delivered';
         }
 
-        if ($event->event_type === OperationalEvent::ORDER_CONFIRMED) {
+        if ($this->hasDispatchProgress($event)) {
+            return 'dispatched_waiting_delivery';
+        }
+
+        if ($this->hasConfirmationProgress($event)) {
             return 'confirmed_waiting_dispatch';
         }
 
@@ -1450,6 +1448,62 @@ class TodaysWork extends Page
             'confirm',
             'order_confirmed',
         ], true);
+    }
+
+    private function hasConfirmationProgress(OperationalEvent $event): bool
+    {
+        $status = $this->stockAppStatus($event);
+
+        return $this->isConfirmedStatus($status) || $event->event_type === OperationalEvent::ORDER_CONFIRMED;
+    }
+
+    private function hasDispatchProgress(OperationalEvent $event): bool
+    {
+        $status = $this->stockAppStatus($event);
+
+        if ($this->isDispatchedStatus($status) || $this->isDeliveredStatus($status)) {
+            return true;
+        }
+
+        if (in_array($event->event_type, [
+            OperationalEvent::TRACKING_NUMBER_ADDED,
+            OperationalEvent::WHOLESALE_PARCEL_SENT,
+        ], true)) {
+            return true;
+        }
+
+        foreach ([
+            'tracking_number',
+            'tracking_no',
+            'waybill_number',
+            'waybill',
+            'dispatched_at',
+            'tracking_added_at',
+            'tracking_number_added_at',
+            'courier_sent_at',
+            'shipped_at',
+            'delivery_status',
+            'shipment_status',
+            'parcel_status',
+            'courier_status',
+            'current_status',
+            'order_status',
+            'order.delivery_status',
+            'order.shipment_status',
+            'order.parcel_status',
+            'data.delivery_status',
+            'data.shipment_status',
+            'data.parcel_status',
+            'payload.delivery_status',
+            'payload.shipment_status',
+            'payload.parcel_status',
+        ] as $key) {
+            if (filled(data_get($event->payload, $key))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isDispatchedStatus(string $status): bool
