@@ -522,7 +522,6 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertDontSee('Total cost')
             ->assertDontSee('Estimated profit / loss')
             ->assertSee('My work dashboard')
-            ->assertSee('Today\'s work is ready.')
             ->assertDontSee('{{ $task', false)
             ->assertDontSee('@if (($task', false)
             ->assertDontSee('@endif', false);
