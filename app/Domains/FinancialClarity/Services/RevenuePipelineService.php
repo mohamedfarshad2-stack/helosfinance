@@ -350,7 +350,22 @@ class RevenuePipelineService
 
     private function stableOrderKey(OperationalEvent $event): string
     {
-        return (string) (data_get($event->payload, 'order_id') ?: $event->external_id ?: $event->id);
+        $orderId = trim((string) (data_get($event->payload, 'order_id') ?: data_get($event->payload, 'cod_order_id') ?: data_get($event->payload, 'order_number') ?: data_get($event->payload, 'reference')));
+
+        if ($orderId !== '') {
+            return $orderId;
+        }
+
+        $externalId = trim((string) $event->external_id);
+        if ($externalId !== '') {
+            if (preg_match('/^(.*?)-(?:created|new|pending|confirmed|delivered|returned|resent|tracking_number_added|tracking_added|tracking|dispatch|dispatched|shipped|shipping|sent_to_courier)(?:-|$)/i', $externalId, $matches) === 1) {
+                return $matches[1];
+            }
+
+            return $externalId;
+        }
+
+        return (string) $event->id;
     }
 
     private function expectedAmount(?Sku $sku, array $payload): float

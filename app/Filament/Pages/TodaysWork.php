@@ -1225,7 +1225,7 @@ class TodaysWork extends Page
             $value = trim((string) data_get($event->payload, $key));
 
             if ($value !== '') {
-                return $key.':'.$value;
+                return $value;
             }
         }
 
@@ -1233,13 +1233,13 @@ class TodaysWork extends Page
 
         if ($externalId !== '') {
             if (preg_match('/^(.*?)-(?:created|new|pending|confirmed|delivered|returned|resent|tracking_number_added|tracking_added|tracking|dispatch|dispatched|shipped|shipping|sent_to_courier)(?:-|$)/i', $externalId, $matches) === 1) {
-                return 'external:'.$matches[1];
+                return $matches[1];
             }
 
-            return 'external:'.$externalId;
+            return $externalId;
         }
 
-        return 'event:'.$event->id;
+        return (string) $event->id;
     }
 
     private function stockAppOrderReference(OperationalEvent $event): string

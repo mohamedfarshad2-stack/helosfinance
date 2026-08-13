@@ -654,14 +654,14 @@ class BusinessHealthSnapshotService
             $value = data_get($event->payload, $key);
 
             if (filled($value)) {
-                return 'stock-order:'.trim((string) $value);
+                return trim((string) $value);
             }
         }
 
         $externalId = trim((string) $event->external_id);
         $normalized = preg_replace('/^(?:pending|created|confirmed|confirmation|dispatch|dispatched|tracking|delivery|delivered|return|returned|resend)[\-_:\/]+/i', '', $externalId);
 
-        return 'stock-order:'.($normalized !== '' ? $normalized : ($externalId !== '' ? $externalId : (string) $event->id));
+        return $normalized !== '' ? $normalized : ($externalId !== '' ? $externalId : (string) $event->id);
     }
 
     /**

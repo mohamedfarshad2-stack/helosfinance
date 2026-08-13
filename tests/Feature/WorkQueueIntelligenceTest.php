@@ -847,6 +847,65 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertSame(2500.0, $movement['dispatched_value']);
     }
 
+    public function test_employee_parcel_movement_dedupes_mixed_order_identifiers(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Identifier Mix Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $employee = User::query()->create([
+            'name' => 'Arafath',
+            'email' => 'identifier-mix@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'employee_access_profile' => 'operations',
+            'responsibilities_configured' => true,
+            'staff_responsibilities' => [],
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::ORDER_CONFIRMED,
+            'external_id' => 'ORDER-MIXED-1-confirmed',
+            'revenue_amount' => 0,
+            'payload' => ['order_id' => 'ORDER-MIXED-1', 'sale_amount' => 2500],
+            'occurred_at' => now()->subMinutes(15),
+        ]);
+
+        OperationalEvent::query()->create([
+            'business_id' => $business->id,
+            'source' => 'stock_app',
+            'event_type' => OperationalEvent::TRACKING_NUMBER_ADDED,
+            'external_id' => 'ORDER-MIXED-1-tracking_number_added',
+            'revenue_amount' => 0,
+            'payload' => ['order_number' => 'ORDER-MIXED-1', 'sale_amount' => 2500],
+            'occurred_at' => now()->subMinutes(5),
+        ]);
+
+        $this->actingAs($employee);
+
+        $page = new TodaysWork;
+        $page->business = $business;
+        $page->parcelStartDate = today()->toDateString();
+        $page->parcelEndDate = today()->toDateString();
+        $method = new \ReflectionMethod(TodaysWork::class, 'employeeParcelMovement');
+        $method->setAccessible(true);
+
+        $movement = $method->invoke($page);
+
+        $this->assertSame(1, $movement['dispatched_count']);
+        $this->assertSame(2500.0, $movement['dispatched_value']);
+        $this->assertSame(0, $movement['confirmed_waiting_dispatch_count']);
+        $this->assertSame(1, $movement['dispatched_waiting_delivery_count']);
+    }
+
     public function test_employee_work_queue_url_redirects_to_todays_work(): void
     {
         $business = Business::query()->create([
