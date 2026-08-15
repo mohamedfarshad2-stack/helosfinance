@@ -36,7 +36,9 @@ class ManagerWorkQueue extends Page
 
     public function mount(WorkQueueService $workQueue): void
     {
-        if (Auth::user()?->isStaff()) {
+        $user = Auth::user();
+
+        if ($user?->isStaff() && strtolower((string) $user?->email) !== 'sandhamali@helos.com') {
             $this->redirect(TodaysWork::getUrl());
 
             return;
@@ -57,14 +59,20 @@ class ManagerWorkQueue extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::check() && (Auth::user()?->isOwner() ?? false);
+        $user = Auth::user();
+
+        return Auth::check()
+            && (bool) ($user?->isOwner() ?? false)
+            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
     }
 
     public static function canAccess(): bool
     {
         $user = Auth::user();
 
-        return Auth::check() && (($user?->isOwner() ?? false) || ($user?->isStaff() ?? false));
+        return Auth::check()
+            && (($user?->isOwner() ?? false) || ($user?->isStaff() ?? false))
+            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
     }
 
     private function loadQueue(WorkQueueService $workQueue): void

@@ -405,8 +405,11 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->assertFalse(TodaysWork::canAccess());
         $this->assertFalse(TodaysWork::shouldRegisterNavigation());
+        $this->assertFalse(ManagerWorkQueue::canAccess());
+        $this->assertFalse(ManagerWorkQueue::shouldRegisterNavigation());
 
         $this->get(TodaysWork::getUrl())->assertForbidden();
+        $this->get(ManagerWorkQueue::getUrl())->assertForbidden();
         $this->get('/admin')->assertOk();
         $this->assertFalse($user->hasStaffResponsibility(['order_confirmation', 'dispatch', 'delivery_follow_up'], $business->id));
         $this->assertFalse($user->canAccessProductionWork($business->id));
