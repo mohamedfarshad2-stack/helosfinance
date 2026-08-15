@@ -1064,6 +1064,10 @@ class TodaysWork extends Page
             return false;
         }
 
+        if (strtolower((string) $user->email) === 'sandhamali@helos.com') {
+            return false;
+        }
+
         return $user->hasStaffResponsibility(['order_confirmation', 'dispatch', 'delivery_follow_up'], $businessId);
     }
 
