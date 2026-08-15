@@ -11,7 +11,6 @@
         @else
             @php
                 $wholesale = $pipeline['wholesale'] ?? [];
-                $teamOverdue = collect($teamRows)->sum('overdue');
             @endphp
 
             <div class="flex items-center justify-between gap-3">
@@ -43,43 +42,17 @@
                     <div class="mt-1 text-sm text-gray-500">{{ (int) ($wholesale['returned_orders'] ?? 0) }} returned order(s).</div>
                 </div>
                 <div class="rounded-xl border border-gray-200 bg-white p-4">
-                    <div class="text-sm font-medium text-gray-600">Team overdue</div>
-                    <div class="mt-1 text-3xl font-semibold">{{ $teamOverdue }}</div>
-                    <div class="mt-1 text-sm text-gray-500">Direct reports need follow-up or review.</div>
+                    <div class="text-sm font-medium text-gray-600">Team work</div>
+                    <div class="mt-1 text-base font-semibold text-gray-900">Open in My Work</div>
+                    <div class="mt-1 text-sm text-gray-500">Direct-report review now lives on the team work page.</div>
+                    <div class="mt-3">
+                        <x-filament::button tag="a" href="{{ \App\Filament\Pages\TodaysWork::getUrl() }}" color="gray" size="sm" icon="heroicon-o-clipboard-document-check">
+                            Open My Work
+                        </x-filament::button>
+                    </div>
                 </div>
             </div>
 
-            <div class="rounded-xl border border-gray-200 bg-white">
-                <div class="border-b border-gray-200 px-4 py-3">
-                    <div class="text-sm font-semibold text-gray-900">Team summary</div>
-                    <div class="text-xs text-gray-500">Only direct reports linked to Nifras are shown here.</div>
-                </div>
-
-                <div class="divide-y divide-gray-100">
-                    @forelse ($teamRows as $row)
-                        <div class="grid gap-2 px-4 py-3 md:grid-cols-12 md:items-center">
-                            <div class="md:col-span-4">
-                                <div class="font-medium text-gray-900">{{ $row['name'] }}</div>
-                                <div class="text-xs text-gray-500">{{ implode(' | ', $row['responsibilities']) ?: 'No active responsibilities' }}</div>
-                            </div>
-                            <div class="md:col-span-2 text-sm text-gray-700">
-                                <div class="text-xs uppercase text-gray-500">Open</div>
-                                {{ $row['open'] }}
-                            </div>
-                            <div class="md:col-span-2 text-sm text-gray-700">
-                                <div class="text-xs uppercase text-gray-500">Overdue</div>
-                                {{ $row['overdue'] }}
-                            </div>
-                            <div class="md:col-span-2 text-sm text-gray-700">
-                                <div class="text-xs uppercase text-gray-500">Status</div>
-                                {{ $row['status'] }}
-                            </div>
-                        </div>
-                    @empty
-                        <div class="px-4 py-6 text-sm text-gray-500">No direct reports are linked to this account yet.</div>
-                    @endforelse
-                </div>
-            </div>
         @endif
     </div>
 </x-filament-panels::page>

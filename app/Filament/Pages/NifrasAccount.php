@@ -4,11 +4,9 @@ namespace App\Filament\Pages;
 
 use App\Domains\FinancialClarity\Services\RevenuePipelineService;
 use App\Domains\Shared\Models\Business;
-use App\Domains\Shared\Models\Mission;
 use App\Models\User;
 use Filament\Pages\Page;
 use Filament\Support\Enums\MaxWidth;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
 class NifrasAccount extends Page
@@ -28,8 +26,6 @@ class NifrasAccount extends Page
     public ?Business $business = null;
 
     public array $pipeline = [];
-
-    public array $teamRows = [];
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -61,7 +57,6 @@ class NifrasAccount extends Page
         return [
             'business' => $this->business,
             'pipeline' => $this->pipeline,
-            'teamRows' => $this->teamRows,
             'hasBusiness' => $this->business instanceof Business,
             'isNifras' => static::isNifrasAccount(),
         ];
@@ -84,58 +79,10 @@ class NifrasAccount extends Page
 
         if (! $this->business instanceof Business) {
             $this->pipeline = [];
-            $this->teamRows = [];
 
             return;
         }
 
         $this->pipeline = $revenuePipeline->forCurrentMonth($this->business);
-        $this->teamRows = $this->directReportRows();
-    }
-
-    private function directReportRows(): array
-    {
-        $user = Auth::user();
-
-        if (! $user instanceof User) {
-            return [];
-        }
-
-        return $user->directReports()
-            ->where('is_employee', true)
-            ->orderBy('name')
-            ->get()
-            ->map(function (User $report): array {
-                $open = Mission::query()
-                    ->where('business_id', $this->business?->id)
-                    ->where('assigned_user_id', $report->id)
-                    ->active()
-                    ->count();
-
-                $overdue = Mission::query()
-                    ->where('business_id', $this->business?->id)
-                    ->where('assigned_user_id', $report->id)
-                    ->active()
-                    ->where('due_at', '<', today())
-                    ->count();
-
-                return [
-                    'name' => $report->name,
-                    'responsibilities' => collect($report->staffResponsibilities($this->business?->id))
-                        ->map(fn (string $code): string => User::staffResponsibilityOptions()[$code] ?? $code)
-                        ->values()
-                        ->all(),
-                    'open' => $open,
-                    'overdue' => $overdue,
-                    'status' => match (true) {
-                        $overdue > 0 => 'Behind',
-                        $open > 3 => 'Attention Needed',
-                        $open > 0 => 'On Track',
-                        default => 'On Track',
-                    },
-                ];
-            })
-            ->values()
-            ->all();
     }
 }

@@ -3,12 +3,12 @@
 Date: 2026-08-15  
 Scope: Nifras-only account surface inside HELOS  
 Status: In progress  
-Deployment: Local only at the time of writing
+Deployment: Pushed to `helosfinance`; hosted verification still pending
 
 ## Goal
 
 Give `nifras@helos.com` a dedicated account page that only this login can open.
-The page should show Nifras-specific wholesale and team visibility without exposing the same surface to other staff.
+The page should show Nifras-specific wholesale visibility without exposing the same surface to other staff.
 
 ## What is already made
 
@@ -22,9 +22,11 @@ The page should show Nifras-specific wholesale and team visibility without expos
 
 - Shows a Nifras heading and summary cards when the signed-in user is `nifras@helos.com`.
 - Uses current-month wholesale data from `RevenuePipelineService`.
-- Shows a direct-report summary based on `Mission` counts.
+- Shows wholesale pipeline numbers from `RevenuePipelineService`.
 - Links to operational order events from the page.
 - Redirects non-Nifras users away from the page.
+- Direct-report summary has been moved to `TodaysWork` as the team-work surface.
+- `TodaysWork` now includes a visible Nifras shortcut so the account page is easier to find.
 
 ## What was intentionally removed
 
@@ -46,10 +48,12 @@ The page should show Nifras-specific wholesale and team visibility without expos
 ## What is not yet done
 
 - The page is not yet confirmed on the hosted environment.
-- The page is not yet committed and pushed from this snapshot.
+- The page has been committed and pushed to `helosfinance`.
 - The wider Nifras CRM/funnel work is still pending if the goal is to build beyond this account page.
+- Team review now lives on `TodaysWork` instead of the Nifras account page.
+- `TodaysWork` now shows the Nifras shortcut at the top of the work board.
 
 ## Handoff note
 
 If you continue from here, keep all changes inside the Nifras account page and do not reopen the old wholesale page route.
-The next step is to commit and push the Nifras-only account page so the hosted site can pick it up.
+The next step is to verify the hosted deployment and confirm the Nifras login can open `/admin/nifras-account`.

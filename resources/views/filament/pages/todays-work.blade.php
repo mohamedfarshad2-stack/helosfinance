@@ -22,6 +22,24 @@
                 </div>
             </div>
 
+            @php
+                $currentUserEmail = strtolower((string) (auth()->user()?->email ?? ''));
+            @endphp
+
+            @if ($currentUserEmail === 'nifras@helos.com')
+                <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <div class="text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Nifras shortcut</div>
+                    <div class="mt-1 text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+                        Open the Nifras account page for wholesale money and collection visibility.
+                    </div>
+                    <div class="mt-3">
+                        <x-filament::button tag="a" href="{{ \App\Filament\Pages\NifrasAccount::getUrl() }}" color="success" icon="heroicon-o-banknotes">
+                            Open Nifras account
+                        </x-filament::button>
+                    </div>
+                </div>
+            @endif
+
             <div class="mt-4 grid gap-3 md:grid-cols-3">
                 <div class="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/30">
                     <div class="text-xs font-black uppercase text-violet-700 dark:text-violet-300">Confirmed parcels</div>
@@ -153,6 +171,65 @@
                 Use the cards above to open the order IDs and amounts you need.
             </div>
         </x-filament::section>
+
+        @if (! empty($team_summary ?? []))
+            <x-filament::section>
+                <div class="grid gap-4">
+                    <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Team Summary</h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Supervisor view for direct reports and blocked work.</p>
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div class="rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-800">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">People</div>
+                                <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ (int) ($team_summary['people'] ?? 0) }}</div>
+                            </div>
+                            <div class="rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-800">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Open</div>
+                                <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ (int) ($team_summary['open'] ?? 0) }}</div>
+                            </div>
+                            <div class="rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-800">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Overdue</div>
+                                <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ (int) ($team_summary['overdue'] ?? 0) }}</div>
+                            </div>
+                            <div class="rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-800">
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Blocked</div>
+                                <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ (int) ($team_summary['blocked'] ?? 0) }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 lg:grid-cols-2">
+                        @forelse (($team_summary['members'] ?? []) as $member)
+                            <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="font-semibold text-gray-950 dark:text-white">{{ $member['name'] }}</div>
+                                        <div class="text-xs uppercase tracking-wide text-gray-500">Status: {{ $member['status'] ?? 'On Track' }}</div>
+                                    </div>
+                                    <div class="text-right text-sm text-gray-500 dark:text-gray-400">
+                                        <div>Open {{ (int) ($member['open'] ?? 0) }}</div>
+                                        <div>Overdue {{ (int) ($member['overdue'] ?? 0) }}</div>
+                                        <div>Blocked {{ (int) ($member['blocked'] ?? 0) }}</div>
+                                    </div>
+                                </div>
+
+                                @if (filled($member['url'] ?? null))
+                                    <div class="mt-3">
+                                        <a href="{{ $member['url'] }}" class="text-sm font-semibold text-violet-600 hover:underline dark:text-violet-300">Open assigned missions</a>
+                                    </div>
+                                @endif
+                            </div>
+                        @empty
+                            <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700">
+                                No direct reports are linked to this user yet.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </x-filament::section>
+        @endif
 
         @if ($showParcelItemsModal)
             <div class="fixed inset-0 z-50 overflow-y-auto bg-gray-950/60 p-4" wire:click.self="closeParcelItems">
