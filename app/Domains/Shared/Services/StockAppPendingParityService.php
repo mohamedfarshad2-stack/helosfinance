@@ -12,14 +12,23 @@ use Throwable;
 
 class StockAppPendingParityService
 {
-    public function compare(Business $business, Carbon $start, Carbon $end, int $syncedCount, bool $allowFetch = true): array
+    public function compare(
+        Business $business,
+        Carbon $start,
+        Carbon $end,
+        int $syncedCount,
+        bool $allowFetch = true,
+        string $status = 'pending',
+        array $queryParams = [],
+        string $label = 'pending',
+    ): array
     {
         if (app()->environment('testing')) {
             return [
                 'available' => false,
                 'live_count' => null,
                 'warning' => false,
-                'note' => 'Live Stock App pending comparison is skipped during automated tests.',
+                'note' => 'Live Stock App '.$label.' comparison is skipped during automated tests.',
             ];
         }
 
@@ -49,24 +58,24 @@ class StockAppPendingParityService
                 'available' => false,
                 'live_count' => null,
                 'warning' => false,
-                'note' => 'Add Stock App read-only email, password, and client ID in Stock App Link to compare live pending against HELOAS.',
+                'note' => 'Add Stock App read-only email, password, and client ID in Stock App Link to compare live '.$label.' against HELOAS.',
             ];
         }
 
-        $cacheKey = $this->cacheKey($integration, $clientId, $start, $end);
+        $cacheKey = $this->cacheKey($integration, $clientId, $start, $end, $status, $queryParams);
 
         if (! $allowFetch && ! Cache::has($cacheKey)) {
             return [
                 'available' => false,
                 'live_count' => null,
                 'warning' => false,
-                'note' => 'Live Stock App pending count is warming. HELOAS is showing synced pending rows now.',
+                'note' => 'Live Stock App '.$label.' count is warming. HELOAS is showing synced '.$label.' rows now.',
             ];
         }
 
         try {
             if ($allowFetch) {
-                $liveCount = $this->fetchLivePendingCount($integration, $email, $password, $clientId, $start, $end);
+                $liveCount = $this->fetchLiveCount($integration, $email, $password, $clientId, $start, $end, $status, $queryParams, $label);
                 Cache::put($cacheKey, $liveCount, now()->addMinutes(30));
             } else {
                 $liveCount = (int) Cache::get($cacheKey);
@@ -76,7 +85,7 @@ class StockAppPendingParityService
                 'available' => false,
                 'live_count' => null,
                 'warning' => true,
-                'note' => 'HELOAS could not read the live Stock App pending queue right now: '.Str::limit($throwable->getMessage(), 140),
+                'note' => 'HELOAS could not read the live Stock App '.$label.' queue right now: '.Str::limit($throwable->getMessage(), 140),
             ];
         }
 
@@ -87,12 +96,12 @@ class StockAppPendingParityService
             'live_count' => $liveCount,
             'warning' => $warning,
             'note' => $warning
-                ? 'Live Stock App pending count is '.number_format($liveCount).', but HELOAS currently has '.number_format($syncedCount).' synced pending row(s) for this range.'
-                : 'HELOAS synced pending rows match the live Stock App pending count for this range.',
+                ? 'Live Stock App '.$label.' count is '.number_format($liveCount).', but HELOAS currently has '.number_format($syncedCount).' synced '.$label.' row(s) for this range.'
+                : 'HELOAS synced '.$label.' rows match the live Stock App '.$label.' count for this range.',
         ];
     }
 
-    private function cacheKey(IntegrationSource $integration, int $clientId, Carbon $start, Carbon $end): string
+    private function cacheKey(IntegrationSource $integration, int $clientId, Carbon $start, Carbon $end, string $status, array $queryParams): string
     {
         return implode(':', [
             'stock-app-pending-count',
@@ -100,17 +109,22 @@ class StockAppPendingParityService
             $clientId,
             $start->toDateString(),
             $end->toDateString(),
+            $status,
+            sha1(json_encode($queryParams)),
             optional($integration->updated_at)->timestamp ?? 0,
         ]);
     }
 
-    private function fetchLivePendingCount(
+    private function fetchLiveCount(
         IntegrationSource $integration,
         string $email,
         string $password,
         int $clientId,
         Carbon $start,
         Carbon $end,
+        string $status,
+        array $queryParams,
+        string $label,
     ): int {
         $baseUrl = rtrim((string) ($integration->base_url ?: 'https://codreturnslanka.lk'), '/');
         $loginUrl = $baseUrl.'/admin/login';
@@ -156,13 +170,13 @@ class StockAppPendingParityService
         }
 
         $cookies = array_merge($cookies, $this->cookiesFromHeaders($loginResponse->headers()['Set-Cookie'] ?? []));
-        $ordersUrl = $baseUrl.'/admin/client-orders-improved?'.http_build_query([
+        $ordersUrl = $baseUrl.'/admin/client-orders-improved?'.http_build_query(array_merge([
             'dateFrom' => $start->toDateString(),
             'dateTo' => $end->toDateString(),
             'clientId' => $clientId,
-            'status' => 'pending',
-            'deliveryStatus' => 'pending',
-        ]);
+            'status' => $status,
+            'deliveryStatus' => $status,
+        ], $queryParams));
 
         $ordersPage = Http::timeout(60)
             ->withCookies($cookies, parse_url($baseUrl, PHP_URL_HOST))
@@ -175,7 +189,7 @@ class StockAppPendingParityService
             throw new \RuntimeException('Unable to load Stock App pending orders page.');
         }
 
-        return $this->parsePendingCount($ordersPage->body());
+        return $this->parseCount($ordersPage->body(), $label);
     }
 
     /**
@@ -201,7 +215,7 @@ class StockAppPendingParityService
         return $cookies;
     }
 
-    private function parsePendingCount(string $html): int
+    private function parseCount(string $html, string $label): int
     {
         $text = preg_replace('/\s+/', ' ', trim(strip_tags($html)));
 
@@ -209,11 +223,13 @@ class StockAppPendingParityService
             throw new \RuntimeException('Unable to read Stock App pending count.');
         }
 
-        if (preg_match('/Pending\s+(\d+)/i', $text, $matches) === 1) {
+        $labelPattern = preg_quote($label, '/');
+
+        if (preg_match('/'. $labelPattern .'\s+(\d+)/i', $text, $matches) === 1) {
             return (int) $matches[1];
         }
 
-        throw new \RuntimeException('Stock App pending count was not found.');
+        throw new \RuntimeException('Stock App '.$label.' count was not found.');
     }
 
     private function firstMatch(string $subject, string $pattern): ?string

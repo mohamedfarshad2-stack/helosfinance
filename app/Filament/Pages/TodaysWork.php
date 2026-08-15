@@ -882,6 +882,16 @@ class TodaysWork extends Page
         $liveQueueStart = $this->stockAppQueueStart();
         $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
         $pendingParity = app(StockAppPendingParityService::class)->compare($business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count(), false);
+        $confirmedParity = app(StockAppPendingParityService::class)->compare(
+            $business,
+            $liveQueueStart,
+            today()->endOfDay(),
+            $confirmedWaitingDispatch->count(),
+            true,
+            'confirmed',
+            ['deliveryStatus' => 'confirmed'],
+            'confirmed',
+        );
         $confirmedDispatchFreshThreshold = now()->subDays(2);
         $confirmedWaitingDispatchFresh = $confirmedWaitingDispatch
             ->filter(fn (OperationalEvent $event): bool => ($this->stockAppPipelineDate($event)?->greaterThanOrEqualTo($confirmedDispatchFreshThreshold)) ?? false)
@@ -913,8 +923,13 @@ class TodaysWork extends Page
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
             'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 40),
-            'confirmed_waiting_dispatch_count' => $confirmedWaitingDispatch->count(),
+            'confirmed_waiting_dispatch_count' => $confirmedParity['available'] && is_int($confirmedParity['live_count'])
+                ? $confirmedParity['live_count']
+                : $confirmedWaitingDispatch->count(),
             'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
+            'confirmed_waiting_dispatch_live_count' => $confirmedParity['live_count'],
+            'confirmed_waiting_dispatch_live_note' => $confirmedParity['note'],
+            'confirmed_waiting_dispatch_live_warning' => $confirmedParity['warning'],
             'confirmed_waiting_dispatch_due_soon_count' => $confirmedWaitingDispatchFresh->count(),
             'confirmed_waiting_dispatch_overdue_count' => $confirmedWaitingDispatchStale->count(),
             'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 40),

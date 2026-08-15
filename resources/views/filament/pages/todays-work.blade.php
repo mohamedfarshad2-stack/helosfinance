@@ -237,6 +237,7 @@
                                 <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['confirmed_waiting_dispatch_value'], 2) }}</div>
                                 <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['confirmed_waiting_dispatch_count']) }} confirmed parcel(s)</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Add tracking and send these to courier.</div>
+                                <div class="mt-1 text-xs font-semibold {{ !empty($parcelMovement['confirmed_waiting_dispatch_live_warning']) ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300' }}">{{ $parcelMovement['confirmed_waiting_dispatch_live_note'] ?? '' }}</div>
                                 <div class="mt-2 text-xs font-black text-violet-700 dark:text-violet-300">Click to see parcels</div>
                             </button>
                             <button type="button" x-on:click="activeLane = activeLane === 'dispatched' ? null : 'dispatched'" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-amber-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400 dark:bg-gray-950 dark:text-white dark:ring-amber-900">
