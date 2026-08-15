@@ -58,6 +58,12 @@ class TodaysWork extends Page
 
     public bool $showConfirmedParcelList = false;
 
+    public bool $showParcelItemsModal = false;
+
+    public ?string $selectedParcelItemsTitle = null;
+
+    public array $selectedParcelItems = [];
+
     private ?string $stockAppUrlCache = null;
 
     public function mount(MissionGeneratorService $missions, BusinessHealthSnapshotService $snapshots): void
@@ -162,6 +168,36 @@ class TodaysWork extends Page
     public function toggleConfirmedParcelList(): void
     {
         $this->showConfirmedParcelList = ! $this->showConfirmedParcelList;
+    }
+
+    public function openParcelItems(string $group): void
+    {
+        $titleMap = [
+            'pending_confirmation' => 'Pending confirmation',
+            'confirmed_live' => 'Confirmed live',
+            'dispatched_today' => 'Dispatching today',
+            'dispatched_waiting_delivery' => 'Dispatched not delivered',
+            'delivered_so_far' => 'Delivered so far',
+        ];
+
+        $itemsMap = [
+            'pending_confirmation' => $this->parcelMovement['pending_confirmation_items'] ?? [],
+            'confirmed_live' => $this->parcelMovement['confirmed_waiting_dispatch_items'] ?? [],
+            'dispatched_today' => $this->parcelMovement['dispatched_items'] ?? [],
+            'dispatched_waiting_delivery' => $this->parcelMovement['dispatched_waiting_delivery_items'] ?? [],
+            'delivered_so_far' => $this->parcelMovement['delivered_so_far_items'] ?? [],
+        ];
+
+        $this->selectedParcelItemsTitle = $titleMap[$group] ?? 'Parcel items';
+        $this->selectedParcelItems = $itemsMap[$group] ?? [];
+        $this->showParcelItemsModal = true;
+    }
+
+    public function closeParcelItems(): void
+    {
+        $this->showParcelItemsModal = false;
+        $this->selectedParcelItemsTitle = null;
+        $this->selectedParcelItems = [];
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -960,6 +996,7 @@ class TodaysWork extends Page
                 ->groupBy(fn (OperationalEvent $event): string => $this->stockAppOrderKey($event))
                 ->count(),
             'dispatched_value' => $dispatchedValue,
+            'dispatched_items' => $this->parcelMovementItems($dispatchEvents, 40),
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
             'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 40),
