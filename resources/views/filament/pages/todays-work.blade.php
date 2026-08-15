@@ -306,17 +306,27 @@
                                                 </div>
                                             @endif
                                             <div class="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
-                                                Showing {{ number_format(count($group['items'])) }} of {{ number_format((int) $group['total']) }} parcel(s)
+                                                @if ($group['key'] === 'confirmed' && count($group['items']) === 0 && (int) ($parcelMovement['confirmed_waiting_dispatch_live_count'] ?? 0) > 0)
+                                                    Showing {{ number_format((int) $parcelMovement['confirmed_waiting_dispatch_live_count']) }} live confirmed parcel(s)
+                                                @else
+                                                    Showing {{ number_format(count($group['items'])) }} of {{ number_format((int) $group['total']) }} parcel(s)
+                                                @endif
                                             </div>
                                             @if ($group['key'] === 'confirmed')
-                                                <div class="mt-1 text-sm font-black text-violet-700 dark:text-violet-200">
-                                                    Confirmed value: LKR {{ number_format((float) ($group['total_value'] ?? 0), 2) }}
-                                                </div>
+                                                @if (count($group['items']) > 0)
+                                                    <div class="mt-1 text-sm font-black text-violet-700 dark:text-violet-200">
+                                                        Confirmed value: LKR {{ number_format((float) ($group['total_value'] ?? 0), 2) }}
+                                                    </div>
+                                                @else
+                                                    <div class="mt-1 text-sm font-black text-violet-700 dark:text-violet-200">
+                                                        Confirmed value is loading from synced rows.
+                                                    </div>
+                                                @endif
                                             @endif
                                         </div>
                                         <button type="button" x-on:click="activeLane = null" class="rounded-lg px-3 py-1 text-xs font-black text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-800 dark:hover:bg-gray-900">Close</button>
                                     </div>
-                                    @if (! empty($group['breakdown'] ?? []))
+                                    @if ($group['key'] !== 'confirmed' || ! empty($group['items']))
                                         <div class="mt-3 grid gap-2 lg:grid-cols-4">
                                             @foreach ([
                                                 'ages' => 'How old',
@@ -343,27 +353,33 @@
                                             @endforeach
                                         </div>
                                     @endif
-                                    <div class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
-                                        @forelse ($group['items'] as $item)
-                                            <div class="grid grid-cols-[1fr_auto] gap-3 py-2 text-sm">
-                                                <div>
-                                                    <div class="font-black text-gray-950 dark:text-white">{{ $item['reference'] }}</div>
-                                                    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold capitalize text-gray-500">
-                                                        <span>{{ $item['status'] }} | {{ $item['date'] }}</span>
-                                                        <span class="rounded-full px-2 py-1 font-black {{ ($item['age_tone'] ?? 'neutral') === 'danger' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200' : (($item['age_tone'] ?? 'neutral') === 'warning' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300') }}">
-                                                            {{ $item['age_label'] ?? 'Age unknown' }}
-                                                        </span>
-                                                        <span class="font-bold {{ ($item['age_tone'] ?? 'neutral') === 'danger' ? 'text-red-700 dark:text-red-200' : (($item['age_tone'] ?? 'neutral') === 'warning' ? 'text-amber-700 dark:text-amber-200' : 'text-gray-500 dark:text-gray-400') }}">
-                                                            {{ $item['dispatch_note'] ?? '' }}
-                                                        </span>
+                                    @if ($group['key'] === 'confirmed' && empty($group['items']))
+                                        <div class="mt-3 rounded-lg border border-violet-100 bg-violet-50 p-3 text-sm text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-100">
+                                            HELOAS has the live confirmed count, but the synced parcel rows are still loading. The amount will appear here after refresh, so there is no pressure yet.
+                                        </div>
+                                    @else
+                                        <div class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
+                                            @forelse ($group['items'] as $item)
+                                                <div class="grid grid-cols-[1fr_auto] gap-3 py-2 text-sm">
+                                                    <div>
+                                                        <div class="font-black text-gray-950 dark:text-white">{{ $item['reference'] }}</div>
+                                                        <div class="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold capitalize text-gray-500">
+                                                            <span>{{ $item['status'] }} | {{ $item['date'] }}</span>
+                                                            <span class="rounded-full px-2 py-1 font-black {{ ($item['age_tone'] ?? 'neutral') === 'danger' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200' : (($item['age_tone'] ?? 'neutral') === 'warning' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300') }}">
+                                                                {{ $item['age_label'] ?? 'Age unknown' }}
+                                                            </span>
+                                                            <span class="font-bold {{ ($item['age_tone'] ?? 'neutral') === 'danger' ? 'text-red-700 dark:text-red-200' : (($item['age_tone'] ?? 'neutral') === 'warning' ? 'text-amber-700 dark:text-amber-200' : 'text-gray-500 dark:text-gray-400') }}">
+                                                                {{ $item['dispatch_note'] ?? '' }}
+                                                            </span>
+                                                        </div>
                                                     </div>
+                                                    <div class="text-right font-black text-gray-950 dark:text-white">LKR {{ number_format((float) $item['value'], 2) }}</div>
                                                 </div>
-                                                <div class="text-right font-black text-gray-950 dark:text-white">LKR {{ number_format((float) $item['value'], 2) }}</div>
-                                            </div>
-                                        @empty
-                                            <div class="py-2 text-sm font-semibold text-gray-500">No parcels in this lane.</div>
-                                        @endforelse
-                                    </div>
+                                            @empty
+                                                <div class="py-2 text-sm font-semibold text-gray-500">No parcels in this lane.</div>
+                                            @endforelse
+                                        </div>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
