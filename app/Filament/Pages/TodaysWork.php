@@ -889,7 +889,7 @@ class TodaysWork extends Page
             $confirmedWaitingDispatch->count(),
             true,
             'confirmed',
-            ['deliveryStatus' => 'confirmed'],
+            ['deliveryStatus' => null],
             'confirmed',
         );
         $confirmedDispatchFreshThreshold = now()->subDays(2);
