@@ -3,7 +3,7 @@
 Date: 2026-08-15  
 Scope: Nifras-only account surface inside HELOS  
 Status: In progress
-Deployment: Pushed to `helosfinance`; hosted verification still pending
+Deployment: Local update in progress; hosted verification still pending
 
 ## Goal
 
@@ -26,7 +26,7 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 - The lead import sheet records customer name, contact person, phone, WhatsApp number, source, status, products of interest, notes, and next follow-up date.
 - The lead queue shows quick Call and WhatsApp actions so Nifras can contact leads without jumping to another page.
 - A sample lead template can be downloaded from the Nifras page.
-- The Nifras page now exposes shortcuts to the existing production board and petty cash screen instead of duplicating those dashboards.
+- The Nifras page now exposes shortcuts to the existing production board and petty cash screen, and Nifras can open those existing pages from the account surface.
 - Transport cost is entered manually on the order desk so profit preview reflects the real freight amount instead of guessing a courier rate.
 
 ## Current page behavior
@@ -72,8 +72,8 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 ## What is not yet done
 
 - The page is not yet confirmed on the hosted environment.
-- The page changes need a fresh push after the lead desk update.
-- The page changes need a fresh push after the bulk lead desk update.
+- The production and petty cash access paths for Nifras still need hosted confirmation after the access rule update.
+- The page changes still need a fresh push after the latest access update.
 - The wider Nifras CRM/funnel work is still pending if the goal is to build beyond this account page.
 - Team review now lives on `TodaysWork` instead of the Nifras account page.
 - `TodaysWork` now shows the Nifras shortcut at the top of the work board.

@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
 use App\Filament\Pages\NifrasAccount;
+use App\Filament\Pages\QuickExpenseEntry;
+use App\Filament\Resources\ProductionEntryResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -50,8 +52,24 @@ class NifrasAccountAccessTest extends TestCase
             ->assertSee('Open petty cash')
             ->assertSee('Create wholesale order');
 
+        $this->actingAs($nifras)
+            ->get(ProductionEntryResource::getUrl('index'))
+            ->assertOk();
+
+        $this->actingAs($nifras)
+            ->get(QuickExpenseEntry::getUrl())
+            ->assertOk();
+
         $this->actingAs($other)
             ->get(NifrasAccount::getUrl())
             ->assertRedirect();
+
+        $this->actingAs($other)
+            ->get(ProductionEntryResource::getUrl('index'))
+            ->assertForbidden();
+
+        $this->actingAs($other)
+            ->get(QuickExpenseEntry::getUrl())
+            ->assertForbidden();
     }
 }
