@@ -234,8 +234,8 @@
                             </button>
                             <button type="button" x-on:click="activeLane = activeLane === 'confirmed' ? null : 'confirmed'" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-violet-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-violet-400 dark:bg-gray-950 dark:text-white dark:ring-violet-900">
                                 <div class="text-xs font-black uppercase text-violet-600">Confirmed parcels to dispatch - {{ $parcelMovement['current_queue_label'] }}</div>
-                                <div class="mt-2 text-2xl font-black">LKR {{ number_format((float) $parcelMovement['confirmed_waiting_dispatch_value'], 2) }}</div>
-                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{{ number_format($parcelMovement['confirmed_waiting_dispatch_count']) }} confirmed parcel(s)</div>
+                                <div class="mt-2 text-2xl font-black">{{ number_format($parcelMovement['confirmed_waiting_dispatch_count']) }} confirmed parcel(s)</div>
+                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">Open to see the LKR value and parcel list.</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Add tracking and send these to courier.</div>
                                 <div class="mt-1 text-xs font-semibold {{ !empty($parcelMovement['confirmed_waiting_dispatch_live_warning']) ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300' }}">{{ $parcelMovement['confirmed_waiting_dispatch_live_note'] ?? '' }}</div>
                                 <div class="mt-2 text-xs font-black text-violet-700 dark:text-violet-300">Click to see parcels</div>
@@ -275,7 +275,7 @@
                         @php
                             $parcelDetailGroups = [
                                 ['key' => 'pending', 'label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'total' => $parcelMovement['pending_confirmation_count'] ?? 0, 'tone' => 'orange', 'instruction' => 'Call the customer and confirm the order before dispatch.'],
-                                ['key' => 'confirmed', 'label' => 'Confirmed parcels to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'total' => $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0, 'tone' => 'violet', 'instruction' => 'These parcels are confirmed and still waiting for dispatch. Confirm within 2 days; older parcels need urgent dispatch.', 'breakdown' => $parcelMovement['confirmed_waiting_dispatch_breakdown'] ?? [], 'fresh_count' => $parcelMovement['confirmed_waiting_dispatch_due_soon_count'] ?? 0, 'stale_count' => $parcelMovement['confirmed_waiting_dispatch_overdue_count'] ?? 0],
+                                ['key' => 'confirmed', 'label' => 'Confirmed parcels to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'total' => $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0, 'total_value' => $parcelMovement['confirmed_waiting_dispatch_value'] ?? 0, 'tone' => 'violet', 'instruction' => 'These parcels are confirmed and still waiting for dispatch. Confirm within 2 days; older parcels need urgent dispatch.', 'breakdown' => $parcelMovement['confirmed_waiting_dispatch_breakdown'] ?? [], 'fresh_count' => $parcelMovement['confirmed_waiting_dispatch_due_soon_count'] ?? 0, 'stale_count' => $parcelMovement['confirmed_waiting_dispatch_overdue_count'] ?? 0],
                                 ['key' => 'dispatched', 'label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'total' => $parcelMovement['dispatched_waiting_delivery_count'] ?? 0, 'tone' => 'amber', 'instruction' => 'Follow up with courier/customer until these become delivered or a true return.'],
                                 ['key' => 'delivered', 'label' => 'Delivered this month', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'total' => $parcelMovement['delivered_so_far_count'] ?? 0, 'tone' => 'emerald', 'instruction' => 'These are already converted to delivered sales this month.'],
                             ];
@@ -308,6 +308,11 @@
                                             <div class="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
                                                 Showing {{ number_format(count($group['items'])) }} of {{ number_format((int) $group['total']) }} parcel(s)
                                             </div>
+                                            @if ($group['key'] === 'confirmed')
+                                                <div class="mt-1 text-sm font-black text-violet-700 dark:text-violet-200">
+                                                    Confirmed value: LKR {{ number_format((float) ($group['total_value'] ?? 0), 2) }}
+                                                </div>
+                                            @endif
                                         </div>
                                         <button type="button" x-on:click="activeLane = null" class="rounded-lg px-3 py-1 text-xs font-black text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-800 dark:hover:bg-gray-900">Close</button>
                                     </div>
