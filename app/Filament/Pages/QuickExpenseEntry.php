@@ -6,6 +6,7 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
+use Filament\Actions;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -18,6 +19,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class QuickExpenseEntry extends Page implements HasForms
 {
@@ -46,6 +48,104 @@ class QuickExpenseEntry extends Page implements HasForms
 
         $this->refreshCashSummary();
         $this->refreshRecentExpenses();
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\Action::make('loadPettyCash')
+                ->label('Load petty cash')
+                ->icon('heroicon-o-banknotes')
+                ->color('gray')
+                ->form([
+                    TextInput::make('amount')
+                        ->label('Amount')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->required(),
+                    Select::make('from_container')
+                        ->label('From')
+                        ->options([
+                            'Current Account' => 'Current Account',
+                            'Savings Account' => 'Savings Account',
+                            'Bank Account' => 'Bank Account',
+                        ])
+                        ->default('Current Account')
+                        ->required(),
+                    Select::make('to_container')
+                        ->label('To')
+                        ->options([
+                            'Petty Cash' => 'Petty Cash',
+                            'Store Cash / Cash Drawer' => 'Store Cash / Cash Drawer',
+                        ])
+                        ->default('Petty Cash')
+                        ->required(),
+                    DatePicker::make('transaction_date')
+                        ->label('Date')
+                        ->default(now())
+                        ->required(),
+                    TextInput::make('description')
+                        ->label('Note')
+                        ->placeholder('Optional')
+                        ->nullable(),
+                ])
+                ->action(function (array $data): void {
+                    $businessId = Auth::user()?->defaultBusinessId();
+
+                    if (! $businessId) {
+                        Notification::make()
+                            ->title('No business found')
+                            ->body('Pick a business before loading petty cash.')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    $amount = max((float) ($data['amount'] ?? 0), 0);
+
+                    if ($amount <= 0) {
+                        Notification::make()
+                            ->title('Enter a valid amount')
+                            ->body('Petty cash loading needs a positive amount.')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    BankTransaction::query()->create([
+                        'business_id' => $businessId,
+                        'statement_name' => 'Manual petty cash load',
+                        'row_hash' => (string) Str::uuid(),
+                        'transaction_date' => $data['transaction_date'],
+                        'description' => trim((string) ($data['description'] ?: 'Petty cash load')),
+                        'money_container' => $data['from_container'] ?? 'Current Account',
+                        'counter_money_container' => $data['to_container'] ?? 'Petty Cash',
+                        'debit' => $amount,
+                        'credit' => 0,
+                        'balance' => null,
+                        'classification' => 'transfer',
+                        'transaction_type' => 'transfer',
+                        'confidence' => 1,
+                        'status' => 'classified',
+                        'raw_payload' => [
+                            'source' => 'quick_expense_entry',
+                            'kind' => 'petty_cash_load',
+                            'amount' => $amount,
+                        ],
+                    ]);
+
+                    $this->refreshCashSummary();
+                    $this->refreshRecentExpenses();
+
+                    Notification::make()
+                        ->title('Petty cash loaded')
+                        ->body('The cash left figure has been updated.')
+                        ->success()
+                        ->send();
+                }),
+        ];
     }
 
     public function form(Form $form): Form
