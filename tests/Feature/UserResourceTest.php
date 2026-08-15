@@ -810,6 +810,37 @@ class UserResourceTest extends TestCase
         $this->assertFalse(ServiceBillingResource::canAccess());
     }
 
+    public function test_sandhamali_no_longer_receives_production_access(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Sandhamali Returns Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $sandhamali = User::query()->create([
+            'name' => 'Sandhamali',
+            'email' => 'sandhamali@helos.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+            'employee_access_profile' => 'work_only',
+            'staff_responsibilities' => ['order_confirmation', 'delivery_follow_up', 'return_recovery'],
+            'responsibilities_configured' => true,
+            'is_staff_supervisor' => false,
+        ]);
+
+        $this->actingAs($sandhamali);
+
+        $this->assertFalse($sandhamali->canAccessProductionWork($business->id));
+        $this->assertFalse($sandhamali->canAccessMaterialWork($business->id));
+        $this->assertFalse(ProductionEntryResource::canAccess());
+        $this->assertFalse(MaterialLedgerResource::canAccess());
+    }
+
     private function mutateCreateUserData(array $data): array
     {
         $method = new ReflectionMethod(CreateUser::class, 'mutateFormDataBeforeCreate');
