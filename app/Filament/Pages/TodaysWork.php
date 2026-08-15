@@ -70,6 +70,28 @@ class TodaysWork extends Page
 
         if ($user instanceof User && $user->isStaff()) {
             try {
+                $visibleMissions = $missions->visibleForUser($user);
+                $this->workQueue = $this->employeeWorkQueue($visibleMissions);
+            } catch (Throwable $e) {
+                report($e);
+                $this->workQueue = $this->fallbackWorkQueue();
+            }
+
+            try {
+                $this->managerProfit = $this->managerProfitGuide($snapshots);
+            } catch (Throwable $e) {
+                report($e);
+                $this->managerProfit = [];
+            }
+
+            try {
+                $this->employeeContribution = $this->employeeContributionGuide($snapshots);
+            } catch (Throwable $e) {
+                report($e);
+                $this->employeeContribution = [];
+            }
+
+            try {
                 $this->parcelMovement = $this->employeeParcelMovement();
             } catch (Throwable $e) {
                 report($e);
@@ -934,10 +956,10 @@ class TodaysWork extends Page
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
             'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 40),
-            'confirmed_waiting_dispatch_count' => count($confirmedLiveItems) > 0
-                ? count($confirmedLiveItems)
-                : ($confirmedParity['available'] && is_int($confirmedParity['live_count'])
-                    ? $confirmedParity['live_count']
+            'confirmed_waiting_dispatch_count' => $confirmedParity['available'] && is_int($confirmedParity['live_count'])
+                ? $confirmedParity['live_count']
+                : (count($confirmedLiveItems) > 0
+                    ? count($confirmedLiveItems)
                     : $confirmedWaitingDispatch->count()),
             'confirmed_waiting_dispatch_value' => $confirmedParity['live_value'] ?? $confirmedWaitingDispatchValue,
             'confirmed_waiting_dispatch_live_count' => $confirmedParity['live_count'],

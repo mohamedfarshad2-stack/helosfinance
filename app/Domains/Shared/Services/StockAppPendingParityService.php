@@ -200,22 +200,66 @@ class StockAppPendingParityService
             'status' => $status,
         ], array_filter($queryParams, fn ($value): bool => filled($value))));
 
-        $ordersPage = Http::timeout(60)
+        $ordersPage = $this->fetchOrdersPage($baseUrl, $cookies, $ordersUrl);
+
+        if (! $ordersPage->successful()) {
+            throw new \RuntimeException('Unable to load Stock App pending orders page.');
+        }
+
+        $pageHtml = $ordersPage->body();
+        $count = $this->parseCount($pageHtml, $label);
+        $value = $this->parseLiveValue($pageHtml);
+        $items = $this->parseLiveItems($pageHtml);
+        $targetPages = max((int) ceil(max($count, 1) / 6), 1);
+
+        for ($page = 2; $page <= min($targetPages + 2, 20) && count($items) < $count; $page++) {
+            $pageUrl = $ordersUrl.'&page='.$page;
+            $pageResponse = $this->fetchOrdersPage($baseUrl, $cookies, $pageUrl);
+
+            if (! $pageResponse->successful()) {
+                break;
+            }
+
+            $pageItems = $this->parseLiveItems($pageResponse->body());
+
+            if ($pageItems === []) {
+                break;
+            }
+
+            $items = collect(array_merge($items, $pageItems))
+                ->unique(fn (array $item): string => md5(json_encode([$item['reference'], $item['customer'], $item['phone'], $item['value'], $item['date']])))
+                ->values()
+                ->all();
+
+            if (count($pageItems) < 2) {
+                break;
+            }
+        }
+
+        return [
+            'count' => $count,
+            'value' => $value,
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $cookies
+     */
+    private function fetchOrdersPage(string $baseUrl, array $cookies, string $ordersUrl): \Illuminate\Http\Client\Response
+    {
+        $response = Http::timeout(60)
             ->withCookies($cookies, parse_url($baseUrl, PHP_URL_HOST))
             ->withHeaders([
                 'Referer' => $baseUrl.'/admin',
             ])
             ->get($ordersUrl);
 
-        if (! $ordersPage->successful()) {
+        if (! $response->successful()) {
             throw new \RuntimeException('Unable to load Stock App pending orders page.');
         }
 
-        return [
-            'count' => $this->parseCount($ordersPage->body(), $label),
-            'value' => $this->parseLiveValue($ordersPage->body()),
-            'items' => $this->parseLiveItems($ordersPage->body()),
-        ];
+        return $response;
     }
 
     /**
@@ -376,6 +420,7 @@ class StockAppPendingParityService
                 continue;
             }
 
+            $fields['__row_id'] = $fields['__row_id'] ?? $matches[1];
             $field = strtolower(trim($matches[2]));
             $value = $this->queueRowNodeValue($node);
 
@@ -414,6 +459,10 @@ class StockAppPendingParityService
             if (filled($fields[$key] ?? null)) {
                 return $fields[$key];
             }
+        }
+
+        if (filled($fields['__row_id'] ?? null)) {
+            return 'Parcel #'.$fields['__row_id'];
         }
 
         if (preg_match('/(?:order|parcel|invoice|ref|#)\s*[:\-]?\s*([A-Z0-9\-\/]+)/i', $text, $matches) === 1) {
