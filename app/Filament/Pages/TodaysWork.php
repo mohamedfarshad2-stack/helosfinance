@@ -77,7 +77,7 @@ class TodaysWork extends Page
 
         $user = Auth::user();
 
-        if (strtolower((string) $user?->email) === 'sandhamali@helos.com') {
+        if ($user?->isSandhamaliAccount()) {
             abort(403);
         }
 
@@ -227,7 +227,7 @@ class TodaysWork extends Page
         $user = Auth::user();
 
         return (bool) ($user?->canAccessOrderWork() ?? false)
-            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
+            && ! $user?->isSandhamaliAccount();
     }
 
     public static function canAccess(): bool
@@ -236,7 +236,7 @@ class TodaysWork extends Page
 
         return Auth::check()
             && (bool) ($user?->canAccessOrderWork() ?? false)
-            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
+            && ! $user?->isSandhamaliAccount();
     }
 
     public function startMission(int $missionId, MissionGeneratorService $missions): void
@@ -1064,7 +1064,7 @@ class TodaysWork extends Page
             return false;
         }
 
-        if (strtolower((string) $user->email) === 'sandhamali@helos.com') {
+        if ($user->isSandhamaliAccount()) {
             return false;
         }
 

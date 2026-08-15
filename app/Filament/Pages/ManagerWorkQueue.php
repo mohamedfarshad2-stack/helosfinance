@@ -38,11 +38,11 @@ class ManagerWorkQueue extends Page
     {
         $user = Auth::user();
 
-        if (strtolower((string) $user?->email) === 'sandhamali@helos.com') {
+        if ($user?->isSandhamaliAccount()) {
             abort(403);
         }
 
-        if ($user?->isStaff() && strtolower((string) $user?->email) !== 'sandhamali@helos.com') {
+        if ($user?->isStaff() && ! $user?->isSandhamaliAccount()) {
             $this->redirect(TodaysWork::getUrl());
 
             return;
@@ -67,7 +67,7 @@ class ManagerWorkQueue extends Page
 
         return Auth::check()
             && (bool) ($user?->isOwner() ?? false)
-            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
+            && ! $user?->isSandhamaliAccount();
     }
 
     public static function canAccess(): bool
@@ -76,7 +76,7 @@ class ManagerWorkQueue extends Page
 
         return Auth::check()
             && (($user?->isOwner() ?? false) || ($user?->isStaff() ?? false))
-            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
+            && ! $user?->isSandhamaliAccount();
     }
 
     private function loadQueue(WorkQueueService $workQueue): void

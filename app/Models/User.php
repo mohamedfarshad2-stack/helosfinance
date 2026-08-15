@@ -225,6 +225,17 @@ class User extends Authenticatable implements FilamentUser
         return (bool) $this->is_employee;
     }
 
+    public function isSandhamaliAccount(): bool
+    {
+        $email = strtolower((string) $this->email);
+        $name = strtolower(trim((string) $this->name));
+
+        return in_array($email, [
+            'sandhamali@helos.com',
+            'nisansalasandamalinew1@gmail.com',
+        ], true) || in_array($name, ['sandhamali', 'sandamali'], true);
+    }
+
     public function isManager(): bool
     {
         return $this->isOwner();

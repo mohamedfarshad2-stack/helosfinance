@@ -391,7 +391,7 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $user = User::query()->create([
             'name' => 'Sandhamali',
-            'email' => 'sandhamali@helos.com',
+            'email' => 'nisansalasandamalinew1@gmail.com',
             'password' => Hash::make('password'),
             'business_id' => $business->id,
             'is_employee' => true,
