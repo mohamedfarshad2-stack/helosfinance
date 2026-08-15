@@ -78,7 +78,9 @@ class TodaysWork extends Page
         $user = Auth::user();
 
         if ($user?->isSandhamaliAccount()) {
-            abort(403);
+            $this->redirect(SandhamaliAccount::getUrl());
+
+            return;
         }
 
         if ($user instanceof User && $user->isStaff()) {
@@ -236,8 +238,7 @@ class TodaysWork extends Page
         $user = Auth::user();
 
         return Auth::check()
-            && ($user?->isStaff() ?? false)
-            && ! $user?->isSandhamaliAccount();
+            && ($user?->isStaff() ?? false);
     }
 
     public function startMission(int $missionId, MissionGeneratorService $missions): void

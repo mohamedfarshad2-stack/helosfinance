@@ -379,12 +379,12 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertRedirect(TodaysWork::getUrl());
     }
 
-    public function test_sandhamali_does_not_land_on_todays_work(): void
+    public function test_sandhamali_lands_on_her_service_workspace_instead_of_the_staff_board(): void
     {
         $business = Business::query()->create([
             'name' => 'Sandhamali No Dashboard Client',
             'currency' => 'LKR',
-            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_type' => Business::TYPE_SERVICE,
             'business_maturity' => Business::MATURITY_LEVEL_5,
             'onboarding_status' => 'ready',
         ]);
@@ -403,14 +403,14 @@ class WorkQueueIntelligenceTest extends TestCase
 
         $this->actingAs($user);
 
-        $this->assertFalse(TodaysWork::canAccess());
+        $this->assertTrue(TodaysWork::canAccess());
         $this->assertFalse(TodaysWork::shouldRegisterNavigation());
-        $this->assertFalse(ManagerWorkQueue::canAccess());
+        $this->assertTrue(ManagerWorkQueue::canAccess());
         $this->assertFalse(ManagerWorkQueue::shouldRegisterNavigation());
 
-        $this->get(TodaysWork::getUrl())->assertForbidden();
-        $this->get(ManagerWorkQueue::getUrl())->assertForbidden();
-        $this->get('/admin')->assertOk();
+        $this->get('/admin')->assertRedirect(\App\Filament\Pages\SandhamaliAccount::getUrl());
+        $this->get(TodaysWork::getUrl())->assertRedirect(\App\Filament\Pages\SandhamaliAccount::getUrl());
+        $this->get(ManagerWorkQueue::getUrl())->assertRedirect(\App\Filament\Pages\SandhamaliAccount::getUrl());
         $this->assertFalse($user->hasStaffResponsibility(['order_confirmation', 'dispatch', 'delivery_follow_up'], $business->id));
         $this->assertFalse($user->canAccessProductionWork($business->id));
     }

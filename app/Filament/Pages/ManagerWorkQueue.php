@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Services\WorkQueueService;
+use App\Filament\Pages\SandhamaliAccount;
 use App\Filament\Resources\BankTransactionResource;
 use App\Filament\Resources\BusinessResource;
 use App\Filament\Resources\EmployeeResource;
@@ -39,7 +40,9 @@ class ManagerWorkQueue extends Page
         $user = Auth::user();
 
         if ($user?->isSandhamaliAccount()) {
-            abort(403);
+            $this->redirect(SandhamaliAccount::getUrl());
+
+            return;
         }
 
         if ($user?->isStaff() && ! $user?->isSandhamaliAccount()) {
@@ -75,8 +78,7 @@ class ManagerWorkQueue extends Page
         $user = Auth::user();
 
         return Auth::check()
-            && (($user?->isOwner() ?? false) || ($user?->isStaff() ?? false))
-            && ! $user?->isSandhamaliAccount();
+            && (($user?->isOwner() ?? false) || ($user?->isStaff() ?? false));
     }
 
     private function loadQueue(WorkQueueService $workQueue): void
