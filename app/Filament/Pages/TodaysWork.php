@@ -70,28 +70,6 @@ class TodaysWork extends Page
 
         if ($user instanceof User && $user->isStaff()) {
             try {
-                $visibleMissions = $missions->visibleForUser($user);
-                $this->workQueue = $this->employeeWorkQueue($visibleMissions);
-            } catch (Throwable $e) {
-                report($e);
-                $this->workQueue = $this->fallbackWorkQueue();
-            }
-
-            try {
-                $this->managerProfit = $this->managerProfitGuide($snapshots);
-            } catch (Throwable $e) {
-                report($e);
-                $this->managerProfit = [];
-            }
-
-            try {
-                $this->employeeContribution = $this->employeeContributionGuide($snapshots);
-            } catch (Throwable $e) {
-                report($e);
-                $this->employeeContribution = [];
-            }
-
-            try {
                 $this->parcelMovement = $this->employeeParcelMovement();
             } catch (Throwable $e) {
                 report($e);
@@ -151,8 +129,8 @@ class TodaysWork extends Page
         $this->parcelMovement = $this->employeeParcelMovement();
 
         Notification::make()
-            ->title('Live Stock App pending count refreshed')
-            ->body('HELOAS refreshed the live pending count without changing Stock App.')
+            ->title('Live Stock App confirmed queue refreshed')
+            ->body('HELOAS refreshed the live confirmed parcel list without changing Stock App.')
             ->success()
             ->send();
     }
@@ -893,6 +871,39 @@ class TodaysWork extends Page
             'confirmed',
         );
         $confirmedDispatchFreshThreshold = now()->subDays(2);
+        $confirmedLiveItems = collect($confirmedParity['items'] ?? [])
+            ->map(function (array $item): array {
+                $date = filled($item['date'] ?? null) ? $this->safeDate((string) $item['date'], today()) : null;
+
+                return [
+                    'reference' => (string) ($item['reference'] ?? 'Confirmed parcel'),
+                    'customer' => filled($item['customer'] ?? null) ? (string) $item['customer'] : null,
+                    'phone' => filled($item['phone'] ?? null) ? (string) $item['phone'] : null,
+                    'value' => (float) ($item['value'] ?? 0),
+                    'date' => filled($item['date'] ?? null) ? (string) $item['date'] : 'No date',
+                    'age_label' => filled($item['age_label'] ?? null)
+                        ? (string) $item['age_label']
+                        : ($date instanceof Carbon ? ($date->isToday() ? 'Today' : $date->diffInDays(now()).' day'.($date->diffInDays(now()) === 1 ? '' : 's').' old') : 'Age unknown'),
+                    'status' => filled($item['status'] ?? null) ? (string) $item['status'] : 'confirmed',
+                    'next_action' => filled($item['next_action'] ?? null) ? (string) $item['next_action'] : 'Add tracking and send this parcel to courier.',
+                ];
+            })
+            ->values()
+            ->all();
+        $confirmedLiveFreshCount = collect($confirmedLiveItems)
+            ->filter(function (array $item) use ($confirmedDispatchFreshThreshold): bool {
+                if (! filled($item['date'] ?? null)) {
+                    return false;
+                }
+
+                try {
+                    return $this->safeDate((string) $item['date'], today())?->greaterThanOrEqualTo($confirmedDispatchFreshThreshold) ?? false;
+                } catch (Throwable) {
+                    return false;
+                }
+            })
+            ->count();
+        $confirmedLiveStaleCount = max(count($confirmedLiveItems) - $confirmedLiveFreshCount, 0);
         $confirmedWaitingDispatchFresh = $confirmedWaitingDispatch
             ->filter(fn (OperationalEvent $event): bool => ($this->stockAppPipelineDate($event)?->greaterThanOrEqualTo($confirmedDispatchFreshThreshold)) ?? false)
             ->values();
@@ -923,18 +934,23 @@ class TodaysWork extends Page
             'pending_confirmation_count' => $pendingConfirmation->count(),
             'pending_confirmation_value' => $pendingConfirmationValue,
             'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 40),
-            'confirmed_waiting_dispatch_count' => $confirmedParity['available'] && is_int($confirmedParity['live_count'])
-                ? $confirmedParity['live_count']
-                : $confirmedWaitingDispatch->count(),
-            'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
+            'confirmed_waiting_dispatch_count' => count($confirmedLiveItems) > 0
+                ? count($confirmedLiveItems)
+                : ($confirmedParity['available'] && is_int($confirmedParity['live_count'])
+                    ? $confirmedParity['live_count']
+                    : $confirmedWaitingDispatch->count()),
+            'confirmed_waiting_dispatch_value' => $confirmedParity['live_value'] ?? $confirmedWaitingDispatchValue,
             'confirmed_waiting_dispatch_live_count' => $confirmedParity['live_count'],
             'confirmed_waiting_dispatch_live_value' => $confirmedParity['live_value'],
             'confirmed_waiting_dispatch_live_note' => $confirmedParity['note'],
             'confirmed_waiting_dispatch_live_warning' => $confirmedParity['warning'],
             'confirmed_waiting_dispatch_live_url' => $this->stockAppConfirmedQueueUrl($liveQueueStart, today()->endOfDay()),
-            'confirmed_waiting_dispatch_due_soon_count' => $confirmedWaitingDispatchFresh->count(),
-            'confirmed_waiting_dispatch_overdue_count' => $confirmedWaitingDispatchStale->count(),
-            'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 40),
+            'confirmed_waiting_dispatch_live_items' => $confirmedLiveItems,
+            'confirmed_waiting_dispatch_due_soon_count' => count($confirmedLiveItems) > 0 ? $confirmedLiveFreshCount : $confirmedWaitingDispatchFresh->count(),
+            'confirmed_waiting_dispatch_overdue_count' => count($confirmedLiveItems) > 0 ? $confirmedLiveStaleCount : $confirmedWaitingDispatchStale->count(),
+            'confirmed_waiting_dispatch_items' => count($confirmedLiveItems) > 0
+                ? $confirmedLiveItems
+                : $this->parcelMovementItems($confirmedWaitingDispatch, 40),
             'confirmed_waiting_dispatch_breakdown' => $this->parcelMovementBreakdown($confirmedWaitingDispatch),
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
             'dispatched_waiting_delivery_value' => $dispatchedWaitingDeliveryValue,
