@@ -842,6 +842,31 @@ class UserResourceTest extends TestCase
         $this->assertFalse(MaterialLedgerResource::canAccess());
     }
 
+    public function test_sandhamali_identity_helper_matches_known_aliases(): void
+    {
+        $sandhamali = User::query()->create([
+            'name' => 'Sandhamali',
+            'email' => 'nisansalasandamalinew1@gmail.com',
+            'password' => Hash::make('password'),
+            'business_id' => null,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        $otherUser = User::query()->create([
+            'name' => 'Floor Worker',
+            'email' => 'worker@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => null,
+            'is_platform_admin' => false,
+            'is_employee' => true,
+        ]);
+
+        $this->assertTrue($sandhamali->isSandhamaliAccount());
+        $this->assertTrue((User::query()->make(['name' => 'sandamali', 'email' => 'someone@example.com']))->isSandhamaliAccount());
+        $this->assertFalse($otherUser->isSandhamaliAccount());
+    }
+
     private function mutateCreateUserData(array $data): array
     {
         $method = new ReflectionMethod(CreateUser::class, 'mutateFormDataBeforeCreate');
