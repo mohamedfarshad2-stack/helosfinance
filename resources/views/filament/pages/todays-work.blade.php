@@ -155,9 +155,10 @@
         </x-filament::section>
 
         @if ($showParcelItemsModal)
-            <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/60 p-4" wire:click.self="closeParcelItems">
-                <div class="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-2xl dark:bg-gray-950">
-                    <div class="flex items-center justify-between gap-4">
+            <div class="fixed inset-0 z-50 overflow-y-auto bg-gray-950/60 p-4" wire:click.self="closeParcelItems">
+                <div class="flex min-h-full items-start justify-center py-6">
+                    <div class="flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-950">
+                        <div class="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 p-4 dark:border-gray-800">
                         <div>
                             <h2 class="text-lg font-black text-gray-950 dark:text-white">{{ $selectedParcelItemsTitle ?? 'Parcel items' }}</h2>
                             <p class="text-sm text-gray-600 dark:text-gray-300">Order ID and amount only.</p>
@@ -171,18 +172,19 @@
                         </button>
                     </div>
 
-                    <div class="mt-4 max-h-[70vh] overflow-auto rounded-xl border border-gray-200 dark:border-gray-800">
-                        <div class="divide-y divide-gray-100 dark:divide-gray-800">
-                            @forelse ($selectedParcelItems as $item)
-                                <div class="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-                                    <div class="min-w-0">
-                                        <div class="font-black text-gray-950 dark:text-white">{{ $item['reference'] ?? 'Confirmed parcel' }}</div>
+                        <div class="min-h-0 flex-1 overflow-auto">
+                            <div class="divide-y divide-gray-100 dark:divide-gray-800">
+                                @forelse ($selectedParcelItems as $item)
+                                    <div class="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                                        <div class="min-w-0">
+                                            <div class="font-black text-gray-950 dark:text-white">{{ $item['reference'] ?? 'Confirmed parcel' }}</div>
+                                        </div>
+                                        <div class="shrink-0 font-black text-gray-950 dark:text-white">LKR {{ number_format((float) ($item['value'] ?? 0), 2) }}</div>
                                     </div>
-                                    <div class="shrink-0 font-black text-gray-950 dark:text-white">LKR {{ number_format((float) ($item['value'] ?? 0), 2) }}</div>
-                                </div>
-                            @empty
-                                <div class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400">No rows to show yet.</div>
-                            @endforelse
+                                @empty
+                                    <div class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400">No rows to show yet.</div>
+                                @endforelse
+                            </div>
                         </div>
                     </div>
                 </div>
