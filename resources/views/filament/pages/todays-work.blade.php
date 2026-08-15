@@ -235,7 +235,7 @@
                             <button type="button" x-on:click="activeLane = activeLane === 'confirmed' ? null : 'confirmed'" class="rounded-xl bg-white p-4 text-left text-gray-950 shadow-sm ring-1 ring-violet-100 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-violet-400 dark:bg-gray-950 dark:text-white dark:ring-violet-900">
                                 <div class="text-xs font-black uppercase text-violet-600">Confirmed parcels to dispatch - {{ $parcelMovement['current_queue_label'] }}</div>
                                 <div class="mt-2 text-2xl font-black">{{ number_format($parcelMovement['confirmed_waiting_dispatch_count']) }} confirmed parcel(s)</div>
-                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">Open to see the LKR value and parcel list.</div>
+                                <div class="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">Open to see the live LKR value and parcel list.</div>
                                 <div class="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Add tracking and send these to courier.</div>
                                 <div class="mt-1 text-xs font-semibold {{ !empty($parcelMovement['confirmed_waiting_dispatch_live_warning']) ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300' }}">{{ $parcelMovement['confirmed_waiting_dispatch_live_note'] ?? '' }}</div>
                                 <div class="mt-2 text-xs font-black text-violet-700 dark:text-violet-300">Click to see parcels</div>
@@ -313,13 +313,13 @@
                                                 @endif
                                             </div>
                                             @if ($group['key'] === 'confirmed')
-                                                @if (count($group['items']) > 0)
+                                                @if (! is_null($parcelMovement['confirmed_waiting_dispatch_live_value'] ?? null))
                                                     <div class="mt-1 text-sm font-black text-violet-700 dark:text-violet-200">
-                                                        Confirmed value: LKR {{ number_format((float) ($group['total_value'] ?? 0), 2) }}
+                                                        Live confirmed value: LKR {{ number_format((float) $parcelMovement['confirmed_waiting_dispatch_live_value'], 2) }}
                                                     </div>
                                                 @else
                                                     <div class="mt-1 text-sm font-black text-violet-700 dark:text-violet-200">
-                                                        Confirmed value is loading from synced rows.
+                                                        Confirmed value will appear after refresh.
                                                     </div>
                                                 @endif
                                             @endif
@@ -355,7 +355,7 @@
                                     @endif
                                     @if ($group['key'] === 'confirmed' && empty($group['items']))
                                         <div class="mt-3 rounded-lg border border-violet-100 bg-violet-50 p-3 text-sm text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-100">
-                                            HELOAS has the live confirmed count, but the synced parcel rows are still loading. The amount will appear here after refresh, so there is no pressure yet.
+                                            HELOAS has the live confirmed count. The live amount is shown above, and synced parcel rows will appear here after refresh.
                                         </div>
                                     @else
                                         <div class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">

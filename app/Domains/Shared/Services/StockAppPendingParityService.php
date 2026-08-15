@@ -27,6 +27,7 @@ class StockAppPendingParityService
             return [
                 'available' => false,
                 'live_count' => null,
+                'live_value' => null,
                 'warning' => false,
                 'note' => 'Live Stock App '.$label.' comparison is skipped during automated tests.',
             ];
@@ -43,6 +44,7 @@ class StockAppPendingParityService
             return [
                 'available' => false,
                 'live_count' => null,
+                'live_value' => null,
                 'warning' => false,
                 'note' => 'No Stock App link is configured for this business yet.',
             ];
@@ -57,6 +59,7 @@ class StockAppPendingParityService
             return [
                 'available' => false,
                 'live_count' => null,
+                'live_value' => null,
                 'warning' => false,
                 'note' => 'Add Stock App read-only email, password, and client ID in Stock App Link to compare live '.$label.' against HELOAS.',
             ];
@@ -68,6 +71,7 @@ class StockAppPendingParityService
             return [
                 'available' => false,
                 'live_count' => null,
+                'live_value' => null,
                 'warning' => false,
                 'note' => 'Live Stock App '.$label.' count is warming. HELOAS is showing synced '.$label.' rows now.',
             ];
@@ -75,15 +79,27 @@ class StockAppPendingParityService
 
         try {
             if ($allowFetch) {
-                $liveCount = $this->fetchLiveCount($integration, $email, $password, $clientId, $start, $end, $status, $queryParams, $label);
-                Cache::put($cacheKey, $liveCount, now()->addMinutes(30));
+                $liveSummary = $this->fetchLiveCount($integration, $email, $password, $clientId, $start, $end, $status, $queryParams, $label);
+                Cache::put($cacheKey, $liveSummary, now()->addMinutes(30));
             } else {
-                $liveCount = (int) Cache::get($cacheKey);
+                $liveSummary = Cache::get($cacheKey);
             }
+
+            if (is_int($liveSummary)) {
+                $liveSummary = ['count' => $liveSummary, 'value' => null];
+            }
+
+            if (! is_array($liveSummary)) {
+                throw new \RuntimeException('Invalid cached Stock App '.$label.' summary.');
+            }
+
+            $liveCount = (int) ($liveSummary['count'] ?? 0);
+            $liveValue = array_key_exists('value', $liveSummary) ? ($liveSummary['value'] !== null ? (float) $liveSummary['value'] : null) : null;
         } catch (Throwable $throwable) {
             return [
                 'available' => false,
                 'live_count' => null,
+                'live_value' => null,
                 'warning' => true,
                 'note' => 'HELOAS could not read the live Stock App '.$label.' queue right now: '.Str::limit($throwable->getMessage(), 140),
             ];
@@ -94,6 +110,7 @@ class StockAppPendingParityService
         return [
             'available' => true,
             'live_count' => $liveCount,
+            'live_value' => $liveValue,
             'warning' => $warning,
             'note' => $warning
                 ? 'Live Stock App '.$label.' count is '.number_format($liveCount).', but HELOAS currently has '.number_format($syncedCount).' synced '.$label.' row(s) for this range.'
@@ -125,7 +142,7 @@ class StockAppPendingParityService
         string $status,
         array $queryParams,
         string $label,
-    ): int {
+    ): array {
         $baseUrl = rtrim((string) ($integration->base_url ?: 'https://codreturnslanka.lk'), '/');
         $loginUrl = $baseUrl.'/admin/login';
         $loginPage = Http::timeout(45)->get($loginUrl);
@@ -188,7 +205,10 @@ class StockAppPendingParityService
             throw new \RuntimeException('Unable to load Stock App pending orders page.');
         }
 
-        return $this->parseCount($ordersPage->body(), $label);
+        return [
+            'count' => $this->parseCount($ordersPage->body(), $label),
+            'value' => $this->parseLiveValue($ordersPage->body()),
+        ];
     }
 
     /**
@@ -229,6 +249,17 @@ class StockAppPendingParityService
         }
 
         throw new \RuntimeException('Stock App '.$label.' count was not found.');
+    }
+
+    private function parseLiveValue(string $html): ?float
+    {
+        if (! preg_match_all("/<label>Amount<\\/label>\\s*<input[^>]*value=\"([0-9.]+)\"[^>]*wire:change=\"updateOrderField\\(\\d+, 'total_amount'/is", $html, $matches)) {
+            return null;
+        }
+
+        $value = array_sum(array_map('floatval', $matches[1] ?? []));
+
+        return $value > 0 ? $value : null;
     }
 
     private function firstMatch(string $subject, string $pattern): ?string

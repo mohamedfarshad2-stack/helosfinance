@@ -928,6 +928,7 @@ class TodaysWork extends Page
                 : $confirmedWaitingDispatch->count(),
             'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
             'confirmed_waiting_dispatch_live_count' => $confirmedParity['live_count'],
+            'confirmed_waiting_dispatch_live_value' => $confirmedParity['live_value'],
             'confirmed_waiting_dispatch_live_note' => $confirmedParity['note'],
             'confirmed_waiting_dispatch_live_warning' => $confirmedParity['warning'],
             'confirmed_waiting_dispatch_due_soon_count' => $confirmedWaitingDispatchFresh->count(),
