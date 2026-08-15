@@ -56,6 +56,8 @@ class TodaysWork extends Page
 
     public ?string $missionActionError = null;
 
+    public bool $showConfirmedParcelList = false;
+
     private ?string $stockAppUrlCache = null;
 
     public function mount(MissionGeneratorService $missions, BusinessHealthSnapshotService $snapshots): void
@@ -155,6 +157,11 @@ class TodaysWork extends Page
             ->body('HELOAS refreshed the live confirmed parcel list without changing Stock App.')
             ->success()
             ->send();
+    }
+
+    public function toggleConfirmedParcelList(): void
+    {
+        $this->showConfirmedParcelList = ! $this->showConfirmedParcelList;
     }
 
     public static function shouldRegisterNavigation(): bool

@@ -151,64 +151,75 @@
         <x-filament::section>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 class="text-lg font-black text-gray-950 dark:text-white">Confirmed parcel list</h2>
-                    <p class="text-sm text-gray-600 dark:text-gray-300">Each row is one parcel. Use this list to add tracking, dispatch, and follow up without hunting through other dashboard blocks.</p>
+                    <button
+                        type="button"
+                        wire:click="toggleConfirmedParcelList"
+                        class="flex items-center gap-2 text-left text-lg font-black text-gray-950 dark:text-white"
+                    >
+                        <span>Confirmed parcel list</span>
+                        <span class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                            {{ $showConfirmedParcelList ? 'Hide' : 'Show' }}
+                        </span>
+                    </button>
+                    <p class="text-sm text-gray-600 dark:text-gray-300">Click to open the parcel rows. It stays hidden until you need it.</p>
                 </div>
-                <div class="text-sm font-black text-gray-700 dark:text-gray-200">Open any row to see the rest.</div>
+                <div class="text-sm font-black text-gray-700 dark:text-gray-200">{{ number_format(count($parcelMovement['confirmed_waiting_dispatch_items'] ?? [])) }} parcel(s)</div>
             </div>
 
-            <div class="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
-                <div class="divide-y divide-gray-100 dark:divide-gray-800">
-                    @forelse (($parcelMovement['confirmed_waiting_dispatch_items'] ?? []) as $item)
-                        <details class="group px-4 py-3">
-                            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-sm">
-                                <div class="min-w-0">
-                                    <div class="font-black text-gray-950 dark:text-white">
-                                        {{ $item['reference'] ?? 'Confirmed parcel' }}
+            @if ($showConfirmedParcelList)
+                <div class="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+                    <div class="divide-y divide-gray-100 dark:divide-gray-800">
+                        @forelse (($parcelMovement['confirmed_waiting_dispatch_items'] ?? []) as $item)
+                            <details class="group px-4 py-3">
+                                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-sm">
+                                    <div class="min-w-0">
+                                        <div class="font-black text-gray-950 dark:text-white">
+                                            {{ $item['reference'] ?? 'Confirmed parcel' }}
+                                        </div>
+                                    </div>
+                                    <div class="shrink-0 font-black text-gray-950 dark:text-white">
+                                        LKR {{ number_format((float) ($item['value'] ?? 0), 2) }}
+                                    </div>
+                                </summary>
+                                <div class="mt-3 grid gap-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
+                                    <div class="grid gap-2 sm:grid-cols-2">
+                                        <div>
+                                            <div class="text-xs font-black uppercase text-gray-500">Customer</div>
+                                            <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['customer'] ?? 'Customer not shown' }}</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-black uppercase text-gray-500">Phone</div>
+                                            <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['phone'] ?? 'Phone not shown' }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="grid gap-2 sm:grid-cols-3">
+                                        <div>
+                                            <div class="text-xs font-black uppercase text-gray-500">Date</div>
+                                            <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['date'] ?? 'No date' }}</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-black uppercase text-gray-500">Age</div>
+                                            <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['age_label'] ?? 'Age unknown' }}</div>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-black uppercase text-gray-500">Status</div>
+                                            <div class="mt-1 font-semibold capitalize text-gray-900 dark:text-gray-100">{{ $item['status'] ?? 'confirmed' }}</div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-black uppercase text-gray-500">Next action</div>
+                                        <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['next_action'] ?? 'Add tracking and send this parcel to courier.' }}</div>
                                     </div>
                                 </div>
-                                <div class="shrink-0 font-black text-gray-950 dark:text-white">
-                                    LKR {{ number_format((float) ($item['value'] ?? 0), 2) }}
-                                </div>
-                            </summary>
-                            <div class="mt-3 grid gap-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-900">
-                                <div class="grid gap-2 sm:grid-cols-2">
-                                    <div>
-                                        <div class="text-xs font-black uppercase text-gray-500">Customer</div>
-                                        <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['customer'] ?? 'Customer not shown' }}</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xs font-black uppercase text-gray-500">Phone</div>
-                                        <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['phone'] ?? 'Phone not shown' }}</div>
-                                    </div>
-                                </div>
-                                <div class="grid gap-2 sm:grid-cols-3">
-                                    <div>
-                                        <div class="text-xs font-black uppercase text-gray-500">Date</div>
-                                        <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['date'] ?? 'No date' }}</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xs font-black uppercase text-gray-500">Age</div>
-                                        <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['age_label'] ?? 'Age unknown' }}</div>
-                                    </div>
-                                    <div>
-                                        <div class="text-xs font-black uppercase text-gray-500">Status</div>
-                                        <div class="mt-1 font-semibold capitalize text-gray-900 dark:text-gray-100">{{ $item['status'] ?? 'confirmed' }}</div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="text-xs font-black uppercase text-gray-500">Next action</div>
-                                    <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $item['next_action'] ?? 'Add tracking and send this parcel to courier.' }}</div>
-                                </div>
+                            </details>
+                        @empty
+                            <div class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400">
+                                HELOS has not loaded the confirmed parcel rows yet. Refresh the live queue or open Stock App to inspect the parcels directly.
                             </div>
-                        </details>
-                    @empty
-                        <div class="px-4 py-8 text-sm text-gray-500 dark:text-gray-400">
-                            HELOS has not loaded the confirmed parcel rows yet. Refresh the live queue or open Stock App to inspect the parcels directly.
-                        </div>
-                    @endforelse
+                        @endforelse
+                    </div>
                 </div>
-            </div>
+            @endif
         </x-filament::section>
 
     </div>
