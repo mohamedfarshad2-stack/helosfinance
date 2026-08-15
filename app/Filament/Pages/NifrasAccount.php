@@ -7,7 +7,10 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\WholesaleOrder;
 use App\Domains\Shared\Models\WholesaleLead;
+use App\Domains\Shared\Services\WholesaleLeadSpreadsheetImportService;
+use App\Domains\Shared\Services\WholesaleLeadTemplateExportService;
 use App\Models\User;
+use Filament\Actions;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -29,10 +32,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
+use Livewire\WithFileUploads;
 
 class NifrasAccount extends Page implements HasForms
 {
     use InteractsWithForms;
+    use WithFileUploads;
 
     protected static ?string $slug = 'nifras-account';
 
@@ -64,6 +69,10 @@ class NifrasAccount extends Page implements HasForms
 
     public ?array $leadData = [];
 
+    public mixed $leadImportFile = null;
+
+    public bool $showLeadDesk = false;
+
     public static function shouldRegisterNavigation(): bool
     {
         return static::isNifrasAccount();
@@ -79,6 +88,22 @@ class NifrasAccount extends Page implements HasForms
         $this->loadAccount($revenuePipeline);
         $this->form->fill($this->defaultWholesaleFormState());
         $this->leadData = $this->defaultLeadFormState();
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\Action::make('toggleLeadDesk')
+                ->label(fn (): string => $this->showLeadDesk ? 'Close lead desk' : 'Open lead desk')
+                ->icon(fn (): string => $this->showLeadDesk ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down')
+                ->color('gray')
+                ->action(fn () => $this->toggleLeadDesk()),
+            Actions\Action::make('downloadLeadSample')
+                ->label('Download lead sample')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->action(fn (WholesaleLeadTemplateExportService $exporter) => $this->downloadLeadTemplate($exporter)),
+        ];
     }
 
     public function form(Form $form): Form
@@ -318,6 +343,68 @@ class NifrasAccount extends Page implements HasForms
         $this->loadWholesaleWorkspace();
     }
 
+    public function toggleLeadDesk(): void
+    {
+        $this->showLeadDesk = ! $this->showLeadDesk;
+    }
+
+    public function downloadLeadTemplate(WholesaleLeadTemplateExportService $exporter)
+    {
+        if (! $this->business instanceof Business) {
+            return null;
+        }
+
+        $path = storage_path('app/helos-wholesale-leads-template.xlsx');
+
+        $exporter->export($this->business, $path);
+
+        return response()->download($path, 'helos-wholesale-leads-template.xlsx')->deleteFileAfterSend();
+    }
+
+    public function importWholesaleLeads(WholesaleLeadSpreadsheetImportService $importer): void
+    {
+        if (! $this->business instanceof Business) {
+            Notification::make()
+                ->title('No business found')
+                ->body('Nifras needs an accessible business before wholesale leads can be imported.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $this->validate([
+            'leadImportFile' => ['required', 'file', 'mimes:xlsx,xls,csv,txt'],
+        ]);
+
+        $relativePath = $this->leadImportFile->store('imports/wholesale-leads', 'local');
+        $path = \Illuminate\Support\Facades\Storage::disk('local')->path($relativePath);
+
+        try {
+            $result = $importer->import($this->business, $path, Auth::user());
+        } catch (\Throwable $exception) {
+            Notification::make()
+                ->title('Wholesale lead upload failed')
+                ->body($exception->getMessage())
+                ->danger()
+                ->send();
+
+            return;
+        } finally {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($relativePath);
+        }
+
+        $this->leadImportFile = null;
+        $this->showLeadDesk = true;
+        $this->loadWholesaleWorkspace();
+
+        Notification::make()
+            ->title('Wholesale leads imported')
+            ->body($this->leadImportSummary($result))
+            ->status($result['skipped'] > 0 ? 'warning' : 'success')
+            ->send();
+    }
+
     public function refreshAccount(RevenuePipelineService $revenuePipeline): void
     {
         $this->loadAccount($revenuePipeline);
@@ -422,7 +509,7 @@ class NifrasAccount extends Page implements HasForms
 
         $this->recentWholesaleOrders = $orders->take(8)->values();
         $this->customerSummaries = $this->customerSummariesFor($orders)->take(8)->values();
-        $this->recentWholesaleLeads = $leads->take(8)->values();
+        $this->recentWholesaleLeads = $this->leadQueueFor($leads)->take(12)->values();
     }
 
     private function customerSummariesFor(Collection $orders): SupportCollection
@@ -568,6 +655,7 @@ class NifrasAccount extends Page implements HasForms
             ->send();
 
         $this->leadData = $this->defaultLeadFormState();
+        $this->showLeadDesk = true;
         $this->loadWholesaleWorkspace();
     }
 
@@ -616,6 +704,26 @@ class NifrasAccount extends Page implements HasForms
     private function leadQueueCount(Collection $leads): int
     {
         return $leads->filter(fn (WholesaleLead $lead): bool => $lead->isOpen() && ($lead->next_follow_up_at?->isPast() ?? false))->count();
+    }
+
+    private function leadQueueFor(Collection $leads): SupportCollection
+    {
+        return $leads
+            ->sortBy(function (WholesaleLead $lead): string {
+                $openRank = $lead->isOpen() ? '0' : '1';
+                $dueRank = $lead->next_follow_up_at?->toDateTimeString() ?? '9999-12-31 23:59:59';
+
+                return $openRank.'-'.$dueRank.'-'.str_pad((string) $lead->id, 10, '0', STR_PAD_LEFT);
+            })
+            ->values();
+    }
+
+    private function leadImportSummary(array $result): string
+    {
+        $body = "Created {$result['created']}, updated {$result['updated']}, skipped {$result['skipped']}.";
+        $reasons = collect($result['skipped_reasons'] ?? [])->take(3)->implode(' ');
+
+        return $reasons === '' ? $body : $body.' '.$reasons;
     }
 
     private function leadNextFollowUpDate(string $status): Carbon

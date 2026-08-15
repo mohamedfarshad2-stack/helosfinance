@@ -55,138 +55,110 @@
                 </div>
             </div>
 
-            <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                <x-filament::section>
-                    <div class="mb-4">
+            <div class="rounded-xl border border-gray-200 bg-white p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
                         <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Lead desk</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Record the lead once, then use the call and WhatsApp buttons to move it toward a customer fast.</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Open this desk to import a sample Excel file and work wholesale leads in one place.</p>
                     </div>
+                    <x-filament::button wire:click="toggleLeadDesk" color="gray" icon="{{ $showLeadDesk ? 'heroicon-o-chevron-up' : 'heroicon-o-chevron-down' }}">
+                        {{ $showLeadDesk ? 'Close lead desk' : 'Open lead desk' }}
+                    </x-filament::button>
+                </div>
 
-                    <form wire:submit="saveWholesaleLead" class="space-y-6">
-                        <div class="grid gap-4 lg:grid-cols-2">
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Business / buyer name</label>
-                                <input wire:model.live="leadData.customer_name" type="text" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500" placeholder="Example: Dilshan Footwear">
+                @if ($showLeadDesk)
+                    <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.05fr)]">
+                        <x-filament::section>
+                            <div class="mb-4">
+                                <h3 class="text-base font-semibold text-gray-950 dark:text-white">Import leads from Excel</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Download the sample sheet from the top action button, fill it, and upload it here.</p>
                             </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Contact person</label>
-                                <input wire:model.live="leadData.contact_name" type="text" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500" placeholder="Example: Dilshan">
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Phone</label>
-                                <input wire:model.live="leadData.phone" type="tel" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500" placeholder="0771234567">
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">WhatsApp number</label>
-                                <input wire:model.live="leadData.whatsapp_phone" type="tel" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500" placeholder="0771234567">
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Location</label>
-                                <input wire:model.live="leadData.location" type="text" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500" placeholder="Kurunegala">
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Source</label>
-                                <select wire:model.live="leadData.source" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500">
-                                    @foreach (\App\Domains\Shared\Models\WholesaleLead::sourceOptions() as $value => $label)
-                                        <option value="{{ $value }}">{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Lead status</label>
-                                <select wire:model.live="leadData.status" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500">
-                                    @foreach (\App\Domains\Shared\Models\WholesaleLead::statusOptions() as $value => $label)
-                                        <option value="{{ $value }}">{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Next follow-up</label>
-                                <input wire:model.live="leadData.next_follow_up_at" type="date" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500">
-                            </div>
-                        </div>
 
-                        <div class="grid gap-4 lg:grid-cols-2">
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Products of interest</label>
-                                <textarea wire:model.live="leadData.products_of_interest" rows="4" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500" placeholder="Sizes, products, target price, quantity, or style."></textarea>
+                            <div class="space-y-4">
+                                <div class="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-600">
+                                    Use the same columns as the sample file. HELOS will import each row as one lead.
+                                </div>
+
+                                <div>
+                                    <label class="mb-2 block text-sm font-medium text-gray-700">Excel / CSV file</label>
+                                    <input wire:model="leadImportFile" type="file" accept=".xlsx,.xls,.csv,.txt" class="block w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500">
+                                    @error('leadImportFile')
+                                        <p class="mt-2 text-sm text-danger-600">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div class="flex justify-end">
+                                    <x-filament::button wire:click="importWholesaleLeads" wire:loading.attr="disabled" icon="heroicon-o-arrow-up-tray">
+                                        Import leads
+                                    </x-filament::button>
+                                </div>
                             </div>
-                            <div>
-                                <label class="mb-2 block text-sm font-medium text-gray-700">Notes</label>
-                                <textarea wire:model.live="leadData.notes" rows="4" class="w-full rounded-lg border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500" placeholder="What should Nifras remember before the next call?"></textarea>
+                        </x-filament::section>
+
+                        <x-filament::section>
+                            <div class="mb-4">
+                                <h3 class="text-base font-semibold text-gray-950 dark:text-white">Lead action queue</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Call first, WhatsApp second, then convert the buyer into a lifetime customer.</p>
                             </div>
-                        </div>
 
-                        <div class="flex flex-wrap justify-end gap-2">
-                            <x-filament::button type="submit" icon="heroicon-o-plus-circle">
-                                Save lead
-                            </x-filament::button>
-                        </div>
-                    </form>
-                </x-filament::section>
+                            <div class="grid gap-3">
+                                @forelse ($recentWholesaleLeads as $lead)
+                                    @php
+                                        $callLink = $lead->callLink();
+                                        $whatsappLink = $lead->whatsappLink($lead->whatsappMessage());
+                                        $statusLabel = \App\Domains\Shared\Models\WholesaleLead::statusOptions()[$lead->status] ?? $lead->status;
+                                    @endphp
+                                    <div class="rounded-xl border border-gray-200 p-4">
+                                        <div class="flex flex-wrap items-start justify-between gap-3">
+                                            <div>
+                                                <div class="font-semibold text-gray-950">{{ $lead->displayLabel() }}</div>
+                                                <div class="text-sm text-gray-500">
+                                                    {{ $statusLabel }}
+                                                    @if ($lead->location)
+                                                        &bull; {{ $lead->location }}
+                                                    @endif
+                                                </div>
+                                                <div class="mt-1 text-sm text-gray-500">
+                                                    {{ $lead->products_of_interest ?: 'No product notes yet' }}
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="font-semibold text-gray-950">{{ optional($lead->next_follow_up_at)->format('Y-m-d') ?? '—' }}</div>
+                                                <div class="text-sm text-gray-500">{{ $lead->nextActionLabel() }}</div>
+                                            </div>
+                                        </div>
 
-                <x-filament::section>
-                    <div class="mb-4">
-                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Lead action queue</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Call first, WhatsApp second, and use the conversion button once the buyer is ready to become a customer.</p>
-                    </div>
-
-                    <div class="grid gap-3">
-                        @forelse ($recentWholesaleLeads as $lead)
-                            @php
-                                $callLink = $lead->callLink();
-                                $whatsappLink = $lead->whatsappLink($lead->whatsappMessage());
-                                $statusLabel = \App\Domains\Shared\Models\WholesaleLead::statusOptions()[$lead->status] ?? $lead->status;
-                            @endphp
-                            <div class="rounded-xl border border-gray-200 p-4">
-                                <div class="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <div class="font-semibold text-gray-950">{{ $lead->displayLabel() }}</div>
-                                        <div class="text-sm text-gray-500">
-                                            {{ $statusLabel }}
-                                            @if ($lead->location)
-                                                • {{ $lead->location }}
+                                        <div class="mt-3 flex flex-wrap gap-2">
+                                            @if ($callLink)
+                                                <x-filament::button tag="a" href="{{ $callLink }}" color="gray" icon="heroicon-o-phone">
+                                                    Call
+                                                </x-filament::button>
                                             @endif
-                                        </div>
-                                        <div class="mt-1 text-sm text-gray-500">
-                                            {{ $lead->products_of_interest ?: 'No product notes yet' }}
+                                            @if ($whatsappLink)
+                                                <x-filament::button tag="a" href="{{ $whatsappLink }}" target="_blank" color="success" icon="heroicon-o-chat-bubble-left-right">
+                                                    WhatsApp
+                                                </x-filament::button>
+                                            @endif
+                                            <x-filament::button wire:click="touchLead({{ $lead->id }}, '{{ \App\Domains\Shared\Models\WholesaleLead::STATUS_CONTACTED }}')" color="gray" icon="heroicon-o-check">
+                                                Contacted
+                                            </x-filament::button>
+                                            <x-filament::button wire:click="touchLead({{ $lead->id }}, '{{ \App\Domains\Shared\Models\WholesaleLead::STATUS_CUSTOMER }}')" color="primary" icon="heroicon-o-user-plus">
+                                                Convert
+                                            </x-filament::button>
+                                            <x-filament::button wire:click="touchLead({{ $lead->id }}, '{{ \App\Domains\Shared\Models\WholesaleLead::STATUS_LOST }}')" color="gray" icon="heroicon-o-x-mark">
+                                                Lost
+                                            </x-filament::button>
                                         </div>
                                     </div>
-                                    <div class="text-right">
-                                        <div class="font-semibold text-gray-950">{{ optional($lead->next_follow_up_at)->format('Y-m-d') ?? '—' }}</div>
-                                        <div class="text-sm text-gray-500">{{ $lead->nextActionLabel() }}</div>
+                                @empty
+                                    <div class="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                                        No wholesale leads have been imported yet.
                                     </div>
-                                </div>
-
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    @if ($callLink)
-                                        <x-filament::button tag="a" href="{{ $callLink }}" color="gray" icon="heroicon-o-phone">
-                                            Call
-                                        </x-filament::button>
-                                    @endif
-                                    @if ($whatsappLink)
-                                        <x-filament::button tag="a" href="{{ $whatsappLink }}" target="_blank" color="success" icon="heroicon-o-chat-bubble-left-right">
-                                            WhatsApp
-                                        </x-filament::button>
-                                    @endif
-                                    <x-filament::button wire:click="touchLead({{ $lead->id }}, '{{ \App\Domains\Shared\Models\WholesaleLead::STATUS_CONTACTED }}')" color="gray" icon="heroicon-o-check">
-                                        Contacted
-                                    </x-filament::button>
-                                    <x-filament::button wire:click="touchLead({{ $lead->id }}, '{{ \App\Domains\Shared\Models\WholesaleLead::STATUS_CUSTOMER }}')" color="primary" icon="heroicon-o-user-plus">
-                                        Convert
-                                    </x-filament::button>
-                                    <x-filament::button wire:click="touchLead({{ $lead->id }}, '{{ \App\Domains\Shared\Models\WholesaleLead::STATUS_LOST }}')" color="gray" icon="heroicon-o-x-mark">
-                                        Lost
-                                    </x-filament::button>
-                                </div>
+                                @endforelse
                             </div>
-                        @empty
-                            <div class="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-                                No wholesale leads have been entered yet.
-                            </div>
-                        @endforelse
+                        </x-filament::section>
                     </div>
-                </x-filament::section>
+                @endif
             </div>
 
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -204,6 +176,11 @@
                     <div class="text-sm font-medium text-gray-600">Gross contribution</div>
                     <div class="mt-1 text-3xl font-semibold">LKR {{ number_format((float) ($wholesale['gross_contribution'] ?? 0), 2) }}</div>
                     <div class="mt-1 text-sm text-gray-500">This is sales after product cost and the manually entered transport cost.</div>
+                </div>
+                <div class="rounded-xl border border-gray-200 bg-white p-4">
+                    <div class="text-sm font-medium text-gray-600">Open collections</div>
+                    <div class="mt-1 text-3xl font-semibold">LKR {{ number_format((float) ($wholesale['outstanding_collections'] ?? 0), 2) }}</div>
+                    <div class="mt-1 text-sm text-gray-500">{{ number_format((int) ($wholesale['open_collection_orders'] ?? 0)) }} order(s) still have money to collect.</div>
                 </div>
             </div>
 
@@ -254,9 +231,9 @@
                                         <div>
                                             <div class="font-semibold text-gray-950">{{ $customer['customer_label'] }}</div>
                                             <div class="text-sm text-gray-500">
-                                                {{ $customer['order_count'] }} order(s) • {{ $customer['delivered_count'] }} delivered
+                                                {{ $customer['order_count'] }} order(s) &bull; {{ $customer['delivered_count'] }} delivered
                                                 @if (! empty($customer['last_status']))
-                                                    • {{ $customer['last_status'] }}
+                                                    &bull; {{ $customer['last_status'] }}
                                                 @endif
                                             </div>
                                         </div>
@@ -304,7 +281,7 @@
                                     <div class="text-sm text-gray-500">
                                         {{ $order->customerLabel() }}
                                         @if ($order->customer_location)
-                                            • {{ $order->customer_location }}
+                                            &bull; {{ $order->customer_location }}
                                         @endif
                                     </div>
                                     <div class="mt-1 text-sm text-gray-500">{{ $order->lineItemSummary() }}</div>

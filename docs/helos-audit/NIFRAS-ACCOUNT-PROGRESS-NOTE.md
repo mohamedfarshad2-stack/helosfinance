@@ -21,8 +21,11 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 - That desk calculates gross sales, product cost, courier cost, net sales, gross profit, paid amount, and outstanding balance.
 - Wholesale customer history and repeat-follow-up timing now appear on the same Nifras account surface.
 - A wholesale lead desk now lives on the same page.
-- The lead desk records customer name, contact person, phone, WhatsApp number, source, status, products of interest, notes, and next follow-up date.
+- The lead desk is collapsed by default and expands when opened.
+- The lead desk now expects a sample Excel or CSV upload instead of one-by-one manual lead entry as the primary workflow.
+- The lead import sheet records customer name, contact person, phone, WhatsApp number, source, status, products of interest, notes, and next follow-up date.
 - The lead queue shows quick Call and WhatsApp actions so Nifras can contact leads without jumping to another page.
+- A sample lead template can be downloaded from the Nifras page.
 - Transport cost is entered manually on the order desk so profit preview reflects the real freight amount instead of guessing a courier rate.
 
 ## Current page behavior
@@ -69,6 +72,7 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 
 - The page is not yet confirmed on the hosted environment.
 - The page changes need a fresh push after the lead desk update.
+- The page changes need a fresh push after the bulk lead desk update.
 - The wider Nifras CRM/funnel work is still pending if the goal is to build beyond this account page.
 - Team review now lives on `TodaysWork` instead of the Nifras account page.
 - `TodaysWork` now shows the Nifras shortcut at the top of the work board.

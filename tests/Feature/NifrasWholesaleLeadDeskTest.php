@@ -74,9 +74,9 @@ class NifrasWholesaleLeadDeskTest extends TestCase
         $this->assertSame('interested', $lead->status);
         $this->assertSame('2026-08-16 00:00:00', optional($lead->next_follow_up_at)->toDateTimeString());
 
-        $this->actingAs($nifras)
-            ->get(NifrasAccount::getUrl())
-            ->assertOk()
+        Livewire::actingAs($nifras)
+            ->test(NifrasAccount::class)
+            ->set('showLeadDesk', true)
             ->assertSee('Lead action queue')
             ->assertSee('Lanka Traders')
             ->assertSee('WhatsApp')
