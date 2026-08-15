@@ -45,6 +45,7 @@ class NifrasAccountAccessTest extends TestCase
             ->get(NifrasAccount::getUrl())
             ->assertOk()
             ->assertSee('Nifras account')
+            ->assertSee('Lead desk')
             ->assertSee('Create wholesale order');
 
         $this->actingAs($other)

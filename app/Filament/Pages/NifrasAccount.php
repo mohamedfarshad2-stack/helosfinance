@@ -6,6 +6,7 @@ use App\Domains\FinancialClarity\Services\RevenuePipelineService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\WholesaleOrder;
+use App\Domains\Shared\Models\WholesaleLead;
 use App\Models\User;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -51,11 +52,17 @@ class NifrasAccount extends Page implements HasForms
 
     public array $wholesaleSummary = [];
 
+    public array $leadSummary = [];
+
     public SupportCollection $customerSummaries;
+
+    public SupportCollection $recentWholesaleLeads;
 
     public Collection $recentWholesaleOrders;
 
     public ?array $data = [];
+
+    public ?array $leadData = [];
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -71,6 +78,7 @@ class NifrasAccount extends Page implements HasForms
     {
         $this->loadAccount($revenuePipeline);
         $this->form->fill($this->defaultWholesaleFormState());
+        $this->leadData = $this->defaultLeadFormState();
     }
 
     public function form(Form $form): Form
@@ -326,7 +334,9 @@ class NifrasAccount extends Page implements HasForms
             'business' => $this->business,
             'pipeline' => $this->pipeline,
             'wholesaleSummary' => $this->wholesaleSummary,
+            'leadSummary' => $this->leadSummary,
             'customerSummaries' => $this->customerSummaries,
+            'recentWholesaleLeads' => $this->recentWholesaleLeads,
             'recentWholesaleOrders' => $this->recentWholesaleOrders,
             'hasBusiness' => $this->business instanceof Business,
             'isNifras' => static::isNifrasAccount(),
@@ -351,7 +361,9 @@ class NifrasAccount extends Page implements HasForms
         if (! $this->business instanceof Business) {
             $this->pipeline = [];
             $this->wholesaleSummary = [];
+            $this->leadSummary = [];
             $this->customerSummaries = collect();
+            $this->recentWholesaleLeads = collect();
             $this->recentWholesaleOrders = collect();
 
             return;
@@ -365,11 +377,19 @@ class NifrasAccount extends Page implements HasForms
     {
         if (! $this->business instanceof Business) {
             $this->wholesaleSummary = [];
+            $this->leadSummary = [];
             $this->customerSummaries = collect();
+            $this->recentWholesaleLeads = collect();
             $this->recentWholesaleOrders = collect();
 
             return;
         }
+
+        $leads = WholesaleLead::query()
+            ->forBusiness($this->business)
+            ->orderByRaw('coalesce(next_follow_up_at, converted_at, created_at) desc')
+            ->orderByDesc('id')
+            ->get();
 
         $orders = WholesaleOrder::query()
             ->forBusiness($this->business)
@@ -378,6 +398,9 @@ class NifrasAccount extends Page implements HasForms
             ->get();
 
         $monthOrders = $orders->filter(fn (WholesaleOrder $order): bool => $order->order_date?->isCurrentMonth() ?? false);
+        $openLeads = $leads->filter(fn (WholesaleLead $lead): bool => $lead->isOpen());
+        $contactDueLeads = $openLeads->filter(fn (WholesaleLead $lead): bool => $lead->next_follow_up_at?->isPast() ?? false);
+        $convertedLeads = $leads->filter(fn (WholesaleLead $lead): bool => $lead->isConverted());
 
         $this->wholesaleSummary = [
             'booked_orders' => $monthOrders->whereNotIn('status', [WholesaleOrder::STATUS_CANCELLED])->count(),
@@ -389,8 +412,17 @@ class NifrasAccount extends Page implements HasForms
             'average_order_value' => $monthOrders->count() > 0 ? round($monthOrders->sum(fn (WholesaleOrder $order): float => $order->netSalesAmount()) / $monthOrders->count(), 2) : 0.0,
         ];
 
+        $this->leadSummary = [
+            'open_leads' => $openLeads->count(),
+            'contact_due' => $contactDueLeads->count(),
+            'converted_customers' => $convertedLeads->count(),
+            'due_today' => $this->leadQueueCount($leads),
+            'last_touch' => $this->formatDate($leads->first()?->last_contacted_at),
+        ];
+
         $this->recentWholesaleOrders = $orders->take(8)->values();
         $this->customerSummaries = $this->customerSummariesFor($orders)->take(8)->values();
+        $this->recentWholesaleLeads = $leads->take(8)->values();
     }
 
     private function customerSummariesFor(Collection $orders): SupportCollection
@@ -480,6 +512,138 @@ class NifrasAccount extends Page implements HasForms
         }
 
         return Carbon::parse($value)->toDateString();
+    }
+
+    public function saveWholesaleLead(): void
+    {
+        if (! $this->business instanceof Business) {
+            Notification::make()
+                ->title('No business found')
+                ->body('Nifras needs an accessible business before a wholesale lead can be saved.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $data = validator($this->leadData ?? [], [
+            'customer_name' => ['required', 'string', 'max:255'],
+            'contact_name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'whatsapp_phone' => ['nullable', 'string', 'max:50'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'products_of_interest' => ['nullable', 'string'],
+            'source' => ['nullable', 'string', 'max:50'],
+            'status' => ['required', 'string', 'max:50'],
+            'next_follow_up_at' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string'],
+        ])->validate();
+
+        $status = $this->normaliseLeadStatus((string) ($data['status'] ?? WholesaleLead::STATUS_LEAD));
+        $nextFollowUpAt = filled($data['next_follow_up_at'] ?? null)
+            ? Carbon::parse($data['next_follow_up_at'])
+            : $this->leadNextFollowUpDate($status);
+
+        WholesaleLead::query()->create([
+            'business_id' => $this->business->id,
+            'captured_by_user_id' => Auth::id(),
+            'source' => $this->normaliseLeadSource((string) ($data['source'] ?? 'owner_referral')),
+            'status' => $status,
+            'customer_name' => $data['customer_name'],
+            'contact_name' => $data['contact_name'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'whatsapp_phone' => $data['whatsapp_phone'] ?? null,
+            'location' => $data['location'] ?? null,
+            'products_of_interest' => $data['products_of_interest'] ?? null,
+            'last_contacted_at' => now(),
+            'next_follow_up_at' => $nextFollowUpAt,
+            'converted_at' => $status === WholesaleLead::STATUS_CUSTOMER ? now() : null,
+            'notes' => $data['notes'] ?? null,
+        ]);
+
+        Notification::make()
+            ->title('Wholesale lead saved')
+            ->body('HELOS recorded the lead and set the next action date for Nifras.')
+            ->success()
+            ->send();
+
+        $this->leadData = $this->defaultLeadFormState();
+        $this->loadWholesaleWorkspace();
+    }
+
+    public function touchLead(int $leadId, string $status): void
+    {
+        if (! $this->business instanceof Business) {
+            return;
+        }
+
+        $lead = WholesaleLead::query()
+            ->forBusiness($this->business)
+            ->findOrFail($leadId);
+
+        $lead->forceFill([
+            'status' => $this->normaliseLeadStatus($status),
+            'last_contacted_at' => now(),
+            'next_follow_up_at' => $this->leadNextFollowUpDate($status),
+            'converted_at' => $status === WholesaleLead::STATUS_CUSTOMER && blank($lead->converted_at) ? now() : $lead->converted_at,
+        ])->save();
+
+        $this->loadWholesaleWorkspace();
+
+        Notification::make()
+            ->title('Lead updated')
+            ->body('HELOS saved the status change and the next follow-up date.')
+            ->success()
+            ->send();
+    }
+
+    private function defaultLeadFormState(): array
+    {
+        return [
+            'customer_name' => '',
+            'contact_name' => '',
+            'phone' => '',
+            'whatsapp_phone' => '',
+            'location' => '',
+            'products_of_interest' => '',
+            'source' => 'owner_referral',
+            'status' => WholesaleLead::STATUS_LEAD,
+            'next_follow_up_at' => now()->addDay()->toDateString(),
+            'notes' => '',
+        ];
+    }
+
+    private function leadQueueCount(Collection $leads): int
+    {
+        return $leads->filter(fn (WholesaleLead $lead): bool => $lead->isOpen() && ($lead->next_follow_up_at?->isPast() ?? false))->count();
+    }
+
+    private function leadNextFollowUpDate(string $status): Carbon
+    {
+        return match ($this->normaliseLeadStatus($status)) {
+            WholesaleLead::STATUS_CONTACT_DUE => now(),
+            WholesaleLead::STATUS_CONTACTED => now()->addDay(),
+            WholesaleLead::STATUS_INTERESTED, WholesaleLead::STATUS_QUOTE_SHARED => now()->addDay(),
+            WholesaleLead::STATUS_FOLLOW_UP_DUE, WholesaleLead::STATUS_NEGOTIATING => now()->addDay(),
+            WholesaleLead::STATUS_CUSTOMER, WholesaleLead::STATUS_REORDER_DUE => now()->addDays(14),
+            WholesaleLead::STATUS_DORMANT => now()->addDays(21),
+            WholesaleLead::STATUS_LOST => now()->addDays(30),
+            default => now()->addDay(),
+        };
+    }
+
+    private function normaliseLeadStatus(string $status): string
+    {
+        return array_key_exists($status, WholesaleLead::statusOptions())
+            ? $status
+            : WholesaleLead::STATUS_LEAD;
+    }
+
+    private function normaliseLeadSource(string $source): string
+    {
+        return array_key_exists($source, WholesaleLead::sourceOptions())
+            ? $source
+            : 'other';
     }
 
     private function defaultWholesaleFormState(): array

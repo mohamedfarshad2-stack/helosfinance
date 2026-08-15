@@ -2,7 +2,7 @@
 
 Date: 2026-08-15  
 Scope: Nifras-only account surface inside HELOS  
-Status: In progress  
+Status: In progress
 Deployment: Pushed to `helosfinance`; hosted verification still pending
 
 ## Goal
@@ -20,10 +20,16 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 - A wholesale order desk now lives inside the Nifras account page itself.
 - That desk calculates gross sales, product cost, courier cost, net sales, gross profit, paid amount, and outstanding balance.
 - Wholesale customer history and repeat-follow-up timing now appear on the same Nifras account surface.
+- A wholesale lead desk now lives on the same page.
+- The lead desk records customer name, contact person, phone, WhatsApp number, source, status, products of interest, notes, and next follow-up date.
+- The lead queue shows quick Call and WhatsApp actions so Nifras can contact leads without jumping to another page.
+- Transport cost is entered manually on the order desk so profit preview reflects the real freight amount instead of guessing a courier rate.
 
 ## Current page behavior
 
 - Shows a Nifras heading and summary cards when the signed-in user is `nifras@helos.com`.
+- Shows lead pipeline cards for open leads, follow-ups due, converted customers, and outstanding collections.
+- Shows a lead capture form and a lead action queue with Call / WhatsApp / Contacted / Convert / Lost actions.
 - Shows wholesale pipeline numbers from `RevenuePipelineService`.
 - Shows a wholesale order form with product lines, delivery charge, payment, and profit preview.
 - Saves wholesale orders into `wholesale_orders`.
@@ -44,23 +50,29 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 - `app/Filament/Pages/NifrasAccount.php`
 - `resources/views/filament/pages/nifras-account.blade.php`
 - `app/Domains/Shared/Models/WholesaleOrder.php`
+- `app/Domains/Shared/Models/WholesaleLead.php`
+- `app/Domains/Shared/Models/Business.php`
 - `database/migrations/2026_08_15_000001_create_wholesale_orders_table.php`
+- `database/migrations/2026_08_15_000002_create_wholesale_leads_table.php`
 - `tests/Feature/NifrasAccountAccessTest.php`
 - `tests/Feature/NifrasWholesaleOrderCreationTest.php`
+- `tests/Feature/NifrasWholesaleLeadDeskTest.php`
 
 ## Verified locally
 
 - PHP syntax checks pass for the page, view, and test.
 - The access test passes locally.
 - The wholesale order creation test passes locally.
+- The wholesale lead desk test passes locally.
 
 ## What is not yet done
 
 - The page is not yet confirmed on the hosted environment.
-- The page has been committed and pushed to `helosfinance`.
+- The page changes need a fresh push after the lead desk update.
 - The wider Nifras CRM/funnel work is still pending if the goal is to build beyond this account page.
 - Team review now lives on `TodaysWork` instead of the Nifras account page.
 - `TodaysWork` now shows the Nifras shortcut at the top of the work board.
+- The hosted site should show the Nifras account page at `/admin/nifras-account` once the updated push is deployed.
 
 ## Handoff note
 
