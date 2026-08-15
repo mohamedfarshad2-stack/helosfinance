@@ -4,6 +4,8 @@ namespace App\Filament\Pages;
 
 use App\Domains\FinancialClarity\Services\RevenuePipelineService;
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\Expense;
+use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\WholesaleOrder;
 use App\Domains\Shared\Models\WholesaleLead;
@@ -65,6 +67,14 @@ class NifrasAccount extends Page implements HasForms
 
     public Collection $recentWholesaleOrders;
 
+    public array $productionSummary = [];
+
+    public array $cashSummary = [];
+
+    public SupportCollection $recentProductionEntries;
+
+    public SupportCollection $recentCashExpenses;
+
     public ?array $data = [];
 
     public ?array $leadData = [];
@@ -102,7 +112,7 @@ class NifrasAccount extends Page implements HasForms
                 ->label('Download lead sample')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('gray')
-                ->action(fn (WholesaleLeadTemplateExportService $exporter) => $this->downloadLeadTemplate($exporter)),
+                ->action(fn () => $this->downloadLeadSample()),
         ];
     }
 
@@ -348,12 +358,13 @@ class NifrasAccount extends Page implements HasForms
         $this->showLeadDesk = ! $this->showLeadDesk;
     }
 
-    public function downloadLeadTemplate(WholesaleLeadTemplateExportService $exporter)
+    public function downloadLeadSample()
     {
         if (! $this->business instanceof Business) {
             return null;
         }
 
+        $exporter = app(WholesaleLeadTemplateExportService::class);
         $path = storage_path('app/helos-wholesale-leads-template.xlsx');
 
         $exporter->export($this->business, $path);
@@ -422,9 +433,13 @@ class NifrasAccount extends Page implements HasForms
             'pipeline' => $this->pipeline,
             'wholesaleSummary' => $this->wholesaleSummary,
             'leadSummary' => $this->leadSummary,
+            'productionSummary' => $this->productionSummary,
+            'cashSummary' => $this->cashSummary,
             'customerSummaries' => $this->customerSummaries,
             'recentWholesaleLeads' => $this->recentWholesaleLeads,
             'recentWholesaleOrders' => $this->recentWholesaleOrders,
+            'recentProductionEntries' => $this->recentProductionEntries,
+            'recentCashExpenses' => $this->recentCashExpenses,
             'hasBusiness' => $this->business instanceof Business,
             'isNifras' => static::isNifrasAccount(),
         ];
@@ -449,15 +464,21 @@ class NifrasAccount extends Page implements HasForms
             $this->pipeline = [];
             $this->wholesaleSummary = [];
             $this->leadSummary = [];
+            $this->productionSummary = [];
+            $this->cashSummary = [];
             $this->customerSummaries = collect();
             $this->recentWholesaleLeads = collect();
             $this->recentWholesaleOrders = collect();
+            $this->recentProductionEntries = collect();
+            $this->recentCashExpenses = collect();
 
             return;
         }
 
         $this->pipeline = $revenuePipeline->forCurrentMonth($this->business);
         $this->loadWholesaleWorkspace();
+        $this->loadProductionWorkspace();
+        $this->loadPettyCashWorkspace();
     }
 
     private function loadWholesaleWorkspace(): void
@@ -510,6 +531,68 @@ class NifrasAccount extends Page implements HasForms
         $this->recentWholesaleOrders = $orders->take(8)->values();
         $this->customerSummaries = $this->customerSummariesFor($orders)->take(8)->values();
         $this->recentWholesaleLeads = $this->leadQueueFor($leads)->take(12)->values();
+    }
+
+    private function loadProductionWorkspace(): void
+    {
+        if (! $this->business instanceof Business) {
+            $this->productionSummary = [];
+            $this->recentProductionEntries = collect();
+
+            return;
+        }
+
+        $entries = ProductionEntry::query()
+            ->where('business_id', $this->business->id)
+            ->orderByDesc('produced_on')
+            ->orderByDesc('id')
+            ->get();
+
+        $monthEntries = $entries->filter(fn (ProductionEntry $entry): bool => $entry->produced_on?->isCurrentMonth() ?? false);
+        $todayEntries = $entries->filter(fn (ProductionEntry $entry): bool => $entry->produced_on?->isToday() ?? false);
+
+        $this->productionSummary = [
+            'entries_this_month' => $monthEntries->count(),
+            'units_this_month' => (int) $monthEntries->sum('quantity_produced'),
+            'entries_today' => $todayEntries->count(),
+            'units_today' => (int) $todayEntries->sum('quantity_produced'),
+            'unpaid_labour' => round($entries->filter(fn (ProductionEntry $entry): bool => $entry->payment_status !== 'paid')->sum(fn (ProductionEntry $entry): float => (float) $entry->net_payable), 2),
+            'paid_labour' => round($monthEntries->filter(fn (ProductionEntry $entry): bool => $entry->payment_status === 'paid')->sum(fn (ProductionEntry $entry): float => (float) $entry->net_payable), 2),
+            'active_workers' => $monthEntries->pluck('employee_name')->filter()->unique()->count(),
+        ];
+
+        $this->recentProductionEntries = $entries->take(6)->values();
+    }
+
+    private function loadPettyCashWorkspace(): void
+    {
+        if (! $this->business instanceof Business) {
+            $this->cashSummary = [];
+            $this->recentCashExpenses = collect();
+
+            return;
+        }
+
+        $expenses = Expense::query()
+            ->where('business_id', $this->business->id)
+            ->where('expense_type', 'variable')
+            ->where('allocation_bucket', 'company_expense')
+            ->orderByDesc('spent_on')
+            ->orderByDesc('id')
+            ->get();
+
+        $monthExpenses = $expenses->filter(fn (Expense $expense): bool => $expense->spent_on?->isCurrentMonth() ?? false);
+        $todayExpenses = $expenses->filter(fn (Expense $expense): bool => $expense->spent_on?->isToday() ?? false);
+
+        $this->cashSummary = [
+            'rows_this_month' => $monthExpenses->count(),
+            'spent_this_month' => round($monthExpenses->sum(fn (Expense $expense): float => (float) $expense->amount), 2),
+            'paid_this_month' => round($monthExpenses->sum(fn (Expense $expense): float => (float) $expense->paid_amount), 2),
+            'balance_due' => round($monthExpenses->sum(fn (Expense $expense): float => max((float) $expense->amount - (float) $expense->paid_amount, 0)), 2),
+            'rows_today' => $todayExpenses->count(),
+        ];
+
+        $this->recentCashExpenses = $expenses->take(6)->values();
     }
 
     private function customerSummariesFor(Collection $orders): SupportCollection
