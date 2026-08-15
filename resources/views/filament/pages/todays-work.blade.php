@@ -63,6 +63,62 @@
                 </div>
             </div>
 
+            <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                <div class="rounded-xl border border-violet-200 bg-white px-3 py-2 dark:border-violet-900 dark:bg-gray-950">
+                    <div class="text-[11px] font-black uppercase tracking-wide text-violet-700 dark:text-violet-300">Pending confirmation</div>
+                    <div class="mt-1 text-lg font-black text-gray-950 dark:text-white">
+                        {{ number_format((int) ($parcelMovement['pending_confirmation_count'] ?? 0)) }}
+                    </div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        LKR {{ number_format((float) ($parcelMovement['pending_confirmation_value'] ?? 0), 2) }}
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-900 dark:bg-gray-950">
+                    <div class="text-[11px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Confirmed live</div>
+                    <div class="mt-1 text-lg font-black text-gray-950 dark:text-white">
+                        {{ number_format((int) ($parcelMovement['confirmed_waiting_dispatch_live_count'] ?? $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0)) }}
+                    </div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        @if (! is_null($parcelMovement['confirmed_waiting_dispatch_live_value'] ?? null))
+                            LKR {{ number_format((float) $parcelMovement['confirmed_waiting_dispatch_live_value'], 2) }}
+                        @else
+                            LKR {{ number_format((float) ($parcelMovement['confirmed_waiting_dispatch_value'] ?? 0), 2) }}
+                        @endif
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-sky-200 bg-white px-3 py-2 dark:border-sky-900 dark:bg-gray-950">
+                    <div class="text-[11px] font-black uppercase tracking-wide text-sky-700 dark:text-sky-300">Dispatching today</div>
+                    <div class="mt-1 text-lg font-black text-gray-950 dark:text-white">
+                        {{ number_format((int) ($parcelMovement['dispatched_count'] ?? 0)) }}
+                    </div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        LKR {{ number_format((float) ($parcelMovement['dispatched_value'] ?? 0), 2) }}
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-amber-200 bg-white px-3 py-2 dark:border-amber-900 dark:bg-gray-950">
+                    <div class="text-[11px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">Dispatched not delivered</div>
+                    <div class="mt-1 text-lg font-black text-gray-950 dark:text-white">
+                        {{ number_format((int) ($parcelMovement['dispatched_waiting_delivery_count'] ?? 0)) }}
+                    </div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        LKR {{ number_format((float) ($parcelMovement['dispatched_waiting_delivery_value'] ?? 0), 2) }}
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-rose-200 bg-white px-3 py-2 dark:border-rose-900 dark:bg-gray-950">
+                    <div class="text-[11px] font-black uppercase tracking-wide text-rose-700 dark:text-rose-300">Delivered so far</div>
+                    <div class="mt-1 text-lg font-black text-gray-950 dark:text-white">
+                        {{ number_format((int) ($parcelMovement['delivered_so_far_count'] ?? 0)) }}
+                    </div>
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        LKR {{ number_format((float) ($parcelMovement['delivered_so_far_value'] ?? 0), 2) }}
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-4 flex flex-wrap gap-2">
                 <button
                     type="button"
