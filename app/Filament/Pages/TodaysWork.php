@@ -77,6 +77,10 @@ class TodaysWork extends Page
 
         $user = Auth::user();
 
+        if (strtolower((string) $user?->email) === 'sandhamali@helos.com') {
+            abort(403);
+        }
+
         if ($user instanceof User && $user->isStaff()) {
             $this->canMoveParcels = $this->business instanceof Business
                 ? $this->canSeeOrderMovement($user, $this->business->id)

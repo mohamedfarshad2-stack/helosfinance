@@ -38,6 +38,10 @@ class ManagerWorkQueue extends Page
     {
         $user = Auth::user();
 
+        if (strtolower((string) $user?->email) === 'sandhamali@helos.com') {
+            abort(403);
+        }
+
         if ($user?->isStaff() && strtolower((string) $user?->email) !== 'sandhamali@helos.com') {
             $this->redirect(TodaysWork::getUrl());
 
