@@ -882,6 +882,13 @@ class TodaysWork extends Page
         $liveQueueStart = $this->stockAppQueueStart();
         $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
         $pendingParity = app(StockAppPendingParityService::class)->compare($business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count(), false);
+        $confirmedDispatchFreshThreshold = now()->subDays(2);
+        $confirmedWaitingDispatchFresh = $confirmedWaitingDispatch
+            ->filter(fn (OperationalEvent $event): bool => ($this->stockAppPipelineDate($event)?->greaterThanOrEqualTo($confirmedDispatchFreshThreshold)) ?? false)
+            ->values();
+        $confirmedWaitingDispatchStale = $confirmedWaitingDispatch
+            ->filter(fn (OperationalEvent $event): bool => ($this->stockAppPipelineDate($event)?->lessThan($confirmedDispatchFreshThreshold)) ?? false)
+            ->values();
 
         return [
             'period_label' => $start->isSameDay($end)
@@ -908,6 +915,8 @@ class TodaysWork extends Page
             'pending_confirmation_items' => $this->parcelMovementItems($pendingConfirmation, 40),
             'confirmed_waiting_dispatch_count' => $confirmedWaitingDispatch->count(),
             'confirmed_waiting_dispatch_value' => $confirmedWaitingDispatchValue,
+            'confirmed_waiting_dispatch_due_soon_count' => $confirmedWaitingDispatchFresh->count(),
+            'confirmed_waiting_dispatch_overdue_count' => $confirmedWaitingDispatchStale->count(),
             'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 40),
             'confirmed_waiting_dispatch_breakdown' => $this->parcelMovementBreakdown($confirmedWaitingDispatch),
             'dispatched_waiting_delivery_count' => $dispatchedWaitingDelivery->count(),
@@ -975,15 +984,29 @@ class TodaysWork extends Page
 
     private function parcelMovementItems(Collection $events, int $limit = 8): array
     {
+        $freshThreshold = now()->subDays(2);
+
         return $events
             ->sortByDesc(fn (OperationalEvent $event): int => $event->occurred_at?->timestamp ?? 0)
             ->take($limit)
-            ->map(fn (OperationalEvent $event): array => [
-                'reference' => $this->stockAppOrderReference($event),
-                'status' => str_replace('_', ' ', $this->stockAppStatus($event)),
-                'value' => $this->stockAppOrderValue($event),
-                'date' => $this->stockAppPipelineDate($event)?->format('M j, H:i') ?? 'No date',
-            ])
+            ->map(function (OperationalEvent $event) use ($freshThreshold): array {
+                $date = $this->stockAppPipelineDate($event);
+                $ageDays = $date instanceof Carbon ? max(0, (int) $date->diffInDays(now())) : null;
+                $isStale = $date instanceof Carbon && $date->lessThan($freshThreshold);
+
+                return [
+                    'reference' => $this->stockAppOrderReference($event),
+                    'status' => str_replace('_', ' ', $this->stockAppStatus($event)),
+                    'value' => $this->stockAppOrderValue($event),
+                    'date' => $date?->format('M j, H:i') ?? 'No date',
+                    'age_days' => $ageDays,
+                    'age_label' => $ageDays === null
+                        ? 'Age unknown'
+                        : ($ageDays === 0 ? 'Today' : $ageDays.' day'.($ageDays === 1 ? '' : 's').' old'),
+                    'age_tone' => $isStale ? 'danger' : ($ageDays !== null && $ageDays <= 2 ? 'warning' : 'neutral'),
+                    'dispatch_note' => $isStale ? 'Dispatch now - older than 2 days.' : 'Dispatch within 2 days.',
+                ];
+            })
             ->values()
             ->all();
     }

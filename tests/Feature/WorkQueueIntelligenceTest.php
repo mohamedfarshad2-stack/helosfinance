@@ -790,7 +790,12 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertCount(4, $movement['pending_confirmation_items']);
         $this->assertSame(2, $movement['confirmed_waiting_dispatch_count']);
         $this->assertSame(8000.0, $movement['confirmed_waiting_dispatch_value']);
+        $this->assertSame(1, $movement['confirmed_waiting_dispatch_due_soon_count']);
+        $this->assertSame(1, $movement['confirmed_waiting_dispatch_overdue_count']);
         $this->assertCount(2, $movement['confirmed_waiting_dispatch_items']);
+        $confirmedItems = collect($movement['confirmed_waiting_dispatch_items'])->keyBy('reference');
+        $this->assertSame('10 days old', $confirmedItems['OLD-CONFIRMED']['age_label']);
+        $this->assertSame('Dispatch now - older than 2 days.', $confirmedItems['OLD-CONFIRMED']['dispatch_note']);
         $this->assertSame(2, $movement['dispatched_waiting_delivery_count']);
         $this->assertSame(2400.0, $movement['dispatched_waiting_delivery_value']);
         $this->assertCount(2, $movement['dispatched_waiting_delivery_items']);

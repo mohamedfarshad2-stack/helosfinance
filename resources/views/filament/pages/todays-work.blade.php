@@ -274,7 +274,7 @@
                         @php
                             $parcelDetailGroups = [
                                 ['key' => 'pending', 'label' => 'Pending to confirm', 'items' => $parcelMovement['pending_confirmation_items'] ?? [], 'total' => $parcelMovement['pending_confirmation_count'] ?? 0, 'tone' => 'orange', 'instruction' => 'Call the customer and confirm the order before dispatch.'],
-                                ['key' => 'confirmed', 'label' => 'Confirmed parcels to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'total' => $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0, 'tone' => 'violet', 'instruction' => 'These parcels are confirmed and still waiting for dispatch.', 'breakdown' => $parcelMovement['confirmed_waiting_dispatch_breakdown'] ?? []],
+                                ['key' => 'confirmed', 'label' => 'Confirmed parcels to dispatch', 'items' => $parcelMovement['confirmed_waiting_dispatch_items'] ?? [], 'total' => $parcelMovement['confirmed_waiting_dispatch_count'] ?? 0, 'tone' => 'violet', 'instruction' => 'These parcels are confirmed and still waiting for dispatch. Confirm within 2 days; older parcels need urgent dispatch.', 'breakdown' => $parcelMovement['confirmed_waiting_dispatch_breakdown'] ?? [], 'fresh_count' => $parcelMovement['confirmed_waiting_dispatch_due_soon_count'] ?? 0, 'stale_count' => $parcelMovement['confirmed_waiting_dispatch_overdue_count'] ?? 0],
                                 ['key' => 'dispatched', 'label' => 'Dispatched not delivered', 'items' => $parcelMovement['dispatched_waiting_delivery_items'] ?? [], 'total' => $parcelMovement['dispatched_waiting_delivery_count'] ?? 0, 'tone' => 'amber', 'instruction' => 'Follow up with courier/customer until these become delivered or a true return.'],
                                 ['key' => 'delivered', 'label' => 'Delivered this month', 'items' => $parcelMovement['delivered_so_far_items'] ?? [], 'total' => $parcelMovement['delivered_so_far_count'] ?? 0, 'tone' => 'emerald', 'instruction' => 'These are already converted to delivered sales this month.'],
                             ];
@@ -294,6 +294,16 @@
                                         <div>
                                             <div class="text-xs font-black uppercase {{ $detailTone }}">{{ $group['label'] }}</div>
                                             <div class="mt-1 text-sm font-semibold text-gray-600 dark:text-gray-300">{{ $group['instruction'] }}</div>
+                                            @if ($group['key'] === 'confirmed')
+                                                <div class="mt-2 flex flex-wrap gap-2 text-xs font-black">
+                                                    <span class="rounded-full bg-violet-100 px-2 py-1 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200">
+                                                        {{ number_format((int) ($group['fresh_count'] ?? 0)) }} confirmed within 2 days
+                                                    </span>
+                                                    <span class="rounded-full {{ (int) ($group['stale_count'] ?? 0) > 0 ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' }} px-2 py-1">
+                                                        {{ number_format((int) ($group['stale_count'] ?? 0)) }} older than 2 days
+                                                    </span>
+                                                </div>
+                                            @endif
                                             <div class="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
                                                 Showing {{ number_format(count($group['items'])) }} of {{ number_format((int) $group['total']) }} parcel(s)
                                             </div>
@@ -332,7 +342,15 @@
                                             <div class="grid grid-cols-[1fr_auto] gap-3 py-2 text-sm">
                                                 <div>
                                                     <div class="font-black text-gray-950 dark:text-white">{{ $item['reference'] }}</div>
-                                                    <div class="text-xs font-semibold capitalize text-gray-500">{{ $item['status'] }} | {{ $item['date'] }}</div>
+                                                    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold capitalize text-gray-500">
+                                                        <span>{{ $item['status'] }} | {{ $item['date'] }}</span>
+                                                        <span class="rounded-full px-2 py-1 font-black {{ ($item['age_tone'] ?? 'neutral') === 'danger' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200' : (($item['age_tone'] ?? 'neutral') === 'warning' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300') }}">
+                                                            {{ $item['age_label'] ?? 'Age unknown' }}
+                                                        </span>
+                                                        <span class="font-bold {{ ($item['age_tone'] ?? 'neutral') === 'danger' ? 'text-red-700 dark:text-red-200' : (($item['age_tone'] ?? 'neutral') === 'warning' ? 'text-amber-700 dark:text-amber-200' : 'text-gray-500 dark:text-gray-400') }}">
+                                                            {{ $item['dispatch_note'] ?? '' }}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 <div class="text-right font-black text-gray-950 dark:text-white">LKR {{ number_format((float) $item['value'], 2) }}</div>
                                             </div>
