@@ -175,8 +175,7 @@ class StockAppPendingParityService
             'dateTo' => $end->toDateString(),
             'clientId' => $clientId,
             'status' => $status,
-            'deliveryStatus' => $status,
-        ], $queryParams));
+        ], array_filter($queryParams, fn ($value): bool => filled($value))));
 
         $ordersPage = Http::timeout(60)
             ->withCookies($cookies, parse_url($baseUrl, PHP_URL_HOST))

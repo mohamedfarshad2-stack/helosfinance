@@ -881,7 +881,7 @@ class TodaysWork extends Page
         $dispatchedValue = (float) $dispatchEvents->sum(fn (OperationalEvent $event): float => $this->stockAppOrderValue($event));
         $liveQueueStart = $this->stockAppQueueStart();
         $pendingSyncCoverage = $this->pendingSyncCoverage($liveQueueStart);
-        $pendingParity = app(StockAppPendingParityService::class)->compare($business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count(), false);
+        $pendingParity = app(StockAppPendingParityService::class)->compare($business, $liveQueueStart, today()->endOfDay(), $pendingConfirmation->count(), false, 'pending', ['deliveryStatus' => 'pending'], 'pending');
         $confirmedParity = app(StockAppPendingParityService::class)->compare(
             $business,
             $liveQueueStart,
@@ -889,7 +889,7 @@ class TodaysWork extends Page
             $confirmedWaitingDispatch->count(),
             true,
             'confirmed',
-            ['deliveryStatus' => null],
+            [],
             'confirmed',
         );
         $confirmedDispatchFreshThreshold = now()->subDays(2);
