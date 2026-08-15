@@ -839,6 +839,36 @@ class WorkQueueIntelligenceTest extends TestCase
         $this->assertSame(2500.0, $movement['dispatched_value']);
     }
 
+    public function test_returns_only_staff_do_not_see_the_parcel_command_board(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Returns Only Business',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $employee = User::query()->create([
+            'name' => 'Sandhamali',
+            'email' => 'sandhamali-returns@example.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'employee_access_profile' => 'work_only',
+            'staff_responsibilities' => ['return_recovery'],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($employee)
+            ->get(TodaysWork::getUrl())
+            ->assertOk()
+            ->assertDontSee('Arafath parcel command board')
+            ->assertDontSee('Confirmed parcels to dispatch')
+            ->assertSee('Returns and resends');
+    }
+
     public function test_employee_parcel_movement_dedupes_mixed_order_identifiers(): void
     {
         $business = Business::query()->create([

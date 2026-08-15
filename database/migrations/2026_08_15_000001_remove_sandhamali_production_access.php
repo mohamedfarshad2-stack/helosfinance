@@ -28,7 +28,7 @@ return new class extends Migration
             return;
         }
 
-        $responsibilities = ['order_confirmation', 'delivery_follow_up', 'return_recovery'];
+        $responsibilities = ['return_recovery'];
 
         DB::table('users')
             ->whereIn('id', $sandhamaliIds)

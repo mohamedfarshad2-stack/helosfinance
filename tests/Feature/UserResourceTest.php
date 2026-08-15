@@ -835,6 +835,7 @@ class UserResourceTest extends TestCase
 
         $this->actingAs($sandhamali);
 
+        $this->assertFalse($sandhamali->hasStaffResponsibility('production', $business->id));
         $this->assertFalse($sandhamali->canAccessProductionWork($business->id));
         $this->assertFalse($sandhamali->canAccessMaterialWork($business->id));
         $this->assertFalse(ProductionEntryResource::canAccess());

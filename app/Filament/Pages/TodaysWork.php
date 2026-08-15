@@ -65,6 +65,7 @@ class TodaysWork extends Page
     public array $selectedParcelItems = [];
 
     private ?string $stockAppUrlCache = null;
+    public bool $canMoveParcels = false;
 
     public function mount(MissionGeneratorService $missions, BusinessHealthSnapshotService $snapshots): void
     {
@@ -77,6 +78,10 @@ class TodaysWork extends Page
         $user = Auth::user();
 
         if ($user instanceof User && $user->isStaff()) {
+            $this->canMoveParcels = $this->business instanceof Business
+                ? $this->canSeeOrderMovement($user, $this->business->id)
+                : false;
+
             try {
                 $visibleMissions = $missions->visibleForUser($user);
                 $this->workQueue = $this->employeeWorkQueue($visibleMissions);
@@ -123,6 +128,7 @@ class TodaysWork extends Page
             'managerProfit' => $this->managerProfit,
             'employeeContribution' => $this->employeeContribution,
             'parcelMovement' => $this->parcelMovement,
+            'canMoveParcels' => $this->canMoveParcels,
             'activeMission' => $this->activeMission(),
             'actionOptions' => $this->actionOptions(),
         ];
@@ -130,17 +136,29 @@ class TodaysWork extends Page
 
     public function updatedParcelStartDate(): void
     {
+        if (! $this->canMoveParcels) {
+            return;
+        }
+
         $this->parcelMovement = $this->employeeParcelMovement();
     }
 
     public function updatedParcelEndDate(): void
     {
+        if (! $this->canMoveParcels) {
+            return;
+        }
+
         $this->parcelMovement = $this->employeeParcelMovement();
     }
 
     public function refreshLivePending(): void
     {
         if (! $this->business) {
+            return;
+        }
+
+        if (! $this->canMoveParcels) {
             return;
         }
 
@@ -1035,11 +1053,7 @@ class TodaysWork extends Page
             return false;
         }
 
-        if ($user->canAccessOrderWork($businessId)) {
-            return true;
-        }
-
-        return in_array($user->employeeAccessProfileValue(), ['work_only', 'operations', 'full_staff'], true);
+        return $user->hasStaffResponsibility(['order_confirmation', 'dispatch', 'delivery_follow_up'], $businessId);
     }
 
     private function pendingSyncCoverage(Carbon $start): array

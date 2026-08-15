@@ -1,5 +1,6 @@
 <x-filament-panels::page>
     <div class="space-y-6">
+        @if ($canMoveParcels ?? false)
         <x-filament::section>
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-2">
@@ -165,6 +166,7 @@
                 {{ $parcelMovement['confirmed_waiting_dispatch_live_note'] ?? 'HELOS will show each confirmed parcel below.' }}
             </div>
         </x-filament::section>
+        @endif
 
         <x-filament::section>
             <div class="text-sm text-gray-600 dark:text-gray-300">
