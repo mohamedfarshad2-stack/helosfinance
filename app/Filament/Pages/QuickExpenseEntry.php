@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\BankTransaction;
 use App\Domains\Shared\Models\Employee;
 use App\Domains\Shared\Models\Expense;
 use Filament\Forms\Components\DatePicker;
@@ -30,6 +31,8 @@ class QuickExpenseEntry extends Page implements HasForms
 
     public ?array $data = [];
 
+    public array $cashSummary = [];
+
     public Collection $recentExpenses;
 
     public function mount(): void
@@ -41,6 +44,7 @@ class QuickExpenseEntry extends Page implements HasForms
             'spent_on' => now()->toDateString(),
         ]);
 
+        $this->refreshCashSummary();
         $this->refreshRecentExpenses();
     }
 
@@ -197,12 +201,14 @@ class QuickExpenseEntry extends Page implements HasForms
             'category' => null,
         ]);
 
+        $this->refreshCashSummary();
         $this->refreshRecentExpenses();
     }
 
     protected function getViewData(): array
     {
         return [
+            'cashSummary' => $this->cashSummary,
             'recentExpenses' => $this->recentExpenses,
         ];
     }
@@ -213,10 +219,33 @@ class QuickExpenseEntry extends Page implements HasForms
 
         $this->recentExpenses = Expense::query()
             ->when($businessIds !== [], fn ($query) => $query->whereIn('business_id', $businessIds))
+            ->where('expense_type', 'variable')
             ->latest('spent_on')
             ->latest('id')
             ->limit(8)
             ->get();
+    }
+
+    private function refreshCashSummary(): void
+    {
+        $businessIds = Auth::user()?->accessibleBusinessIds() ?? [];
+
+        $pettyCashLoaded = BankTransaction::query()
+            ->when($businessIds !== [], fn ($query) => $query->whereIn('business_id', $businessIds))
+            ->where('transaction_type', 'transfer')
+            ->whereIn('counter_money_container', ['Petty Cash', 'Store Cash / Cash Drawer'])
+            ->sum('debit');
+
+        $pettyCashSpent = Expense::query()
+            ->when($businessIds !== [], fn ($query) => $query->whereIn('business_id', $businessIds))
+            ->where('expense_type', 'variable')
+            ->sum('paid_amount');
+
+        $this->cashSummary = [
+            'loaded' => round((float) $pettyCashLoaded, 2),
+            'spent' => round((float) $pettyCashSpent, 2),
+            'remaining' => round(max((float) $pettyCashLoaded - (float) $pettyCashSpent, 0), 2),
+        ];
     }
 
     private function businessOptions(): array
@@ -242,8 +271,6 @@ class QuickExpenseEntry extends Page implements HasForms
             'Repairs',
             'Electricity',
             'Water',
-            'Rent',
-            'Salary',
             'Bank charges',
             'Marketing',
             'Suppliers',

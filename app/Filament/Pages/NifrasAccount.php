@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Domains\FinancialClarity\Services\RevenuePipelineService;
 use App\Domains\Shared\Models\Business;
+use App\Domains\Shared\Models\ProductionEntry;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\WholesaleOrder;
 use App\Domains\Shared\Models\WholesaleLead;
@@ -61,11 +62,15 @@ class NifrasAccount extends Page implements HasForms
 
     public array $leadSummary = [];
 
+    public array $productionSummary = [];
+
     public SupportCollection $customerSummaries;
 
     public SupportCollection $recentWholesaleLeads;
 
     public Collection $recentWholesaleOrders;
+
+    public Collection $recentProductionEntries;
 
     public ?array $data = [];
 
@@ -435,9 +440,11 @@ class NifrasAccount extends Page implements HasForms
             'pipeline' => $this->pipeline,
             'wholesaleSummary' => $this->wholesaleSummary,
             'leadSummary' => $this->leadSummary,
+            'productionSummary' => $this->productionSummary,
             'customerSummaries' => $this->customerSummaries,
             'recentWholesaleLeads' => $this->recentWholesaleLeads,
             'recentWholesaleOrders' => $this->recentWholesaleOrders,
+            'recentProductionEntries' => $this->recentProductionEntries,
             'hasBusiness' => $this->business instanceof Business,
             'isNifras' => static::isNifrasAccount(),
         ];
@@ -462,15 +469,18 @@ class NifrasAccount extends Page implements HasForms
             $this->pipeline = [];
             $this->wholesaleSummary = [];
             $this->leadSummary = [];
+            $this->productionSummary = [];
             $this->customerSummaries = collect();
             $this->recentWholesaleLeads = collect();
             $this->recentWholesaleOrders = collect();
+            $this->recentProductionEntries = collect();
 
             return;
         }
 
         $this->pipeline = $revenuePipeline->forCurrentMonth($this->business);
         $this->loadWholesaleWorkspace();
+        $this->loadProductionWorkspace();
     }
 
     private function loadWholesaleWorkspace(): void
@@ -523,6 +533,33 @@ class NifrasAccount extends Page implements HasForms
         $this->recentWholesaleOrders = $orders->take(8)->values();
         $this->customerSummaries = $this->customerSummariesFor($orders)->take(8)->values();
         $this->recentWholesaleLeads = $this->leadQueueFor($leads)->take(12)->values();
+    }
+
+    private function loadProductionWorkspace(): void
+    {
+        if (! $this->business instanceof Business) {
+            $this->productionSummary = [];
+            $this->recentProductionEntries = collect();
+
+            return;
+        }
+
+        $entries = ProductionEntry::query()
+            ->where('business_id', $this->business->id)
+            ->whereDate('produced_on', '>=', now()->startOfMonth())
+            ->orderByDesc('produced_on')
+            ->orderByDesc('id')
+            ->get();
+
+        $this->productionSummary = [
+            'rows_this_month' => $entries->count(),
+            'labour_cost_total' => round((float) $entries->sum('employee_payout'), 2),
+            'net_payable_total' => round((float) $entries->sum('net_payable'), 2),
+            'paid_rows' => $entries->where('payment_status', 'paid')->count(),
+            'pending_rows' => $entries->where('payment_status', 'pending')->count(),
+        ];
+
+        $this->recentProductionEntries = $entries->take(5)->values();
     }
 
     private function customerSummariesFor(Collection $orders): SupportCollection

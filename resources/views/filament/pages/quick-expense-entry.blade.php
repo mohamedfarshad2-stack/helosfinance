@@ -1,6 +1,24 @@
 <x-filament-panels::page>
     <div class="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
         <x-filament::section>
+            <div class="mb-4 grid gap-3 md:grid-cols-3">
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                    <div class="text-sm font-medium text-gray-600 dark:text-gray-400">Petty cash loaded</div>
+                    <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) ($cashSummary['loaded'] ?? 0), 2) }}</div>
+                    <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Transferred into petty cash / store cash.</div>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                    <div class="text-sm font-medium text-gray-600 dark:text-gray-400">Quick spends recorded</div>
+                    <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) ($cashSummary['spent'] ?? 0), 2) }}</div>
+                    <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Only quick petty-cash spends are counted here.</div>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                    <div class="text-sm font-medium text-gray-600 dark:text-gray-400">Cash left</div>
+                    <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">LKR {{ number_format((float) ($cashSummary['remaining'] ?? 0), 2) }}</div>
+                    <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">This is what remains after quick expense entries.</div>
+                </div>
+            </div>
+
             <div class="mb-4 flex justify-end">
                 <x-filament::button tag="a" href="{{ url('/admin/expenses') }}" color="gray" icon="heroicon-o-rectangle-stack">
                     Open expense review
@@ -59,7 +77,7 @@
                         </div>
                     @empty
                         <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                            No quick spend recorded yet.
+                            No quick petty-cash spend recorded yet.
                         </div>
                     @endforelse
                 </div>

@@ -58,6 +58,78 @@
             <div class="rounded-xl border border-gray-200 bg-white p-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
+                        <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Labour cost split</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Labour cost from the current month production entries.</p>
+                    </div>
+                    <x-filament::button tag="a" href="{{ \App\Filament\Resources\ProductionEntryResource::getUrl('index') }}" color="gray" icon="heroicon-o-clipboard-document-list">
+                        Open production board
+                    </x-filament::button>
+                </div>
+
+                <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-xl border border-gray-200 p-4">
+                        <div class="text-sm font-medium text-gray-600">Production rows this month</div>
+                        <div class="mt-1 text-3xl font-semibold">{{ number_format((int) ($productionSummary['rows_this_month'] ?? 0)) }}</div>
+                        <div class="mt-1 text-sm text-gray-500">Every row recorded in production this month.</div>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 p-4">
+                        <div class="text-sm font-medium text-gray-600">Labour cost</div>
+                        <div class="mt-1 text-3xl font-semibold">LKR {{ number_format((float) ($productionSummary['labour_cost_total'] ?? 0), 2) }}</div>
+                        <div class="mt-1 text-sm text-gray-500">This is the employee payout portion.</div>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 p-4">
+                        <div class="text-sm font-medium text-gray-600">Net payable</div>
+                        <div class="mt-1 text-3xl font-semibold">LKR {{ number_format((float) ($productionSummary['net_payable_total'] ?? 0), 2) }}</div>
+                        <div class="mt-1 text-sm text-gray-500">
+                            {{ number_format((int) ($productionSummary['paid_rows'] ?? 0)) }} paid and {{ number_format((int) ($productionSummary['pending_rows'] ?? 0)) }} pending.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-3">
+                    @forelse ($recentProductionEntries as $entry)
+                        <div class="rounded-xl border border-gray-200 p-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="font-semibold text-gray-950">{{ $entry->sku?->code ?? 'Production row' }}</div>
+                                    <div class="text-sm text-gray-500">
+                                        {{ $entry->employee_name ?? 'Unassigned worker' }}
+                                        @if ($entry->production_step)
+                                            &bull; {{ $entry->production_step }}
+                                        @endif
+                                    </div>
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        {{ $entry->production_kind === 'finished_product' ? 'Finished product' : 'Part production' }}
+                                        &bull; Qty {{ number_format((int) $entry->quantity_produced) }}
+                                        @if ($entry->part_name)
+                                            &bull; {{ $entry->part_name }}
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-semibold text-gray-950">LKR {{ number_format((float) $entry->employee_payout, 2) }}</div>
+                                    <div class="text-sm text-gray-500">Labour</div>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 grid gap-2 text-sm text-gray-600 md:grid-cols-4">
+                                <div>Net payable: <span class="font-medium text-gray-900">LKR {{ number_format((float) $entry->net_payable, 2) }}</span></div>
+                                <div>Paid status: <span class="font-medium text-gray-900">{{ $entry->payment_status === 'paid' ? 'Paid' : 'Pending' }}</span></div>
+                                <div>Date: <span class="font-medium text-gray-900">{{ optional($entry->produced_on)->format('Y-m-d') }}</span></div>
+                                <div>Labour rate: <span class="font-medium text-gray-900">LKR {{ number_format((float) $entry->employee_payout, 2) }}</span></div>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                            No production rows found for this month yet.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
                         <h2 class="text-lg font-semibold text-gray-950 dark:text-white">Lead desk</h2>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Open this desk to import a sample Excel file and work wholesale leads in one place.</p>
                     </div>
