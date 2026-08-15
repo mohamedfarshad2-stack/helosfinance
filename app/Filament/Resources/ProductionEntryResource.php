@@ -102,9 +102,10 @@ class ProductionEntryResource extends Resource
                     Select::make('sku_recipe_item_id')
                         ->label('Production work / pay step')
                         ->placeholder('Select work step')
-                        ->helperText('This decides the rate per piece.')
+                        ->helperText('Optional. Use only when HELOS has saved work-step rates for this SKU. Otherwise HELOS will use the SKU labor cost.')
                         ->live()
                         ->options(fn (Get $get) => static::laborStepOptions((int) ($get('sku_id') ?? 0), (string) ($get('part_name') ?? ''), (string) ($get('production_kind') ?? 'part_production')))
+                        ->visible(fn (Get $get): bool => static::hasLaborStepOptions((int) ($get('sku_id') ?? 0), (string) ($get('part_name') ?? ''), (string) ($get('production_kind') ?? 'part_production')))
                         ->searchable()
                         ->preload()
                         ->afterStateUpdated(function (Get $get, Set $set): void {
@@ -131,6 +132,35 @@ class ProductionEntryResource extends Resource
                         ->minValue(1)
                         ->helperText('Enter only the completed quantity.')
                         ->extraInputAttributes(['inputmode' => 'numeric']),
+                    Select::make('rate_mode')
+                        ->label('Rate option')
+                        ->options([
+                            'standard' => 'Saved work step / SKU labor cost',
+                            'special' => 'Special rate',
+                        ])
+                        ->default('standard')
+                        ->live()
+                        ->helperText('Choose special rate only when this batch pays a different amount.')
+                        ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
+                            if ($state !== 'special') {
+                                $set('piece_rate', null);
+                            }
+
+                            $set('employee_payout', static::calculateGrossPay($get));
+                            $set('net_payable', static::calculateNetPayable($get));
+                        }),
+                    TextInput::make('piece_rate')
+                        ->label('Special piece rate')
+                        ->numeric()
+                        ->prefix('LKR')
+                        ->helperText('Enter the special amount only when Rate option is set to Special rate.')
+                        ->visible(fn (Get $get): bool => ($get('rate_mode') ?? 'standard') === 'special')
+                        ->required(fn (Get $get): bool => ($get('rate_mode') ?? 'standard') === 'special')
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (Get $get, Set $set): void {
+                            $set('employee_payout', static::calculateGrossPay($get));
+                            $set('net_payable', static::calculateNetPayable($get));
+                        }),
                     DatePicker::make('produced_on')
                         ->label('Production date')
                         ->required()
@@ -144,16 +174,6 @@ class ProductionEntryResource extends Resource
                         ->readOnly()
                         ->dehydrated()
                         ->placeholder('Auto-filled from selected work step'),
-                    TextInput::make('piece_rate')
-                        ->label('Rate per piece')
-                        ->numeric()
-                        ->prefix('LKR')
-                        ->helperText('Auto-filled from the SKU recipe labor line. Adjust only if this batch has a special rate.')
-                        ->live(onBlur: true)
-                        ->afterStateUpdated(function (Get $get, Set $set): void {
-                            $set('employee_payout', static::calculateGrossPay($get));
-                            $set('net_payable', static::calculateNetPayable($get));
-                        }),
                     TextInput::make('waste_quantity')
                         ->label('Waste / damaged quantity')
                         ->numeric()
@@ -403,6 +423,11 @@ class ProductionEntryResource extends Resource
             ->all();
     }
 
+    private static function hasLaborStepOptions(int $skuId, string $partName = '', string $productionKind = 'part_production'): bool
+    {
+        return static::laborStepOptions($skuId, $partName, $productionKind) !== [];
+    }
+
     private static function partOptions(int $skuId): array
     {
         if ($skuId <= 0) {
@@ -523,12 +548,13 @@ class ProductionEntryResource extends Resource
         $skuId = (int) ($get('sku_id') ?? 0);
         $quantity = max((int) ($get('quantity_produced') ?? 0), 0);
         $pieceRate = (float) ($get('piece_rate') ?? 0);
+        $rateMode = (string) ($get('rate_mode') ?? 'standard');
 
         if ($skuId <= 0 || $quantity <= 0) {
             return 0.0;
         }
 
-        if ($pieceRate > 0) {
+        if ($rateMode === 'special' && $pieceRate > 0) {
             return $pieceRate * $quantity;
         }
 
