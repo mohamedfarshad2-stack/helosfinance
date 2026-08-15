@@ -379,6 +379,39 @@ class WorkQueueIntelligenceTest extends TestCase
             ->assertRedirect(TodaysWork::getUrl());
     }
 
+    public function test_sandhamali_does_not_land_on_todays_work(): void
+    {
+        $business = Business::query()->create([
+            'name' => 'Sandhamali No Dashboard Client',
+            'currency' => 'LKR',
+            'business_type' => Business::TYPE_MANUFACTURING,
+            'business_maturity' => Business::MATURITY_LEVEL_5,
+            'onboarding_status' => 'ready',
+        ]);
+
+        $user = User::query()->create([
+            'name' => 'Sandhamali',
+            'email' => 'sandhamali@helos.com',
+            'password' => Hash::make('password'),
+            'business_id' => $business->id,
+            'is_employee' => true,
+            'is_platform_admin' => false,
+            'employee_access_profile' => 'work_only',
+            'staff_responsibilities' => ['return_recovery'],
+            'responsibilities_configured' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        $this->assertFalse(TodaysWork::canAccess());
+        $this->assertFalse(TodaysWork::shouldRegisterNavigation());
+
+        $this->get(TodaysWork::getUrl())->assertForbidden();
+        $this->get('/admin')->assertOk();
+        $this->assertFalse($user->hasStaffResponsibility(['order_confirmation', 'dispatch', 'delivery_follow_up'], $business->id));
+        $this->assertFalse($user->canAccessProductionWork($business->id));
+    }
+
     public function test_internal_admins_land_on_client_businesses(): void
     {
         $business = Business::query()->create([

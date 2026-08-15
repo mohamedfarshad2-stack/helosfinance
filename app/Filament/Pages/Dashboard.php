@@ -13,7 +13,7 @@ class Dashboard extends BaseDashboard
     {
         $user = Auth::user();
 
-        if ($user?->isStaff()) {
+        if ($user?->isStaff() && strtolower((string) $user?->email) !== 'sandhamali@helos.com') {
             $this->redirect(TodaysWork::getUrl());
 
             return;

@@ -220,12 +220,19 @@ class TodaysWork extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::user()?->isStaff() ?? false;
+        $user = Auth::user();
+
+        return (bool) ($user?->canAccessOrderWork() ?? false)
+            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
     }
 
     public static function canAccess(): bool
     {
-        return Auth::check() && (Auth::user()?->isStaff() ?? false);
+        $user = Auth::user();
+
+        return Auth::check()
+            && (bool) ($user?->canAccessOrderWork() ?? false)
+            && strtolower((string) $user?->email) !== 'sandhamali@helos.com';
     }
 
     public function startMission(int $missionId, MissionGeneratorService $missions): void
