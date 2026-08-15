@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Domains\FinancialClarity\Services\CourierRateService;
 use App\Domains\FinancialClarity\Services\RevenuePipelineService;
 use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\Sku;
@@ -146,6 +145,13 @@ class NifrasAccount extends Page implements HasForms
                     ->prefix('LKR')
                     ->default(0)
                     ->live(),
+                TextInput::make('transport_cost_amount')
+                    ->label('Transport cost')
+                    ->numeric()
+                    ->prefix('LKR')
+                    ->default(0)
+                    ->live()
+                    ->helperText('Enter the real transport amount manually. Do not guess it.'),
                 TextInput::make('paid_amount')
                     ->label('Paid now')
                     ->numeric()
@@ -211,7 +217,7 @@ class NifrasAccount extends Page implements HasForms
             ->columns(2);
     }
 
-    public function saveWholesaleOrder(CourierRateService $courierRates): void
+    public function saveWholesaleOrder(): void
     {
         $data = $this->form->getState();
 
@@ -241,7 +247,7 @@ class NifrasAccount extends Page implements HasForms
         $productCostAmount = round(collect($lineItems)->sum(fn (array $item): float => $this->lineItemCostAmount($item)), 2);
         $discountAmount = max((float) ($data['discount_amount'] ?? 0), 0);
         $deliveryChargeCharged = max((float) ($data['delivery_charge_charged'] ?? 0), 0);
-        $courierCostAmount = $this->resolveCourierCost($courierRates, $data);
+        $transportCostAmount = max((float) ($data['transport_cost_amount'] ?? 0), 0);
         $netSalesAmount = round(max($grossSaleAmount + $deliveryChargeCharged - $discountAmount, 0), 2);
         $paidAmount = max((float) ($data['paid_amount'] ?? 0), 0);
         $status = $this->normaliseStatus((string) ($data['status'] ?? WholesaleOrder::STATUS_BOOKED));
@@ -283,11 +289,11 @@ class NifrasAccount extends Page implements HasForms
             'gross_sale_amount' => $grossSaleAmount,
             'discount_amount' => $discountAmount,
             'delivery_charge_charged' => $deliveryChargeCharged,
-            'courier_cost_amount' => $courierCostAmount,
+            'courier_cost_amount' => $transportCostAmount,
             'product_cost_amount' => $productCostAmount,
             'net_sales_amount' => $netSalesAmount,
             'paid_amount' => $paidAmount,
-            'gross_profit_amount' => round($netSalesAmount - $productCostAmount - $courierCostAmount, 2),
+            'gross_profit_amount' => round($netSalesAmount - $productCostAmount - $transportCostAmount, 2),
             'next_follow_up_at' => $nextFollowUpAt,
             'reorder_due_at' => $reorderDueAt,
             'delivered_at' => $deliveredAt,
@@ -487,6 +493,7 @@ class NifrasAccount extends Page implements HasForms
             'delivery_method' => WholesaleOrder::DELIVERY_COURIER,
             'discount_amount' => 0,
             'delivery_charge_charged' => 0,
+            'transport_cost_amount' => 0,
             'paid_amount' => 0,
             'line_items' => [
                 [
@@ -574,24 +581,6 @@ class NifrasAccount extends Page implements HasForms
         $unitCost = max((float) ($item['unit_cost'] ?? 0), 0);
 
         return $quantity * $unitCost;
-    }
-
-    private function resolveCourierCost(CourierRateService $courierRates, array $data): float
-    {
-        if (($data['delivery_method'] ?? WholesaleOrder::DELIVERY_PICKUP) === WholesaleOrder::DELIVERY_PICKUP) {
-            return 0.0;
-        }
-
-        if (! $this->business instanceof Business) {
-            return 0.0;
-        }
-
-        $courierName = trim((string) ($data['courier_name'] ?? ''));
-        $rate = filled($courierName)
-            ? $courierRates->rateForBusiness($this->business->id, $courierName)
-            : $courierRates->defaultRateForBusiness($this->business->id);
-
-        return round((float) ($rate?->delivery_charge ?? 0), 2);
     }
 
     private function normaliseStatus(string $status): string
@@ -690,13 +679,10 @@ class NifrasAccount extends Page implements HasForms
         $discountAmount = max((float) ($get('discount_amount') ?? 0), 0);
         $deliveryChargeCharged = max((float) ($get('delivery_charge_charged') ?? 0), 0);
         $paidAmount = max((float) ($get('paid_amount') ?? 0), 0);
+        $transportCostAmount = max((float) ($get('transport_cost_amount') ?? 0), 0);
         $netSalesAmount = round(max($grossSaleAmount + $deliveryChargeCharged - $discountAmount, 0), 2);
         $outstandingAmount = round(max($netSalesAmount - $paidAmount, 0), 2);
-        $deliveryCost = $this->resolveCourierCost(app(CourierRateService::class), [
-            'delivery_method' => $get('delivery_method'),
-            'courier_name' => $get('courier_name'),
-        ]);
-        $grossProfitAmount = round($netSalesAmount - $productCostAmount - $deliveryCost, 2);
+        $grossProfitAmount = round($netSalesAmount - $productCostAmount - $transportCostAmount, 2);
         $margin = $netSalesAmount > 0 ? round(($grossProfitAmount / $netSalesAmount) * 100, 1) : 0.0;
 
         return new HtmlString(
@@ -707,8 +693,8 @@ class NifrasAccount extends Page implements HasForms
             .'<div><div class="text-xs uppercase tracking-wide text-gray-500">Profit preview</div><div class="text-base font-semibold">LKR '.number_format($grossProfitAmount, 2).'</div></div>'
             .'<div><div class="text-xs uppercase tracking-wide text-gray-500">Outstanding</div><div class="text-base font-semibold">LKR '.number_format($outstandingAmount, 2).'</div></div>'
             .'</div>'
-            .'<div class="mt-3 text-xs text-gray-500">Product cost uses SKU production cost. Delivery cost uses courier rates when they exist. If HELOS cannot find a courier rate, the preview stays conservative.</div>'
-            .'<div class="mt-2 text-xs text-gray-500">Estimated courier cost: LKR '.number_format($deliveryCost, 2).' • Margin: '.$margin.'%</div>'
+            .'<div class="mt-3 text-xs text-gray-500">Product cost uses SKU production cost. Transport cost is entered manually so the preview matches the real freight amount.</div>'
+            .'<div class="mt-2 text-xs text-gray-500">Transport cost: LKR '.number_format($transportCostAmount, 2).' • Margin: '.$margin.'%</div>'
             .'</div>'
         );
     }

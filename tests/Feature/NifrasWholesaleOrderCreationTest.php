@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Domains\Shared\Models\Business;
-use App\Domains\Shared\Models\CourierRate;
 use App\Domains\Shared\Models\Sku;
 use App\Domains\Shared\Models\WholesaleOrder;
 use App\Filament\Pages\NifrasAccount;
@@ -66,15 +65,6 @@ class NifrasWholesaleOrderCreationTest extends TestCase
             'active' => true,
         ]);
 
-        CourierRate::query()->create([
-            'business_id' => $business->id,
-            'courier_name' => 'Fast Express',
-            'delivery_charge' => 300,
-            'return_charge' => 150,
-            'resend_charge' => 120,
-            'active' => true,
-        ]);
-
         $nifras = User::query()->create([
             'name' => 'Nifras',
             'email' => 'nifras@helos.com',
@@ -100,6 +90,7 @@ class NifrasWholesaleOrderCreationTest extends TestCase
                 'courier_name' => 'Fast Express',
                 'discount_amount' => 150,
                 'delivery_charge_charged' => 250,
+                'transport_cost_amount' => 300,
                 'paid_amount' => 2000,
                 'notes' => 'First wholesale booking through the Nifras account desk.',
                 'line_items' => [
