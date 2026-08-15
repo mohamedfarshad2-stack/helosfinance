@@ -33,6 +33,7 @@ Supports service businesses or service income streams: clients, billing periods,
 
 Service client setup -> billing record with period/due/payment status -> paid/balance due calculation -> revenue/cash/work queue/dashboard signals.
 Sandhamali service workspace -> service lead capture/import -> lead conversion into service clients -> automatic first billing row for the client -> recurring payment reminders.
+Sandhamali account now keeps its visible active-client list tied to billing-backed live truth and clears orphan manual client rows so the page does not keep showing owner-added test clients.
 
 ## Important Business Rules
 

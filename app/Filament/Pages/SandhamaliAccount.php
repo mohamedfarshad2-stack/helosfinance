@@ -400,13 +400,13 @@ class SandhamaliAccount extends Page implements HasForms
             return;
         }
 
+        $this->purgeUnsyncedServiceClients($this->business);
+
         $service = $revenuePipeline->forCurrentMonth($this->business)['service'] ?? [];
 
-        $this->activeServiceClients = ServiceClient::query()
-            ->where('business_id', $this->business->id)
-            ->orderBy('status')
-            ->orderBy('name')
-            ->get();
+        $this->activeServiceClients = $this->liveServiceClients($this->business)
+            ->sortBy(fn (ServiceClient $client): array => [$client->status, Str::lower($client->name)])
+            ->values();
 
         $leadOrder = array_flip([
             ServiceLead::STATUS_LEAD,
@@ -473,6 +473,34 @@ class SandhamaliAccount extends Page implements HasForms
             'overdue_billing' => $overdueBilling,
             'client_work_open' => $this->clientWorkQueue->count(),
         ];
+    }
+
+    private function liveServiceClients(Business $business): SupportCollection
+    {
+        return ServiceClient::query()
+            ->where('business_id', $business->id)
+            ->whereHas('billingRecords')
+            ->get();
+    }
+
+    private function purgeUnsyncedServiceClients(Business $business): void
+    {
+        if (! static::isSandhamaliAccount()) {
+            return;
+        }
+
+        $orphanClientIds = ServiceClient::query()
+            ->where('business_id', $business->id)
+            ->whereDoesntHave('billingRecords')
+            ->pluck('id');
+
+        if ($orphanClientIds->isEmpty()) {
+            return;
+        }
+
+        ServiceClient::query()
+            ->whereIn('id', $orphanClientIds)
+            ->delete();
     }
 
     private function defaultLeadFormState(): array

@@ -38,6 +38,15 @@ class SandhamaliAccountTest extends TestCase
             'default_due_day' => 5,
         ]);
 
+        ServiceClient::query()->create([
+            'business_id' => $business->id,
+            'name' => 'Temporary Manual Client',
+            'status' => ServiceClient::STATUS_ACTIVE,
+            'billing_style' => ServiceClient::BILLING_FIXED_MONTHLY,
+            'default_monthly_amount' => 5000,
+            'default_due_day' => 10,
+        ]);
+
         ServiceBillingRecord::query()->create([
             'business_id' => $business->id,
             'client_name' => 'Peak Logistics',
@@ -84,6 +93,12 @@ class SandhamaliAccountTest extends TestCase
             ->assertSee('Sandhamali account')
             ->assertSee('Peak Logistics')
             ->assertSee('Return Care Lanka')
+            ->assertDontSee('Temporary Manual Client')
             ->assertDontSee('Arafath parcel command board');
+
+        $this->assertDatabaseMissing('service_clients', [
+            'business_id' => $business->id,
+            'name' => 'Temporary Manual Client',
+        ]);
     }
 }
