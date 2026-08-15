@@ -319,12 +319,24 @@
                                                     </div>
                                                 @else
                                                     <div class="mt-1 text-sm font-black text-violet-700 dark:text-violet-200">
-                                                        Confirmed value will appear after refresh.
+                                                        Open the live confirmed queue to see the LKR value.
                                                     </div>
                                                 @endif
                                             @endif
                                         </div>
-                                        <button type="button" x-on:click="activeLane = null" class="rounded-lg px-3 py-1 text-xs font-black text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-800 dark:hover:bg-gray-900">Close</button>
+                                        <div class="flex flex-col items-end gap-2">
+                                            @if ($group['key'] === 'confirmed' && filled($parcelMovement['confirmed_waiting_dispatch_live_url'] ?? null))
+                                                <a
+                                                    href="{{ $parcelMovement['confirmed_waiting_dispatch_live_url'] }}"
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    class="rounded-lg bg-violet-600 px-3 py-1 text-xs font-black text-white shadow-sm transition hover:bg-violet-700"
+                                                >
+                                                    Open live queue
+                                                </a>
+                                            @endif
+                                            <button type="button" x-on:click="activeLane = null" class="rounded-lg px-3 py-1 text-xs font-black text-gray-500 ring-1 ring-gray-200 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-800 dark:hover:bg-gray-900">Close</button>
+                                        </div>
                                     </div>
                                     @if ($group['key'] !== 'confirmed' || ! empty($group['items']))
                                         <div class="mt-3 grid gap-2 lg:grid-cols-4">
@@ -355,7 +367,7 @@
                                     @endif
                                     @if ($group['key'] === 'confirmed' && empty($group['items']))
                                         <div class="mt-3 rounded-lg border border-violet-100 bg-violet-50 p-3 text-sm text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-100">
-                                            HELOAS has the live confirmed count. The live amount is shown above, and synced parcel rows will appear here after refresh.
+                                            HELOAS has the live confirmed count. Open the live queue to inspect the 62 parcels in Stock App while HELOAS catches up on synced rows.
                                         </div>
                                     @else
                                         <div class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">

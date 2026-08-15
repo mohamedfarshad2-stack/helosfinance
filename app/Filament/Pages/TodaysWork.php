@@ -931,6 +931,7 @@ class TodaysWork extends Page
             'confirmed_waiting_dispatch_live_value' => $confirmedParity['live_value'],
             'confirmed_waiting_dispatch_live_note' => $confirmedParity['note'],
             'confirmed_waiting_dispatch_live_warning' => $confirmedParity['warning'],
+            'confirmed_waiting_dispatch_live_url' => $this->stockAppConfirmedQueueUrl($liveQueueStart, today()->endOfDay()),
             'confirmed_waiting_dispatch_due_soon_count' => $confirmedWaitingDispatchFresh->count(),
             'confirmed_waiting_dispatch_overdue_count' => $confirmedWaitingDispatchStale->count(),
             'confirmed_waiting_dispatch_items' => $this->parcelMovementItems($confirmedWaitingDispatch, 40),
@@ -1759,6 +1760,34 @@ class TodaysWork extends Page
             ->value('base_url');
 
         return $this->stockAppUrlCache = rtrim((string) ($baseUrl ?: 'https://codreturnslanka.lk'), '/').'/admin';
+    }
+
+    private function stockAppConfirmedQueueUrl(Carbon $start, Carbon $end): ?string
+    {
+        $integration = IntegrationSource::query()
+            ->where('business_id', $this->business?->id)
+            ->where('type', 'stock_app')
+            ->orderByDesc('last_successful_sync_at')
+            ->orderByDesc('last_webhook_received_at')
+            ->first();
+
+        if (! $integration instanceof IntegrationSource) {
+            return null;
+        }
+
+        $clientId = $integration->stockAppPendingReadConfig()['client_id'] ?? null;
+
+        if (! is_int($clientId) || $clientId <= 0) {
+            return null;
+        }
+
+        return $this->stockAppUrl().'/client-orders-improved?'.http_build_query([
+            'dateFrom' => $start->toDateString(),
+            'dateTo' => $end->toDateString(),
+            'clientId' => $clientId,
+            'status' => 'confirmed',
+            'deliveryStatus' => '',
+        ]);
     }
 
     private function resolvedBusinessId(): ?int
