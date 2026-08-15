@@ -17,12 +17,17 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 - The page is gated by email, so only `nifras@helos.com` can access it.
 - The page uses a separate Blade view at `resources/views/filament/pages/nifras-account.blade.php`.
 - A focused access test exists at `tests/Feature/NifrasAccountAccessTest.php`.
+- A wholesale order desk now lives inside the Nifras account page itself.
+- That desk calculates gross sales, product cost, courier cost, net sales, gross profit, paid amount, and outstanding balance.
+- Wholesale customer history and repeat-follow-up timing now appear on the same Nifras account surface.
 
 ## Current page behavior
 
 - Shows a Nifras heading and summary cards when the signed-in user is `nifras@helos.com`.
-- Uses current-month wholesale data from `RevenuePipelineService`.
 - Shows wholesale pipeline numbers from `RevenuePipelineService`.
+- Shows a wholesale order form with product lines, delivery charge, payment, and profit preview.
+- Saves wholesale orders into `wholesale_orders`.
+- Shows recent wholesale orders and repeat-customer summaries.
 - Links to operational order events from the page.
 - Redirects non-Nifras users away from the page.
 - Direct-report summary has been moved to `TodaysWork` as the team-work surface.
@@ -38,12 +43,16 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 
 - `app/Filament/Pages/NifrasAccount.php`
 - `resources/views/filament/pages/nifras-account.blade.php`
+- `app/Domains/Shared/Models/WholesaleOrder.php`
+- `database/migrations/2026_08_15_000001_create_wholesale_orders_table.php`
 - `tests/Feature/NifrasAccountAccessTest.php`
+- `tests/Feature/NifrasWholesaleOrderCreationTest.php`
 
 ## Verified locally
 
 - PHP syntax checks pass for the page, view, and test.
 - The access test passes locally.
+- The wholesale order creation test passes locally.
 
 ## What is not yet done
 

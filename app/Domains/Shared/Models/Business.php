@@ -436,6 +436,11 @@ class Business extends Model
         return $this->hasMany(CodOrder::class);
     }
 
+    public function wholesaleOrders(): HasMany
+    {
+        return $this->hasMany(WholesaleOrder::class);
+    }
+
     public function codOrderSources(): HasMany
     {
         return $this->hasMany(CodOrderSource::class);
