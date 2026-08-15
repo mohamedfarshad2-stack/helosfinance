@@ -226,7 +226,8 @@ class TodaysWork extends Page
     {
         $user = Auth::user();
 
-        return (bool) ($user?->canAccessOrderWork() ?? false)
+        return Auth::check()
+            && ($user?->isStaff() ?? false)
             && ! $user?->isSandhamaliAccount();
     }
 
@@ -235,7 +236,7 @@ class TodaysWork extends Page
         $user = Auth::user();
 
         return Auth::check()
-            && (bool) ($user?->canAccessOrderWork() ?? false)
+            && ($user?->isStaff() ?? false)
             && ! $user?->isSandhamaliAccount();
     }
 
@@ -1066,6 +1067,10 @@ class TodaysWork extends Page
 
         if ($user->isSandhamaliAccount()) {
             return false;
+        }
+
+        if ($user->canAccessOperationalTasks() || $user->canAccessFullStaff()) {
+            return true;
         }
 
         return $user->hasStaffResponsibility(['order_confirmation', 'dispatch', 'delivery_follow_up'], $businessId);
