@@ -26,8 +26,7 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 - The lead import sheet records customer name, contact person, phone, WhatsApp number, source, status, products of interest, notes, and next follow-up date.
 - The lead queue shows quick Call and WhatsApp actions so Nifras can contact leads without jumping to another page.
 - A sample lead template can be downloaded from the Nifras page.
-- A products and production block is now visible on the same page so Nifras can see daily slipper output, labour rows, and unpaid piece pay.
-- A petty cash block is now visible on the same page so Nifras can see small cash spends, balance due, and recent cash rows.
+- The Nifras page now exposes shortcuts to the existing production board and petty cash screen instead of duplicating those dashboards.
 - Transport cost is entered manually on the order desk so profit preview reflects the real freight amount instead of guessing a courier rate.
 
 ## Current page behavior
@@ -75,7 +74,6 @@ The page should show Nifras-specific wholesale visibility without exposing the s
 - The page is not yet confirmed on the hosted environment.
 - The page changes need a fresh push after the lead desk update.
 - The page changes need a fresh push after the bulk lead desk update.
-- The page changes need a fresh push after the production and petty cash visibility update.
 - The wider Nifras CRM/funnel work is still pending if the goal is to build beyond this account page.
 - Team review now lives on `TodaysWork` instead of the Nifras account page.
 - `TodaysWork` now shows the Nifras shortcut at the top of the work board.
