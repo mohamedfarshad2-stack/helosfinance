@@ -60,6 +60,13 @@ class SandhamaliAccount extends Page implements HasForms
 
     public array $teamExceptionSummary = [];
 
+    public array $stockAppSyncStatus = [
+        'available' => null,
+        'note' => null,
+        'synced_clients' => 0,
+        'synced_billing_records' => 0,
+    ];
+
     public SupportCollection $recentServiceLeads;
 
     public SupportCollection $activeServiceClients;
@@ -372,6 +379,7 @@ class SandhamaliAccount extends Page implements HasForms
             'clientSummary' => $this->clientSummary,
             'billingSummary' => $this->billingSummary,
             'teamExceptionSummary' => $this->teamExceptionSummary,
+            'stockAppSyncStatus' => $this->stockAppSyncStatus,
             'recentServiceLeads' => $this->recentServiceLeads,
             'activeServiceClients' => $this->activeServiceClients,
             'billingDueRecords' => $this->billingDueRecords,
@@ -393,6 +401,12 @@ class SandhamaliAccount extends Page implements HasForms
             $this->clientSummary = [];
             $this->billingSummary = [];
             $this->teamExceptionSummary = [];
+            $this->stockAppSyncStatus = [
+                'available' => null,
+                'note' => null,
+                'synced_clients' => 0,
+                'synced_billing_records' => 0,
+            ];
             $this->recentServiceLeads = collect();
             $this->activeServiceClients = collect();
             $this->billingDueRecords = collect();
@@ -401,8 +415,12 @@ class SandhamaliAccount extends Page implements HasForms
             return;
         }
 
-        app(StockAppClientSyncService::class)->sync($this->business);
-        $this->purgeUnsyncedServiceClients($this->business);
+        $syncResult = app(StockAppClientSyncService::class)->sync($this->business);
+        $this->stockAppSyncStatus = $syncResult;
+
+        if (($syncResult['available'] ?? false) === true) {
+            $this->purgeUnsyncedServiceClients($this->business);
+        }
 
         $service = $revenuePipeline->forCurrentMonth($this->business)['service'] ?? [];
 

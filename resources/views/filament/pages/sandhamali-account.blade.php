@@ -30,6 +30,19 @@
                 </div>
             </div>
 
+            @if (($stockAppSyncStatus['note'] ?? null))
+                <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+                    <div class="font-medium text-gray-900">Stock App sync</div>
+                    <div class="mt-1">{{ $stockAppSyncStatus['note'] }}</div>
+                </div>
+            @endif
+
+            @if (($stockAppSyncStatus['available'] ?? null) === true)
+                <div class="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+                    Live Stock App rows synced: {{ number_format((int) ($stockAppSyncStatus['synced_clients'] ?? 0)) }} clients, {{ number_format((int) ($stockAppSyncStatus['synced_billing_records'] ?? 0)) }} billing rows.
+                </div>
+            @endif
+
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <div class="rounded-xl border border-gray-200 bg-white p-4">
                     <div class="text-sm font-medium text-gray-600">Active clients</div>

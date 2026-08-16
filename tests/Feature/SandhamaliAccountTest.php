@@ -96,7 +96,7 @@ class SandhamaliAccountTest extends TestCase
             ->assertDontSee('Temporary Manual Client')
             ->assertDontSee('Arafath parcel command board');
 
-        $this->assertDatabaseMissing('service_clients', [
+        $this->assertDatabaseHas('service_clients', [
             'business_id' => $business->id,
             'name' => 'Temporary Manual Client',
         ]);

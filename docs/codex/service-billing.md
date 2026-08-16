@@ -35,6 +35,7 @@ Service client setup -> billing record with period/due/payment status -> paid/ba
 Sandhamali service workspace -> service lead capture/import -> lead conversion into service clients -> automatic first billing row for the client -> recurring payment reminders.
 Sandhamali account now keeps its visible active-client list tied to billing-backed live truth and clears orphan manual client rows so the page does not keep showing owner-added test clients.
 Sandhamali now can live-sync service clients and pricing rows from Stock App admin pages into HELOS so the active-client list reflects the current Stock App truth instead of manual test rows.
+Sandhamali now shows the Stock App sync result on the page and only clears orphan client rows after a successful live sync, so a failed read does not blank the visible client list.
 
 ## Important Business Rules
 
