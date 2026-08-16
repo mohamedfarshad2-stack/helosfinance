@@ -415,7 +415,7 @@ class SandhamaliAccount extends Page implements HasForms
             return;
         }
 
-        $syncResult = app(StockAppClientSyncService::class)->sync($this->business);
+        $syncResult = app(StockAppClientSyncService::class)->sync($this->business, ! app()->environment('testing'));
         $this->stockAppSyncStatus = $syncResult;
 
         if (($syncResult['available'] ?? false) === true) {

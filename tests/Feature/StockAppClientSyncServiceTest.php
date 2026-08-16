@@ -21,17 +21,6 @@ class StockAppClientSyncServiceTest extends TestCase
         Carbon::setTestNow('2026-08-16 12:00:00');
 
         $business = Business::query()->create(['name' => 'Horns England']);
-        IntegrationSource::query()->create([
-            'business_id' => $business->id,
-            'name' => 'Horns England stock-app',
-            'type' => 'stock_app',
-            'base_url' => 'https://codreturnslanka.lk',
-            'settings' => [
-                'stock_app_admin_email' => 'admin1@gmail.com',
-                'stock_app_admin_password' => 'Horns@123',
-                'stock_app_client_id' => 1,
-            ],
-        ]);
 
         $loginHtml = <<<'HTML'
 <html><head>
@@ -134,6 +123,13 @@ HTML;
             ->firstOrFail();
 
         $this->assertSame('6000.00', (string) $ynox->default_monthly_amount);
+
+        $integration = IntegrationSource::query()
+            ->where('business_id', $business->id)
+            ->where('type', 'stock_app')
+            ->firstOrFail();
+
+        $this->assertSame('horns-england', $integration->settings['stock_app_business_key']);
 
         $billing = ServiceBillingRecord::query()
             ->where('business_id', $business->id)

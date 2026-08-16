@@ -19,21 +19,7 @@ class StockAppClientSyncService
      */
     public function sync(Business $business, bool $allowFetch = true): array
     {
-        $integration = IntegrationSource::query()
-            ->where('business_id', $business->id)
-            ->where('type', 'stock_app')
-            ->orderByDesc('last_successful_sync_at')
-            ->orderByDesc('last_webhook_received_at')
-            ->first();
-
-        if (! $integration instanceof IntegrationSource) {
-            return [
-                'synced_clients' => 0,
-                'synced_billing_records' => 0,
-                'available' => false,
-                'note' => 'No Stock App link is configured for this business yet.',
-            ];
-        }
+        $integration = $this->resolveIntegrationSource($business);
 
         $config = $integration->stockAppPendingReadConfig();
         $email = trim((string) ($config['email'] ?? ''));
@@ -138,6 +124,38 @@ class StockAppClientSyncService
             'available' => true,
             'note' => 'HELOS synced '.number_format($syncedClients).' live Stock App client row(s).',
         ];
+    }
+
+    private function resolveIntegrationSource(Business $business): IntegrationSource
+    {
+        $integration = IntegrationSource::query()
+            ->where('business_id', $business->id)
+            ->where('type', 'stock_app')
+            ->orderByDesc('last_successful_sync_at')
+            ->orderByDesc('last_webhook_received_at')
+            ->first();
+
+        if ($integration instanceof IntegrationSource) {
+            return $integration;
+        }
+
+        $businessKey = (string) data_get($business->settings, 'stock_app_business_key', Str::slug((string) $business->name));
+
+        return IntegrationSource::query()->updateOrCreate(
+            [
+                'business_id' => $business->id,
+                'type' => 'stock_app',
+            ],
+            [
+                'name' => $business->name.' Stock App',
+                'base_url' => 'https://codreturnslanka.lk',
+                'status' => 'active',
+                'settings' => [
+                    'stock_app_business_key' => $businessKey,
+                    'notes' => 'Auto-created by Sandhamali live sync.',
+                ],
+            ]
+        );
     }
 
     /**

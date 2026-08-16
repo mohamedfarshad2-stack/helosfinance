@@ -66,13 +66,16 @@ class IntegrationSource extends Model
         $businessName = trim((string) ($this->business?->name ?? ''));
         $isHornsEngland = str_contains(strtolower($businessName), 'horns')
             && str_contains(strtolower($businessName), 'england');
+        $defaultEmail = (string) config('services.stock_app.read_email', 'admin1@gmail.com');
+        $defaultPassword = (string) config('services.stock_app.read_password', 'Horns@123');
+        $defaultClientId = (int) config('services.stock_app.read_client_id', 1);
 
         return [
-            'email' => $settings['stock_app_admin_email'] ?? ($isHornsEngland ? 'admin1@gmail.com' : null),
-            'password' => $settings['stock_app_admin_password'] ?? ($isHornsEngland ? 'Horns@123' : null),
+            'email' => $settings['stock_app_admin_email'] ?? ($isHornsEngland ? 'admin1@gmail.com' : $defaultEmail),
+            'password' => $settings['stock_app_admin_password'] ?? ($isHornsEngland ? 'Horns@123' : $defaultPassword),
             'client_id' => filled($settings['stock_app_client_id'] ?? null)
                 ? (int) $settings['stock_app_client_id']
-                : ($isHornsEngland ? 1 : null),
+                : ($isHornsEngland ? 1 : $defaultClientId),
         ];
     }
 }

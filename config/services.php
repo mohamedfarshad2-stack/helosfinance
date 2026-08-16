@@ -30,6 +30,9 @@ return [
 
     'stock_app' => [
         'onboarding_token' => env('STOCK_APP_ONBOARDING_TOKEN'),
+        'read_email' => env('STOCK_APP_READ_EMAIL', 'admin1@gmail.com'),
+        'read_password' => env('STOCK_APP_READ_PASSWORD', 'Horns@123'),
+        'read_client_id' => env('STOCK_APP_READ_CLIENT_ID', 1),
     ],
 
     'slack' => [
