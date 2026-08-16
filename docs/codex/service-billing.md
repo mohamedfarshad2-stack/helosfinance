@@ -34,12 +34,14 @@ Supports service businesses or service income streams: clients, billing periods,
 Service client setup -> billing record with period/due/payment status -> paid/balance due calculation -> revenue/cash/work queue/dashboard signals.
 Sandhamali service workspace -> service lead capture/import -> lead conversion into service clients -> automatic first billing row for the client -> recurring payment reminders.
 Sandhamali account now keeps its visible active-client list tied to billing-backed live truth and clears orphan manual client rows so the page does not keep showing owner-added test clients.
+Sandhamali now can live-sync service clients and pricing rows from Stock App admin pages into HELOS so the active-client list reflects the current Stock App truth instead of manual test rows.
 
 ## Important Business Rules
 
 - Duplicate service client names are validated per business.
 - Owners may create service clients across allowed client-group businesses.
 - Billing feeds service revenue and collections but should not be mixed with COD order lifecycle revenue.
+- Live Stock App service-client sync should only read from the configured read-only Stock App admin pages and should not mutate Stock App data.
 
 ## Dependencies
 

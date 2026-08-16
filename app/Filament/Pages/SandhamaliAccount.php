@@ -7,6 +7,7 @@ use App\Domains\Shared\Models\Business;
 use App\Domains\Shared\Models\ServiceBillingRecord;
 use App\Domains\Shared\Models\ServiceClient;
 use App\Domains\Shared\Models\ServiceLead;
+use App\Domains\Shared\Services\StockAppClientSyncService;
 use App\Domains\Shared\Services\ServiceLeadSpreadsheetImportService;
 use App\Domains\Shared\Services\ServiceLeadTemplateExportService;
 use App\Domains\Shared\Services\WorkQueueService;
@@ -400,6 +401,7 @@ class SandhamaliAccount extends Page implements HasForms
             return;
         }
 
+        app(StockAppClientSyncService::class)->sync($this->business);
         $this->purgeUnsyncedServiceClients($this->business);
 
         $service = $revenuePipeline->forCurrentMonth($this->business)['service'] ?? [];
